@@ -16,4 +16,4 @@ if [ "$INPUT_DRY_RUN" = "true" ]; then
   args+=(--dry-run)
 fi
 
-exec scaffold "${args[@]}"
+exec gitscaffold "${args[@]}"
