@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import argparse
+import re
 
 try:
     import openai
@@ -148,6 +149,13 @@ def main():
         sys.exit(1)
     # Extract issues
     issues = extract_issues(md_text)
+    # Parse markdown via AI for additional issue candidates
+    try:
+        additional = parse_issues_via_llm(md_text)
+        issues.extend(additional)
+    except ValueError as e:
+        sys.stderr.write(f"Error parsing additional issues: {e}\n")
+        sys.exit(1)
     for itm in issues:
         title = itm.get('title')
         desc = itm.get('description', '')
