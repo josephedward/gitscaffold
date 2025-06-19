@@ -122,9 +122,13 @@ def main():
     parser.add_argument('repo', help='GitHub repository (owner/repo)')
     parser.add_argument('markdown_file', help='Path to markdown file')
     parser.add_argument('--token', help='GitHub token override')
+    parser.add_argument('--openai-key', dest='openai_key', help='OpenAI API key override')
     parser.add_argument('--dry-run', action='store_true', help='List issues without creating them')
     parser.add_argument('--apply', action='store_true', help='Apply created issues and enriched bodies')
     args = parser.parse_args()
+    # override OpenAI key if provided
+    if getattr(args, 'openai_key', None):
+        os.environ['OPENAI_API_KEY'] = args.openai_key
     token = args.token or os.getenv('GITHUB_TOKEN')
     if not token:
         sys.stderr.write("Error: GITHUB_TOKEN not set\n")
