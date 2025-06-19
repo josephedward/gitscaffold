@@ -1,11 +1,12 @@
 import click
+from . import __version__
 
 from .parser import parse_roadmap
 from .validator import validate_roadmap
 from .github import GitHubClient
 
 @click.group()
-@click.version_option()
+@click.version_option(version=__version__, prog_name="gitscaffold")
 def cli():
     """Scaffold – Convert roadmaps to GitHub issues."""
     pass
