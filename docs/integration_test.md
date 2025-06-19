@@ -2,6 +2,38 @@
 
 This document demonstrates integration testing using structured YAML roadmap files. For unstructured Markdown imports, see the `import-md` command in the CLI documentation (README.md).
 
+## Unstructured Markdown Example
+
+When you have a free-form Markdown document instead of a structured YAML roadmap, use the `import-md` command to extract and enrich issues automatically. Create a file named `markdown_roadmap.md` with content like:
+
+```markdown
+# Authentication Service
+Implement login, logout, and registration flows.
+
+## Database Schema
+- Define `users` table with fields: id, email, password_hash
+- Define `sessions` table with fields: id, user_id, expires_at
+
+# Payment Integration
+Enable subscription payments with Stripe.
+
+## Stripe Webhook
+- Listen to payment events and update user plans
+```
+
+Then run:
+
+```sh
+export OPENAI_API_KEY=<your-openai-key>
+# Preview extracted and enriched issue bodies without creating on GitHub
+gitscaffold import-md your-user/test-gitscaffold markdown_roadmap.md \
+  --dry-run --token $GITHUB_TOKEN
+
+# To actually create and enrich issues on GitHub:
+gitscaffold import-md your-user/test-gitscaffold markdown_roadmap.md \
+  --apply --token $GITHUB_TOKEN
+``` 
+
 Here’s a quick “integration‐test” recipe for both the CLI and the GitHub Action. You don’t need to touch your production repos—just spin up a throw-away repo on GitHub (or locally with act) and a fake roadmap file:
 
 1. Prepare a throw-away GitHub repo  
