@@ -50,6 +50,10 @@ You can also clone this repository and use the top-level `gitscaffold.py` script
 ```sh
 # Initialize a new roadmap YAML template
 ./gitscaffold.py init ROADMAP.yml
+
+# Import issues from an unstructured markdown file
+./gitscaffold.py import-md owner/repo path/to/file.md --heading 2 --dry-run
+./gitscaffold.py import-md owner/repo path/to/file.md --heading 2
 ```
 
 For detailed documentation and examples, see the project repository or run:
@@ -80,62 +84,3 @@ jobs:
 
 See docs/integration_test.md for a quick sandbox recipe for CLI and GitHub Action integration tests.
 
-## Releasing
-
-### Publishing to PyPI
-
-1. Bump the version in `pyproject.toml` under the `[project]` table.
-2. Commit and tag the release:
-
-   ```sh
-   git add pyproject.toml
-   git commit -m "Release vX.Y.Z"
-   git tag vX.Y.Z
-   ```
-
-3. Build distribution packages:
-
-   ```sh
-   pip install --upgrade build twine
-   python -m build
-   ```
-
-4. Upload to PyPI:
-
-   ```sh
-   twine upload dist/*
-   ```
-
-5. Push commits and tags:
-
-   ```sh
-   git push origin main --tags
-   ```
-
-### Automating releases with GitHub Actions
-
-Add a workflow file (e.g., `.github/workflows/release.yml`) to publish on tag push:
-
-```yaml
-name: Publish
-
-on:
-  push:
-    tags:
-      - 'v*.*.*'
-
-jobs:
-  build-and-publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-      - run: pip install --upgrade build twine
-      - run: python -m build
-      - uses: pypa/gh-action-pypi-publish@v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-``` 
-Ensure you’ve added a `PYPI_API_TOKEN` secret in your repository settings.

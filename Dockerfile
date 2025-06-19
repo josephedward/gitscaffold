@@ -10,5 +10,5 @@ RUN pip install --no-cache-dir .
 # Make entrypoint executable
 RUN chmod +x /app/entrypoint.sh
 
-# Entrypoint script handles inputs and invokes scaffold
+# Entrypoint script handles inputs and invokes gitscaffold
 ENTRYPOINT ["/app/entrypoint.sh"]
