@@ -1,0 +1,37 @@
+name: Release Package & Action
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  publish-pypi:
+    name: 🐍 Publish to PyPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - run: pip install --upgrade build twine
+      - run: python -m build
+      - run: |
+          python -m twine upload dist/* \
+            --username __token__ --password "$PYPI_API_TOKEN"
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+  publish-action:
+    name: 🚀 Notify Release
+    runs-on: ubuntu-latest
+    needs: publish-pypi
+    steps:
+      - uses: peter-evans/create-or-update-comment@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: 1
+          body: |
+            ### Release ${{ github.ref_name }}
+            • PyPI package published  
+            • GitHub Action ready for Marketplace
