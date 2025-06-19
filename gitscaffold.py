@@ -111,17 +111,21 @@ features:
 @click.argument('repo')
 @click.argument('markdown_file', type=click.Path(exists=True))
 @click.option('--token', help='GitHub token override')
+@click.option('--openai-key', 'openai_key', help='OpenAI API key override')
 @click.option('--dry-run', is_flag=True, help='List issues without creating them')
-@click.option('--heading', type=int, default=1, show_default=True,
-              help='Heading level to split issues (e.g., 1 for "#", 2 for "##")')
-def import_md(repo, markdown_file, token, dry_run, heading):
-    """Import issues from an unstructured markdown file."""
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply enriched bodies to created issues')
+def import_md(repo, markdown_file, token, openai_key, dry_run, apply_changes):
+    """Import and enrich issues from an unstructured markdown file via AI."""
     script = os.path.join(os.path.dirname(__file__), 'scripts', 'import_md.py')
-    cmd = [sys.executable, script, repo, markdown_file, '--heading', str(heading)]
+    cmd = [sys.executable, script, repo, markdown_file]
     if dry_run:
         cmd.append('--dry-run')
+    if apply_changes:
+        cmd.append('--apply')
     if token:
         cmd.extend(['--token', token])
+    if openai_key:
+        cmd.extend(['--openai-key', openai_key])
     subprocess.run(cmd, check=True)
 
 if __name__ == '__main__':

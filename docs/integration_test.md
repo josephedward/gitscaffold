@@ -1,5 +1,7 @@
 # Integration Testing
 
+This document demonstrates integration testing using structured YAML roadmap files. For unstructured Markdown imports, see the `import-md` command in the CLI documentation (README.md).
+
 Here’s a quick “integration‐test” recipe for both the CLI and the GitHub Action. You don’t need to touch your production repos—just spin up a throw-away repo on GitHub (or locally with act) and a fake roadmap file:
 
 1. Prepare a throw-away GitHub repo  

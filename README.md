@@ -1,6 +1,6 @@
-# Gitscaffold – Roadmaps to GitHub Issues
+# Gitscaffold – Roadmaps and Markdown to GitHub Issues
 
-Gitscaffold is a command-line tool and GitHub Action that converts structured roadmap files (YAML/JSON) into GitHub issues and milestones.
+Gitscaffold is a command-line tool and GitHub Action that converts structured roadmap files (YAML/JSON) and free-form Markdown documents into GitHub issues and milestones using AI-driven extraction and enrichment.
 
 Installation:
 ```sh
@@ -14,11 +14,29 @@ pip install gitscaffold
 After installing, the `gitscaffold` command is available:
 
 ```sh
-# Create GitHub issues from a roadmap file
+# Create GitHub issues from a structured roadmap file
 gitscaffold create ROADMAP.yml --repo owner/repo --token $GITHUB_TOKEN
 
 # Validate without creating issues (dry run)
 gitscaffold create ROADMAP.yml --repo owner/repo --token $GITHUB_TOKEN --dry-run
+```
+
+### AI extraction & enrichment from unstructured Markdown
+
+Use AI to extract actionable issues from free-form Markdown and generate detailed descriptions.  Invoke via the `create` command with the `--ai-extract` and `--ai-enrich` flags.
+
+```sh
+# Preview extracted and enriched issues without creating (dry run)
+OPENAI_API_KEY=<your-openai-key> \
+  gitscaffold create ROADMAP.md \
+    --repo owner/repo --token $GITHUB_TOKEN \
+    --ai-extract --ai-enrich --dry-run
+
+# Create and enrich issues on GitHub
+OPENAI_API_KEY=<your-openai-key> \
+  gitscaffold create ROADMAP.md \
+    --repo owner/repo --token $GITHUB_TOKEN \
+    --ai-extract --ai-enrich
 ```
 
 ### Initialize a roadmap template
@@ -50,11 +68,8 @@ You can also clone this repository and use the top-level `gitscaffold.py` script
 ```sh
 # Initialize a new roadmap YAML template
 ./gitscaffold.py init ROADMAP.yml
-
-# Import issues from an unstructured markdown file
-./gitscaffold.py import-md owner/repo path/to/file.md --heading 2 --dry-run
-./gitscaffold.py import-md owner/repo path/to/file.md --heading 2
 ```
+
 
 For detailed documentation and examples, see the project repository or run:
 ```sh

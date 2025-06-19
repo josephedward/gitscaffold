@@ -19,3 +19,4 @@ dist/
 .idea/
 /venv-test
 /pytest-of-user
+misc
