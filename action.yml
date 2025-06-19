@@ -1,5 +1,5 @@
 name: 'Gitscaffold – Roadmap to GitHub Issues'
-description: 'Convert a roadmap file to GitHub issues using scaffold CLI'
+description: 'Convert a roadmap file to GitHub issues using gitscaffold CLI'
 inputs:
   roadmap-file:
     description: 'Path to the roadmap file (YAML/JSON)'

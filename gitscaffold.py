@@ -106,6 +106,23 @@ features:
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(example)
     click.echo(f'Initialized roadmap file: {output_file}')
+    
+@cli.command(name='import-md')
+@click.argument('repo')
+@click.argument('markdown_file', type=click.Path(exists=True))
+@click.option('--token', help='GitHub token override')
+@click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--heading', type=int, default=1, show_default=True,
+              help='Heading level to split issues (e.g., 1 for "#", 2 for "##")')
+def import_md(repo, markdown_file, token, dry_run, heading):
+    """Import issues from an unstructured markdown file."""
+    script = os.path.join(os.path.dirname(__file__), 'scripts', 'import_md.py')
+    cmd = [sys.executable, script, repo, markdown_file, '--heading', str(heading)]
+    if dry_run:
+        cmd.append('--dry-run')
+    if token:
+        cmd.extend(['--token', token])
+    subprocess.run(cmd, check=True)
 
 if __name__ == '__main__':
     cli()

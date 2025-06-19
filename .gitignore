@@ -17,3 +17,5 @@ dist/
 # IDE and editor settings
 .vscode/
 .idea/
+/venv-test
+/pytest-of-user
