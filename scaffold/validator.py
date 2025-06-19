@@ -28,7 +28,7 @@ class Roadmap(BaseModel):
     milestones: List[Milestone] = Field(default_factory=list)
     features: List[Feature] = Field(default_factory=list)
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def check_milestone_refs(cls, values):
         milestones = values.get('milestones') or []
         features = values.get('features') or []
