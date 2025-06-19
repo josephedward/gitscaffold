@@ -1,0 +1,16 @@
+name: Test Project
+description: A test.
+
+milestones:
+  - name: Alpha
+    due_date: 2023-12-31
+
+features:
+  - title: Feature A
+    milestone: Alpha
+    labels: [bug, enhancement]
+    assignees: [alice]
+    tasks:
+      - title: Subtask A1
+        description: Details
+        labels: [documentation]

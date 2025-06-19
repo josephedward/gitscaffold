@@ -1,0 +1,1 @@
+"""Package for Jinja2 templates used by Scaffold."""
