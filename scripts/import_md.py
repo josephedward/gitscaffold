@@ -89,7 +89,32 @@ def enrich_issue(title, description, md_text):
     except Exception as e:
         sys.stderr.write(f"Error calling OpenAI API for enrichment: {e}\n")
         sys.exit(1)
-    return resp.choices[0].message.content.strip()
+    return resp.choices[0].message.content.stri        return resp.choices[0].message.content.strip()
+
+    return resp.choices[0].message.content.stridef parse_issues_via_llm(content: str) -> list:
+    return resp.choices[0].message.content.stri    """
+    return resp.choices[0].message.content.stri    Parse raw markdown into list of (title, body) tuples via AI.
+    return resp.choices[0].message.content.stri    """
+    return resp.choices[0].message.content.stri    prompt = (
+    return resp.choices[0].message.content.stri        "Parse the following markdown into a JSON list of issues with 'title' and 'body' fields:\n\n"
+    return resp.choices[0].message.content.stri        f"{content}"
+    return resp.choices[0].message.content.stri    )
+    return resp.choices[0].message.content.stri    messages = [
+    return resp.choices[0].message.content.stri        {"role": "system", "content": "You are an expert software engineer specializing in GitHub issues."},
+    return resp.choices[0].message.content.stri        {"role": "user", "content": prompt}
+    return resp.choices[0].message.content.stri    ]
+    return resp.choices[0].message.content.stri    resp = openai.chat.completions.create(
+    return resp.choices[0].message.content.stri        model=model,
+    return resp.choices[0].message.content.stri        messages=messages,
+    return resp.choices[0].message.content.stri        temperature=temperature,
+    return resp.choices[0].message.content.stri        max_tokens=max_tokens
+    return resp.choices[0].message.content.stri    )
+    return resp.choices[0].message.content.stri    text = resp.choices[0].message.content.strip()
+    return resp.choices[0].message.content.stri    try:
+    return resp.choices[0].message.content.stri        items = json.loads(text)
+    return resp.choices[0].message.content.stri        return [(item['title'], item.get('body', '').strip()) for item in items]
+    return resp.choices[0].message.content.stri    except Exception as e:
+    return resp.choices[0].message.content.stri        raise ValueError(f"Invalid JSON from AI: {e}\n{text}")
 
 
 def main():
