@@ -8,7 +8,8 @@ version = "0.1.1"
 description = "Convert roadmaps to GitHub issues"
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "PyGithub>=1.55",
     "pyyaml>=6.0",
