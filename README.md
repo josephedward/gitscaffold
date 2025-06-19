@@ -78,6 +78,8 @@ jobs:
           dry-run: 'false'
 ```
 
+See docs/integration_test.md for a quick sandbox recipe for CLI and GitHub Action integration tests.
+
 ## Releasing
 
 ### Publishing to PyPI
