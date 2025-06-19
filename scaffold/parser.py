@@ -1,5 +1,7 @@
 """Parser for roadmap files."""
 
+import os
+import re
 import yaml
 import os
 
@@ -51,6 +53,53 @@ def parse_markdown(roadmap_file):
     return {
         'name': name,
         'description': '\n'.join(description_lines).strip(),
+        'milestones': [],
+        'features': features
+    }
+
+def parse_markdown(roadmap_file):
+    """Parse unstructured Markdown roadmap into dict."""
+    features = []
+    current_feature = None
+    current_task = None
+    roadmap_name = None
+    with open(roadmap_file, 'r') as f:
+        for line in f:
+            line = line.rstrip()
+            m = re.match(r'^(#{1,6})\s+(.*)', line)
+            if m:
+                level = len(m.group(1))
+                text = m.group(2).strip()
+                if level == 1 and not roadmap_name:
+                    roadmap_name = text
+                elif level == 2:
+                    current_feature = {
+                        'title': text,
+                        'description': '',
+                        'tasks': [],
+                        'assignees': [],
+                        'labels': [],
+                        'milestone': None
+                    }
+                    features.append(current_feature)
+                elif level == 3 and current_feature is not None:
+                    current_task = {
+                        'title': text,
+                        'description': '',
+                        'assignees': [],
+                        'labels': [],
+                        'milestone': None
+                    }
+                    current_feature['tasks'].append(current_task)
+                else:
+                    current_task = None
+            else:
+                if current_task is not None:
+                    current_task['description'] += line + '\n'
+                elif current_feature is not None:
+                    current_feature['description'] += line + '\n'
+    return {
+        'name': roadmap_name or os.path.basename(roadmap_file),
         'milestones': [],
         'features': features
     }
