@@ -1,4 +1,4 @@
-name: 'Scaffold – Roadmap to GitHub Issues'
+name: 'Gitscaffold – Roadmap to GitHub Issues'
 description: 'Convert a roadmap file to GitHub issues using scaffold CLI'
 inputs:
   roadmap-file:
