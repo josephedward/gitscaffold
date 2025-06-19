@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Unified GitHub LLM enrichment CLI for R.A.D.A.R.
+enrich: General-purpose CLI for GitHub issue enrichment via LLM using roadmap context.
 
 Subcommands:
   issue   - Enrich a single issue with LLM using roadmap context
-  batch   - Batch enrich all open issues with LLM using roadmap context
+  batch   - Batch enrich issues with LLM using roadmap context
 """
 import os
 import sys
@@ -19,9 +19,11 @@ except ImportError:
 
 import openai
 
-# Delay GitHub import until runtime
-
 def parse_roadmap(path="ROADMAP.md"):
+    """
+    Parse ROADMAP.md and return a mapping of item title -> context dict.
+    Captures goal, tasks, deliverables under sections/phases.
+    """
     data = {}
     current = None
     section = None
@@ -62,6 +64,7 @@ def parse_roadmap(path="ROADMAP.md"):
     except FileNotFoundError:
         print(f"Error: ROADMAP.md not found at {path}", file=sys.stderr)
         sys.exit(1)
+    # Flatten mapping for lookups
     mapping = {}
     for ctx, obj in data.items():
         for key in ('goal', 'tasks', 'deliverables'):
@@ -78,7 +81,7 @@ def get_context(title, roadmap):
         return roadmap[m], m
     return None, None
 
-def call_llm(title, existing_body, ctx, matched):
+def call_llm(title, existing_body, ctx):
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         print('Error: OPENAI_API_KEY not set', file=sys.stderr)
@@ -92,32 +95,30 @@ def call_llm(title, existing_body, ctx, matched):
         parts.append("Tasks:\n" + "\n".join(f"- {t}" for t in ctx['tasks']))
     if ctx.get('deliverables'):
         parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
-    parts.append(f"Existing description:\n{existing_body}")
-    parts.append(
-        "Generate a detailed GitHub issue description with background, scope, acceptance criteria, implementation outline, code snippets, and a checklist."
-    )
+    parts.append(f"Existing description:\n{existing_body or ''}")
+    parts.append("Generate a detailed GitHub issue description with background, scope, acceptance criteria, implementation outline, code snippets, and a checklist.")
     response = openai.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model=os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo'),
         messages=[system, {"role": "user", "content": "\n\n".join(parts)}],
-        temperature=0.7,
-        max_tokens=800
+        temperature=float(os.getenv('OPENAI_TEMPERATURE', '0.7')),
+        max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '800'))
     )
     return response.choices[0].message.content.strip()
 
+import argparse
+from github import Github, GithubException
+
 def main():
-    import argparse
     parser = argparse.ArgumentParser(description="GitHub LLM Enrichment CLI")
     sub = parser.add_subparsers(dest='command', required=True)
-    # Single issue enrichment
     pi = sub.add_parser('issue', help='Enrich a single issue via LLM')
     pi.add_argument('--repo', required=True, help='owner/repo')
     pi.add_argument('--issue', type=int, required=True, help='Issue number')
-    pi.add_argument('--path', default='ROADMAP.md', help='Path to ROADMAP.md')
+    pi.add_argument('--path', default='ROADMAP.md', help='Path to roadmap file')
     pi.add_argument('--apply', action='store_true', help='Apply the update')
-    # Batch enrichment
     pb = sub.add_parser('batch', help='Batch enrich issues via LLM')
     pb.add_argument('--repo', required=True, help='owner/repo')
-    pb.add_argument('--path', default='ROADMAP.md', help='Path to ROADMAP.md')
+    pb.add_argument('--path', default='ROADMAP.md', help='Path to roadmap file')
     pb.add_argument('--csv', help='Output CSV file')
     pb.add_argument('--interactive', action='store_true', help='Interactive approval')
     pb.add_argument('--apply', action='store_true', help='Apply all updates')
@@ -125,11 +126,6 @@ def main():
     token = os.getenv('GITHUB_TOKEN')
     if not token:
         print('Error: GITHUB_TOKEN not set', file=sys.stderr)
-        sys.exit(1)
-    try:
-        from github import Github, GithubException
-    except ImportError:
-        print('Error: PyGithub not installed. Install with `pip install PyGithub`.', file=sys.stderr)
         sys.exit(1)
     gh = Github(token)
     try:
@@ -144,7 +140,7 @@ def main():
         if not ctx:
             print(f"No roadmap context for issue #{args.issue}", file=sys.stderr)
             sys.exit(1)
-        enriched = call_llm(issue.title, issue.body or '', ctx, matched)
+        enriched = call_llm(issue.title, issue.body, ctx)
         print(enriched)
         if args.apply:
             issue.edit(body=enriched)
@@ -156,7 +152,7 @@ def main():
             ctx, matched = get_context(issue.title.strip(), roadmap)
             if not ctx:
                 continue
-            enriched = call_llm(issue.title, issue.body or '', ctx, matched)
+            enriched = call_llm(issue.title, issue.body, ctx)
             records.append((issue.number, issue.title, ctx['context'], matched, enriched))
         if args.csv:
             import csv
@@ -182,7 +178,6 @@ def main():
                 repo.get_issue(num).edit(body=body)
                 print(f"Updated issue #{num}")
             return
-        # Dry-run output
         for num, title, ctx_name, matched, _ in records:
             print(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
 
