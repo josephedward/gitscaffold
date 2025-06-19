@@ -3,7 +3,7 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "scaffold-roadmap"
+name = "gitscaffold"
 version = "0.1.0"
 description = "Convert roadmaps to GitHub issues"
 readme = "README.md"
@@ -18,4 +18,4 @@ dependencies = [
 ]
 
 [project.scripts]
-scaffold = "scaffold.cli:cli"
+gitscaffold = "scaffold.cli:cli"

@@ -4,53 +4,57 @@ Scaffold is a command-line tool and GitHub Action that converts structured roadm
 
 Installation:
 ```sh
-pip install scaffold-roadmap
+pip install gitscaffold
 ```
 
 ## CLI Usage
 
 ### As an installed package
 
-After installing, the `scaffold` command is available:
+After installing, the `gitscaffold` command is available:
 
 ```sh
 # Create GitHub issues from a roadmap file
-scaffold create ROADMAP.yml --repo owner/repo --token $GITHUB_TOKEN
+gitscaffold create ROADMAP.yml --repo owner/repo --token $GITHUB_TOKEN
 
 # Validate without creating issues (dry run)
-scaffold create ROADMAP.yml --repo owner/repo --token $GITHUB_TOKEN --dry-run
+gitscaffold create ROADMAP.yml --repo owner/repo --token $GITHUB_TOKEN --dry-run
 ```
 
 ### Initialize a roadmap template
 ```sh
 # Generate an example roadmap file
-scaffold init example-roadmap.yml
+gitscaffold init example-roadmap.yml
 ```
 
 ### From the source checkout
 
-You can also clone this repository and use the top-level `scaffold.py` script for additional commands:
+You can also clone this repository and use the top-level `gitscaffold.py` script for additional commands:
 
 ```sh
 # Setup GitHub labels, milestones, and (optionally) a project board
-./scaffold.py setup owner/repo --phase phase-1 --create-project
+./gitscaffold.py setup owner/repo --phase phase-1 --create-project
 
 # Delete all closed issues in a repository
-./scaffold.py delete-closed owner/repo
+./gitscaffold.py delete-closed owner/repo
 # Use GraphQL API for deletion
-./scaffold.py delete-closed owner/repo --api
+./gitscaffold.py delete-closed owner/repo --api
 
+```
+```sh
 # Enrich a single issue or batch enrich via LLM
-./scaffold.py enrich owner/repo --issue 123 --path ROADMAP.md --apply
-./scaffold.py enrich owner/repo --batch --path ROADMAP.md --csv output.csv --interactive
+./gitscaffold.py enrich owner/repo --issue 123 --path ROADMAP.md --apply
+./gitscaffold.py enrich owner/repo --batch --path ROADMAP.md --csv output.csv --interactive
 
+```
+```sh
 # Initialize a new roadmap YAML template
-./scaffold.py init ROADMAP.yml
+./gitscaffold.py init ROADMAP.yml
 ```
 
 For detailed documentation and examples, see the project repository or run:
 ```sh
-scaffold --help
+gitscaffold --help
 ``` 
 
 ## GitHub Action Usage
@@ -73,3 +77,63 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           dry-run: 'false'
 ```
+
+## Releasing
+
+### Publishing to PyPI
+
+1. Bump the version in `pyproject.toml` under the `[project]` table.
+2. Commit and tag the release:
+
+   ```sh
+   git add pyproject.toml
+   git commit -m "Release vX.Y.Z"
+   git tag vX.Y.Z
+   ```
+
+3. Build distribution packages:
+
+   ```sh
+   pip install --upgrade build twine
+   python -m build
+   ```
+
+4. Upload to PyPI:
+
+   ```sh
+   twine upload dist/*
+   ```
+
+5. Push commits and tags:
+
+   ```sh
+   git push origin main --tags
+   ```
+
+### Automating releases with GitHub Actions
+
+Add a workflow file (e.g., `.github/workflows/release.yml`) to publish on tag push:
+
+```yaml
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - run: pip install --upgrade build twine
+      - run: python -m build
+      - uses: pypa/gh-action-pypi-publish@v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+``` 
+Ensure you’ve added a `PYPI_API_TOKEN` secret in your repository settings.
