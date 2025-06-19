@@ -1,6 +1,6 @@
-# Scaffold – Roadmaps to GitHub Issues
+# Gitscaffold – Roadmaps to GitHub Issues
 
-Scaffold is a command-line tool and GitHub Action that converts structured roadmap files (YAML/JSON) into GitHub issues and milestones.
+Gitscaffold is a command-line tool and GitHub Action that converts structured roadmap files (YAML/JSON) into GitHub issues and milestones.
 
 Installation:
 ```sh
@@ -59,7 +59,7 @@ gitscaffold --help
 
 ## GitHub Action Usage
 
-Use Scaffold as a GitHub Action in your workflow (e.g., .github/workflows/sync-roadmap.yml):
+Use Gitscaffold as a GitHub Action in your workflow (e.g., .github/workflows/sync-roadmap.yml):
 ```yaml
 name: Sync Roadmap to Issues
 on:
@@ -70,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Run Scaffold
-        uses: your-org/scaffold-action@v0.1.0
+        uses: your-org/gitscaffold-action@v0.1.0
         with:
           roadmap-file: roadmap.yml
           repo: ${{ github.repository }}
