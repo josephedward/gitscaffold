@@ -59,7 +59,7 @@ def delete_closed(repo, method, dry_run, token):
 def enrich(repo, issue_number, batch, path, csv_file, interactive, apply_changes):
     """Enrich issues using LLM based on roadmap context."""
     # Enrichment script resides under scripts/
-    base = os.path.join(os.path.dirname(__file__), 'scripts', 'github_cli.py')
+    base = os.path.join(os.path.dirname(__file__), 'scripts', 'enrich.py')
     cmd = [sys.executable, base, '--repo', repo]
     if issue_number is not None:
         cmd.extend(['issue', '--issue', str(issue_number)])
