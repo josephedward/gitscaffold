@@ -16,6 +16,14 @@ inputs:
     description: 'Validate without creating issues'
     required: false
     default: 'false'
+  openai-key:
+    description: 'OpenAI API key (use ${{ secrets.OPENAI_API_KEY }})'
+    required: false
+    default: ''
+  apply:
+    description: 'Apply enriched bodies to created issues (for markdown imports)'
+    required: false
+    default: 'false'
 runs:
   using: 'docker'
   image: 'Dockerfile'
