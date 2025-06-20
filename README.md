@@ -1,7 +1,7 @@
 <!-- Gitscaffold README -->
-# Gitscaffold – Roadmaps to GitHub Issues
+# Gitscaffold – Generate GitHub Issues from Markdown & YAML Roadmaps
 
-Gitscaffold is a command-line tool and GitHub Action that converts structured roadmap files (YAML/JSON) into GitHub issues and milestones. It also supports importing issues from unstructured Markdown documents using OpenAI, splitting on headings and generating rich issue bodies via an AI prompt.
+Gitscaffold is a command-line tool and GitHub Action that primarily converts unstructured Markdown documents into GitHub issues and milestones using AI-driven extraction and enrichment. It also supports structured roadmap files (YAML/JSON) when you need strict schemas and milestones.
 
 ## Installation
 ```sh
@@ -10,20 +10,6 @@ pip install gitscaffold
 
 ## CLI Usage
 
-### As an installed package
-After installing, the `gitscaffold` command is available:
-```sh
-# Create GitHub issues from a structured roadmap file
-gitscaffold create ROADMAP.yml \
-  --repo owner/repo \
-  --token $GITHUB_TOKEN
-
-# Validate without creating issues (dry run)
-gitscaffold create ROADMAP.yml \
-  --repo owner/repo \
-  --token $GITHUB_TOKEN \
-  --dry-run
-```
 
 ### Import and enrich from unstructured Markdown
 When you have a free-form Markdown document instead of a structured YAML roadmap, use `import-md` to extract and enrich issues.
@@ -53,6 +39,22 @@ gitscaffold import-md owner/repo markdown_roadmap.md \
 # Create enriched issues on GitHub
 gitscaffold import-md owner/repo markdown_roadmap.md \
   --heading 1 --token $GITHUB_TOKEN
+```
+
+### Generate issues from structured YAML/JSON roadmap
+Use `create` for structured YAML or JSON roadmaps:
+
+```sh
+# Create GitHub issues from a structured roadmap file
+gitscaffold create ROADMAP.yml \
+  --repo owner/repo \
+  --token $GITHUB_TOKEN
+
+# Validate without creating issues (dry run)
+gitscaffold create ROADMAP.yml \
+  --repo owner/repo \
+  --token $GITHUB_TOKEN \
+  --dry-run
 ```
 
 ### Initialize a roadmap template
