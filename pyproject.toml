@@ -21,3 +21,9 @@ dependencies = [
 
 [project.scripts]
 gitscaffold = "scaffold.cli:cli"
+
+[tool.setuptools.packages.find]
+namespaces = false
+include = ["scaffold*"]
+# You could also add: exclude = ["misc*"] if 'misc' should never be part of the package.
+# For now, explicitly including 'scaffold' should be sufficient.
