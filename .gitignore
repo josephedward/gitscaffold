@@ -20,3 +20,6 @@ dist/
 /venv-test
 /pytest-of-user
 misc
+
+# Environment variables
+.env
