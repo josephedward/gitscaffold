@@ -33,8 +33,7 @@
    --dry-run
 
  # Full run: create issues & apply enriched bodies
- gitscaffold import-md your-user/test-gitscaffold markdown_roadmap.md \
-   --apply
+ gitscaffold import-md your-user/test-gitscaffold markdown_roadmap.md
 ```
 
  ## 3. Test as a GitHub Action
