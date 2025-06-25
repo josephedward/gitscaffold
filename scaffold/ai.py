@@ -17,8 +17,9 @@ def extract_issues_from_markdown(md_file, model=None, temperature=0.5):
         "You are a software project manager. "
         "Given the following project notes in Markdown, extract all actionable issues. "
         "For each issue, return an object with 'title' and 'description'. "
-        "Output a JSON array only, without extra text.\n\n```
-" + content + "\n```"
+        "Output a JSON array only, without extra text.\n\n```\n" # Ensure this string literal is properly terminated
+        + content 
+        + "\n```\n" # Ensure this is also a complete string literal for concatenation
     )
     openai.api_key = _get_api_key()
     model = model or os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
