@@ -80,27 +80,6 @@ def enrich(repo, issue_number, batch, path, csv_file, interactive, apply_changes
 @cli.command()
 @click.argument('output_file')
 def init(output_file):
-description: Project description
-milestones:
-  - name: MVP
-    due_date: 2025-08-01
-  - name: Beta
-    due_date: 2025-09-15
-
-features:
-  - title: Feature 1
-    description: Description of feature 1
-    milestone: MVP
-    labels: [enhancement, core]
-    assignees: [username1]
-    tasks:
-      - title: Task 1.1
-        description: Implementation details
-        labels: [enhancement]
-      - title: Task 1.2
-        description: Testing and validation
-        labels: [testing]
-'''
     """Initialize a new roadmap file with example structure. Generates YAML or Markdown based on file extension."""
     ext = os.path.splitext(output_file)[1].lower()
     if ext in ('.md', '.markdown'):
@@ -168,18 +147,20 @@ features:
 @click.option('--token', help='GitHub token override')
 @click.option('--openai-key', 'openai_key', help='OpenAI API key override')
 @click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--heading-level', type=int, help='Markdown heading level to consider for issue creation (e.g., 1 for #, 2 for ##). Passed as --heading to the underlying script.')
 # The --apply flag is removed for import-md as it always applies enrichment if not dry-run.
-def import_md(repo, markdown_file, token, openai_key, dry_run):
+def import_md(repo, markdown_file, token, openai_key, dry_run, heading_level):
     """Import and enrich issues from an unstructured markdown file via AI."""
     script = os.path.join(os.path.dirname(__file__), 'scripts', 'import_md.py')
     cmd = [sys.executable, script, repo, markdown_file]
     if dry_run:
         cmd.append('--dry-run')
-    # Removed: if apply_changes: cmd.append('--apply')
     if token:
         cmd.extend(['--token', token])
     if openai_key:
         cmd.extend(['--openai-key', openai_key])
+    if heading_level is not None:
+        cmd.extend(['--heading', str(heading_level)])
     subprocess.run(cmd, check=True)
 
 if __name__ == '__main__':

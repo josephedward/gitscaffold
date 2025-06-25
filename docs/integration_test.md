@@ -30,10 +30,12 @@
 
  # Dry-run: extract & enrich without creating
  gitscaffold import-md your-user/test-gitscaffold markdown_roadmap.md \
+   --heading-level 1 \
    --dry-run
 
  # Full run: create issues & apply enriched bodies
- gitscaffold import-md your-user/test-gitscaffold markdown_roadmap.md
+ gitscaffold import-md your-user/test-gitscaffold markdown_roadmap.md \
+   --heading-level 1
 ```
 
  ## 3. Test as a GitHub Action
@@ -53,7 +55,11 @@ jobs:
       - name: Import Markdown roadmap
         run: |
           gitscaffold import-md ${{ github.repository }} markdown_roadmap.md \
+            --heading-level 1 \
             --dry-run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Assuming action needs OpenAI key
 ```
 
  Push and observe the Action logs. Then switch `dry-run` to `false` to create issues.

@@ -2,6 +2,8 @@ import click
 from . import __version__
 
 import os
+import sys
+import subprocess
 from pathlib import Path
 from dotenv import load_dotenv, set_key
 from github import Github, GithubException
@@ -246,3 +248,72 @@ def setup_repository(roadmap_file, token, repo_name, org, private, dry_run, ai_e
         context_text=context_text,
         roadmap_file_path=path
     )
+
+
+@cli.command(name='import-md')
+@click.argument('repo_full_name', metavar='REPO')
+@click.argument('markdown_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var if not provided)')
+@click.option('--openai-key', envvar='OPENAI_API_KEY', help='OpenAI API key (reads from .env or OPENAI_API_KEY env var if not provided)')
+@click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--heading-level', 'heading_level', type=int, default=1, show_default=True,
+              help='Markdown heading level to split issues (1 for "#", 2 for "##"). Passed as --heading to the underlying script.')
+# Options from scripts/import_md.py that might be useful to expose: --model, --temperature, --max-tokens
+# For now, keeping it simple and letting the script use its defaults or env vars for those.
+def import_md_command(repo_full_name, markdown_file, token, openai_key, dry_run, heading_level):
+    """Import issues from an unstructured markdown file, enriching via OpenAI LLM.
+    
+    This command calls the scripts/import_md.py script.
+    """
+    actual_token = token if token else os.getenv('GITHUB_TOKEN')
+    if not actual_token:
+        # get_github_token() prompts and might save, but scripts/import_md.py needs it directly.
+        # For simplicity, we'll rely on it being set or provided.
+        click.echo("Error: GitHub token required. Set GITHUB_TOKEN env var or use --token.", err=True)
+        # Could call get_github_token() here if we want to prompt.
+        # However, scripts/import_md.py also checks for GITHUB_TOKEN.
+        return 1 # Indicate error
+
+    actual_openai_key = openai_key if openai_key else os.getenv('OPENAI_API_KEY')
+    if not actual_openai_key:
+        click.echo("Error: OpenAI API key required. Set OPENAI_API_KEY env var or use --openai-key.", err=True)
+        return 1 # Indicate error
+
+    script_path = Path(__file__).parent.parent / 'scripts' / 'import_md.py'
+    if not script_path.exists():
+        click.echo(f"Error: The script import_md.py was not found at {script_path}", err=True)
+        return 1
+
+    cmd = [sys.executable, str(script_path), repo_full_name, markdown_file]
+
+    if dry_run:
+        cmd.append('--dry-run')
+    
+    # Pass token and openai_key to the script if provided, otherwise script will use env vars
+    if token: # Pass explicitly if given via CLI option to this command
+        cmd.extend(['--token', actual_token])
+    if openai_key: # Pass explicitly if given via CLI option to this command
+        cmd.extend(['--openai-key', actual_openai_key])
+
+    if heading_level is not None: # scripts/import_md.py has a default, so always pass.
+        cmd.extend(['--heading', str(heading_level)])
+
+    try:
+        # It's important to set the working directory or ensure script paths if scripts/import_md.py
+        # relies on relative paths for its own imports or resources, though it seems self-contained.
+        # For now, assume scripts/import_md.py handles its own dependencies.
+        # Pass GITHUB_TOKEN and OPENAI_API_KEY in environment for the subprocess,
+        # ensuring the script can pick them up if not passed directly as args.
+        env = os.environ.copy()
+        env['GITHUB_TOKEN'] = actual_token
+        env['OPENAI_API_KEY'] = actual_openai_key
+        
+        process = subprocess.run(cmd, check=False, capture_output=True, text=True, env=env)
+        if process.stdout:
+            click.echo(process.stdout)
+        if process.stderr:
+            click.echo(process.stderr, err=True)
+        if process.returncode != 0:
+            click.echo(f"Error: Script {script_path.name} failed with exit code {process.returncode}.", err=True)
+    except Exception as e:
+        click.echo(f"Failed to execute {script_path.name}: {e}", err=True)

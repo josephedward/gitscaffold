@@ -34,11 +34,11 @@ Enable subscription payments with Stripe.
 # Preview extracted and enriched issues (dry-run)
 export OPENAI_API_KEY=<your-openai-key>
 gitscaffold import-md owner/repo markdown_roadmap.md \
-  --heading 1 --dry-run --token $GITHUB_TOKEN
+  --heading-level 1 --dry-run --token $GITHUB_TOKEN
 
 # Create enriched issues on GitHub
 gitscaffold import-md owner/repo markdown_roadmap.md \
-  --heading 1 --token $GITHUB_TOKEN
+  --heading-level 1 --token $GITHUB_TOKEN
 ```
 
 ### Generate issues from structured YAML/JSON roadmap
@@ -76,7 +76,7 @@ You can clone this repository and use the top-level `gitscaffold.py` script:
 ./gitscaffold.py enrich owner/repo --batch --path ROADMAP.md --csv out.csv --interactive
 
 ## Import from unstructured Markdown (via AI)
-./gitscaffold.py import-md owner/repo markdown_roadmap.md --heading 2 --token $GITHUB_TOKEN
+./gitscaffold.py import-md owner/repo markdown_roadmap.md --heading-level 2 --token $GITHUB_TOKEN
 
 ## Initialize a new roadmap YAML template
 ./gitscaffold.py init ROADMAP.yml
