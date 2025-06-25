@@ -8,6 +8,27 @@ Gitscaffold is a command-line tool and GitHub Action that primarily converts uns
 pip install gitscaffold
 ```
 
+## Authentication and API Keys
+
+`gitscaffold` requires a GitHub Personal Access Token (PAT) for interacting with GitHub and an OpenAI API key for AI-driven features.
+
+You can provide these keys in a few ways:
+1.  **Environment Variables**: Set `GITHUB_TOKEN` and `OPENAI_API_KEY` in your shell.
+2.  **`.env` file**: Create a `.env` file in your project's root directory. `gitscaffold` will automatically load it.
+    ```
+    GITHUB_TOKEN="your_github_personal_access_token"
+    OPENAI_API_KEY="your_openai_api_key"
+    ```
+    *   **GitHub Token (`GITHUB_TOKEN`)**:
+        *   You'll need a [Personal Access Token (PAT)](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic).
+        *   For operations on *existing* repositories (e.g., `gitscaffold create`, `gitscaffold import-md`), the token primarily needs the `issues:write` permission.
+        *   If you use commands that *create new repositories* (e.g., `gitscaffold setup-repository` from the `scaffold.cli` or `./gitscaffold.py setup`), your PAT will need the `repo` scope (which includes `public_repo` and `repo:status`).
+    *   **OpenAI API Key (`OPENAI_API_KEY`)**: This is your standard API key from [OpenAI](https://platform.openai.com/api-keys).
+    *   **Important**: Add your `.env` file to your `.gitignore` to prevent accidentally committing your secret keys.
+3.  **Command-line Options**: Pass them directly, e.g., `--token YOUR_GITHUB_TOKEN`.
+
+If a token/key is provided via a command-line option, it will take precedence over environment variables or `.env` file settings. If not provided via an option, environment variables are checked next, followed by the `.env` file. Some commands like `gitscaffold create` may prompt for the GitHub token if it's not found.
+
 ## CLI Usage
 
 
