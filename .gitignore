@@ -23,3 +23,5 @@ misc
 
 # Environment variables
 .env
+.DS_Store
+scaffold/.DS_Store
