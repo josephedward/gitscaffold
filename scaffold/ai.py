@@ -8,7 +8,13 @@ from openai import OpenAI, OpenAIError # Updated import
 
 def extract_issues_from_markdown(md_file, model_name=None, temperature=0.5): # Renamed model to model_name for clarity
     """Use OpenAI to extract a list of issues from unstructured Markdown."""
-    client = OpenAI()
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        raise ValueError(
+            "OPENAI_API_KEY not found. Please set it in your environment or .env file. "
+            "Ensure the .env file is in the directory where you are running gitscaffold."
+        )
+    client = OpenAI(api_key=api_key)
     with open(md_file, 'r', encoding='utf-8') as f:
         content = f.read()
     
@@ -75,7 +81,13 @@ def extract_issues_from_markdown(md_file, model_name=None, temperature=0.5): # R
 
 def enrich_issue_description(title, existing_body, context='', model_name=None, temperature=0.7): # Renamed model to model_name
     """Use OpenAI to generate an enriched GitHub issue body."""
-    client = OpenAI()
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        raise ValueError(
+            "OPENAI_API_KEY not found. Please set it in your environment or .env file. "
+            "Ensure the .env file is in the directory where you are running gitscaffold."
+        )
+    client = OpenAI(api_key=api_key)
     effective_model_name = model_name or os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
     system_prompt = 'You are an expert software engineer and technical writer.'
     
