@@ -17,6 +17,7 @@ from .ai import extract_issues_from_markdown, enrich_issue_description
 @click.version_option(version=__version__, prog_name="gitscaffold")
 def cli():
     """Scaffold – Convert roadmaps to GitHub issues."""
+    load_dotenv()  # Load .env file at the start of CLI execution
     pass
 
 
@@ -24,8 +25,9 @@ def get_github_token():
     """
     Retrieves the GitHub token from .env file or prompts the user if not found.
     Saves the token to .env if newly provided.
+    Assumes load_dotenv() has already been called.
     """
-    load_dotenv()
+    # load_dotenv() # Moved to cli()
     token = os.getenv('GITHUB_TOKEN')
     if not token:
         click.echo("GitHub PAT not found in environment or .env file.")
