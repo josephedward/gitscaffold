@@ -250,6 +250,154 @@ def setup_repository(roadmap_file, token, repo_name, org, private, dry_run, ai_e
     )
 
 
+def _sync_issues_from_roadmap(
+    gh_client: GitHubClient,
+    roadmap_data,
+    existing_issue_titles: set[str],
+    dry_run: bool,
+    ai_enrich: bool,
+    context_text: str
+):
+    """Helper function to sync roadmap items to GitHub, creating missing ones after prompt."""
+    click.echo(f"Syncing roadmap '{roadmap_data.name}' with repository '{gh_client.repo.full_name}'.")
+    click.echo(f"Found {len(existing_issue_titles)} existing issue titles in the repository.")
+
+    # 1. Ensure Milestones exist
+    for m_data in roadmap_data.milestones:
+        milestone_name = m_data.name
+        existing_milestone = gh_client._find_milestone(milestone_name)
+        if dry_run:
+            if existing_milestone:
+                click.echo(f"[dry-run] Milestone '{milestone_name}' already exists. No action.")
+            else:
+                click.echo(f"[dry-run] Milestone '{milestone_name}' not found. Would create (Due: {m_data.due_date}).")
+        else:
+            if existing_milestone:
+                click.echo(f"Milestone '{existing_milestone.title}' already exists.")
+            else:
+                click.echo(f"Milestone '{milestone_name}' not found. Creating...")
+                new_milestone = gh_client.create_milestone(name=milestone_name, due_on=m_data.due_date)
+                click.echo(f"Milestone created: {new_milestone.title}")
+
+    # 2. Process features and tasks
+    for feat in roadmap_data.features:
+        feature_exists = feat.title in existing_issue_titles
+        feat_issue_obj = None # Stores created/found feature issue for parent linking
+
+        if not feature_exists:
+            if dry_run:
+                click.echo(f"[dry-run] Feature '{feat.title}' not found. Would prompt to create.")
+            elif click.confirm(f"Feature '{feat.title}' not found in GitHub issues. Create it?", default=False):
+                body = feat.description or ''
+                if ai_enrich:
+                    click.echo(f"AI-enriching new feature: {feat.title}...")
+                    body = enrich_issue_description(feat.title, body, context_text)
+                
+                click.echo(f"Creating feature issue: {feat.title}")
+                feat_issue_obj = gh_client.create_issue(
+                    title=feat.title,
+                    body=body,
+                    assignees=feat.assignees,
+                    labels=feat.labels,
+                    milestone=feat.milestone
+                )
+                click.echo(f"Feature issue created: #{feat_issue_obj.number} {feat.title}")
+                existing_issue_titles.add(feat.title) # Add to set to avoid re-prompting
+            else:
+                click.echo(f"Skipping feature: {feat.title}")
+        else:
+            click.echo(f"Feature '{feat.title}' already exists in GitHub issues. Checking its tasks...")
+            # Try to get the existing feature object for potential parent linking of new tasks
+            feat_issue_obj = gh_client._find_issue(feat.title)
+
+        # Process tasks for this feature
+        for task in feat.tasks:
+            task_exists = task.title in existing_issue_titles
+            if not task_exists:
+                if dry_run:
+                    click.echo(f"[dry-run] Task '{task.title}' (for feature '{feat.title}') not found. Would prompt to create.")
+                elif click.confirm(f"Task '{task.title}' (for feature '{feat.title}') not found in GitHub issues. Create it?", default=False):
+                    t_body = task.description or ''
+                    if ai_enrich:
+                        click.echo(f"AI-enriching new task: {task.title}...")
+                        t_body = enrich_issue_description(task.title, t_body, context_text)
+                    
+                    content = t_body
+                    # Attempt to link to parent feature if it was just created or already existed
+                    parent_issue_for_linking = feat_issue_obj
+                    if not parent_issue_for_linking and feature_exists: # If feature existed but obj not fetched yet
+                        parent_issue_for_linking = gh_client._find_issue(feat.title)
+
+                    if parent_issue_for_linking:
+                        content = f"{t_body}\n\nParent issue: #{parent_issue_for_linking.number}".strip()
+                    
+                    click.echo(f"Creating task issue: {task.title}")
+                    new_task_issue = gh_client.create_issue(
+                        title=task.title,
+                        body=content,
+                        assignees=task.assignees,
+                        labels=task.labels,
+                        milestone=feat.milestone # Tasks inherit milestone from feature
+                    )
+                    click.echo(f"Task issue created: #{new_task_issue.number} {task.title}")
+                    existing_issue_titles.add(task.title) # Add to set
+                else:
+                    click.echo(f"Skipping task: {task.title}")
+            else:
+                click.echo(f"Task '{task.title}' (for feature '{feat.title}') already exists in GitHub issues.")
+    click.echo("Roadmap sync processing finished.")
+
+
+@cli.command()
+@click.argument('roadmap_file', type=click.Path(exists=True))
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env if not provided)')
+@click.option('--repo', help='GitHub repository (owner/repo)', required=True)
+@click.option('--dry-run', is_flag=True, help='Simulate and show what would be created without making changes')
+@click.option('--ai-extract', is_flag=True, help='Use AI to extract issues from Markdown (if roadmap is Markdown)')
+@click.option('--ai-enrich', is_flag=True, help='Use AI to enrich descriptions of new issues')
+def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
+    """Compare roadmap with an existing GitHub repository and prompt to create missing issues."""
+    actual_token = token if token else get_github_token()
+    if not actual_token:
+        return
+
+    path = Path(roadmap_file)
+    suffix = path.suffix.lower()
+
+    if ai_extract:
+        if suffix not in ('.md', '.markdown'):
+            raise click.UsageError('--ai-extract only supported for Markdown files')
+        click.echo(f"AI-extracting issues from {roadmap_file}...")
+        features = extract_issues_from_markdown(roadmap_file)
+        raw_roadmap_data = {'name': path.stem, 'description': 'Roadmap extracted by AI.', 'milestones': [], 'features': features}
+    else:
+        raw_roadmap_data = parse_roadmap(roadmap_file)
+
+    validated_roadmap = validate_roadmap(raw_roadmap_data)
+    
+    gh_client = GitHubClient(actual_token, repo)
+
+    click.echo(f"Fetching existing issue titles from repository '{repo}'...")
+    existing_issue_titles = gh_client.get_all_issue_titles()
+    
+    context_text = ''
+    if ai_enrich:
+        if suffix in ('.md', '.markdown'):
+            context_text = path.read_text(encoding='utf-8')
+        elif validated_roadmap.description: # Use roadmap description as context for structured files
+            context_text = validated_roadmap.description
+    
+    _sync_issues_from_roadmap(
+        gh_client=gh_client,
+        roadmap_data=validated_roadmap,
+        existing_issue_titles=existing_issue_titles,
+        dry_run=dry_run,
+        ai_enrich=ai_enrich,
+        context_text=context_text
+    )
+    click.echo("Sync command finished.")
+
+
 @cli.command(name='import-md')
 @click.argument('repo_full_name', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')

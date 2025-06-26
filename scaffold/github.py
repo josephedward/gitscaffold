@@ -74,3 +74,14 @@ class GitHubClient:
                 raise ValueError(f"Milestone '{milestone}' not found for issue '{title}'")
             params['milestone'] = m.number
         return self.repo.create_issue(**params)
+
+    def get_all_issue_titles(self) -> set[str]:
+        """Fetch all issue titles in the repository."""
+        titles = set()
+        try:
+            for issue in self.repo.get_issues(state='all'):
+                titles.add(issue.title)
+        except GithubException as e:
+            # Consider more robust error handling or logging if needed
+            print(f"Warning: Error fetching issue titles: {e}. Proceeding with an empty list of existing titles.")
+        return titles
