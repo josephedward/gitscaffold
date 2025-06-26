@@ -78,6 +78,17 @@ gitscaffold create ROADMAP.yml \
   --dry-run
 ```
 
+### Delete closed issues
+Use `delete-closed` to permanently remove all closed issues from a specified repository. This action is irreversible and requires confirmation.
+
+```sh
+# List closed issues that would be deleted (dry run)
+gitscaffold delete-closed --repo owner/repo --token $GITHUB_TOKEN --dry-run
+
+# Delete all closed issues (will prompt for confirmation)
+gitscaffold delete-closed --repo owner/repo --token $GITHUB_TOKEN
+```
+
 ### Initialize a roadmap template
 ```sh
 gitscaffold init example-roadmap.yml
