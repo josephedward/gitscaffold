@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gitscaffold"
-version = "0.1.2"
+dynamic = ["version"]
 description = "Convert roadmaps to GitHub issues"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -27,3 +27,6 @@ namespaces = false
 include = ["scaffold*"]
 # You could also add: exclude = ["misc*"] if 'misc' should never be part of the package.
 # For now, explicitly including 'scaffold' should be sufficient.
+
+[tool.setuptools.dynamic]
+version = {attr = "scaffold.__version__"}
