@@ -6,32 +6,18 @@ on:
       - 'v*.*.*'
 
 jobs:
-  publish-pypi:
-    name: 🐍 Publish to PyPI
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-      - run: pip install --upgrade build twine
-      - run: python -m build
-      - run: |
-          python -m twine upload dist/* \
-            --username __token__ --password "$PYPI_API_TOKEN"
-        env:
-          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-
   publish-action:
-    name: 🚀 Notify Release
+    name: 🚀 Notify Release Triggered
     runs-on: ubuntu-latest
-    needs: publish-pypi
+    # This job no longer depends on a local PyPI publish,
+    # as pypi-publish.yml handles the actual publishing.
     steps:
       - uses: peter-evans/create-or-update-comment@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: 1
+          issue-number: 1 # Ensure this issue number is where you want notifications
           body: |
-            ### Release ${{ github.ref_name }}
-            • PyPI package published  
-            • GitHub Action ready for Marketplace
+            ### Release ${{ github.ref_name }} Initiated
+            A new release tag ${{ github.ref_name }} has been pushed.
+            • PyPI package publishing is being handled by the 'Publish Python package' workflow.
+            • Check the Actions tab for its status.
