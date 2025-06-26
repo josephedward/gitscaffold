@@ -52,88 +52,119 @@ SAMPLE_ROADMAP_DATA = {
 def runner():
     return CliRunner()
 
+from unittest.mock import MagicMock
+
+# Helper classes at module level
+class MockIssue:
+    def __init__(self, number, title, body="", milestone=None, labels=None, assignees=None):
+        self.number = number
+        self.title = title
+        self.body = body
+        self.milestone = milestone # Should be a MockMilestone object or None
+        self.labels = labels or []
+        self.assignees = assignees or []
+
+class MockMilestone:
+    def __init__(self, title, number=1, due_on=None):
+        self.title = title
+        self.number = number
+        self.due_on = due_on
+
+
 @pytest.fixture
 def mock_github_client(monkeypatch):
-    """Mocks GitHubClient and its relevant methods."""
-    mock_issues_created = []
-    mock_milestones_created = []
+    """Mocks GitHubClient by replacing its instantiation in scaffold.cli."""
     
-    class MockIssue:
-        def __init__(self, number, title, body="", milestone=None, labels=None, assignees=None):
-            self.number = number
-            self.title = title
-            self.body = body
-            self.milestone = milestone
-            self.labels = labels or []
-            self.assignees = assignees or []
-
-    class MockMilestone:
-        def __init__(self, title, number=1, due_on=None):
-            self.title = title
-            self.number = number
-            self.due_on = due_on
-
-    # Store existing titles to simulate a GitHub repo state
+    # Shared state for the mock client methods
+    mock_issues_created_list = []
+    mock_milestones_created_list = []
     existing_issue_titles_set = set()
-    existing_milestones_map = {} # title -> MockMilestone
+    existing_milestones_map = {}  # title -> MockMilestone object
+    pre_existing_issues_map = {} # title -> MockIssue object (for issues that exist "remotely")
 
-    def _get_all_issue_titles():
-        return existing_issue_titles_set
+    class MockedGitHubClientInstance:
+        def __init__(self, token, repo_full_name_arg):
+            self.token = token # Not used, but part of real signature
+            # Mock self.repo.full_name as it's used by the sync command
+            self.repo = MagicMock()
+            self.repo.full_name = repo_full_name_arg
+            
+            # Methods will operate on the shared state from the outer fixture scope
+            # This is a form of closure over the lists/dicts defined above.
 
-    def _find_milestone(name):
-        return existing_milestones_map.get(name)
+        def get_all_issue_titles(self) -> set[str]:
+            return existing_issue_titles_set
 
-    def _create_milestone(name, due_on=None):
-        if name in existing_milestones_map:
-            return existing_milestones_map[name]
-        new_m = MockMilestone(title=name, due_on=due_on, number=len(existing_milestones_map) + 1)
-        existing_milestones_map[name] = new_m
-        mock_milestones_created.append(new_m)
-        return new_m
-    
-    def _find_issue(title):
-        # This is a simplified find, real one might search a list of MockIssue objects
-        # For sync, we primarily care about titles, so this might not be heavily used by sync's direct logic
-        # if the title is in existing_issue_titles_set.
-        # However, it's used to get the parent issue object.
-        for issue in mock_issues_created: # Check newly created ones
-            if issue.title == title:
-                return issue
-        # In a more complex mock, you'd also check "pre-existing" issues.
-        return None
+        def _find_milestone(self, name: str):
+            return existing_milestones_map.get(name)
 
+        def create_milestone(self, name: str, due_on=None):
+            if name in existing_milestones_map: # If it "pre-existed"
+                return existing_milestones_map[name]
+            
+            # Check if it was already created in this "session" by this mock
+            for m in mock_milestones_created_list:
+                if m.title == name:
+                    return m
 
-    def _create_issue(title, body, assignees, labels, milestone):
-        # Simulate finding the milestone object if only name is passed
-        milestone_obj = None
-        if milestone and isinstance(milestone, str): # milestone name
-            milestone_obj = existing_milestones_map.get(milestone)
+            new_m = MockMilestone(title=name, due_on=due_on, number=len(existing_milestones_map) + len(mock_milestones_created_list) + 1)
+            # Unlike real client, we might add to existing_milestones_map here so _find_milestone can see it immediately
+            # Or rely on tests to populate existing_milestones_map for pre-existing ones.
+            # For simplicity, let's assume create_milestone makes it findable by _find_milestone.
+            existing_milestones_map[name] = new_m 
+            mock_milestones_created_list.append(new_m)
+            return new_m
+        
+        def _find_issue(self, title: str):
+            # Check issues created during this sync operation first
+            for issue in mock_issues_created_list:
+                if issue.title == title:
+                    return issue
+            # Then check "pre-existing" issues (simulating those already on GitHub)
+            return pre_existing_issues_map.get(title)
 
-        new_issue = MockIssue(
-            number=len(mock_issues_created) + 100, # Arbitrary starting number
-            title=title,
-            body=body,
-            milestone=milestone_obj,
-            labels=labels,
-            assignees=assignees
-        )
-        mock_issues_created.append(new_issue)
-        existing_issue_titles_set.add(title) # Add to existing titles upon creation
-        return new_issue
+        def create_issue(self, title: str, body: str = None, assignees: list = None, labels: list = None, milestone: str = None):
+            # Real client's create_issue calls _find_issue first.
+            # Our sync logic checks `title in existing_issue_titles` then calls create_issue if not found and confirmed.
+            # So, this mock method assumes the decision to create has been made.
 
-    monkeypatch.setattr(GitHubClient, "get_all_issue_titles", _get_all_issue_titles)
-    monkeypatch.setattr(GitHubClient, "_find_milestone", _find_milestone)
-    monkeypatch.setattr(GitHubClient, "create_milestone", _create_milestone)
-    monkeypatch.setattr(GitHubClient, "_find_issue", _find_issue)
-    monkeypatch.setattr(GitHubClient, "create_issue", _create_issue)
-    
-    # Allow tests to modify the "remote" state and check created items
-    return {
+            milestone_obj = None
+            if milestone: # milestone is a name string
+                milestone_obj = self._find_milestone(milestone) # Uses mocked _find_milestone
+                if not milestone_obj:
+                    # This behavior is consistent with the real GitHubClient if a milestone name is provided
+                    # but the milestone doesn't exist (it would try to find it, then fail).
+                    # The sync logic in cli.py should ensure milestones exist before creating issues with them.
+                    # However, the GitHubClient.create_issue itself raises ValueError if milestone not found by name.
+                    raise ValueError(f"Mocked GitHubClient: Milestone '{milestone}' not found for issue '{title}'")
+
+            new_issue = MockIssue(
+                number=len(mock_issues_created_list) + 100, # Arbitrary starting number for new issues
+                title=title,
+                body=body,
+                milestone=milestone_obj, # Pass the MockMilestone object
+                labels=labels,
+                assignees=assignees
+            )
+            mock_issues_created_list.append(new_issue)
+            existing_issue_titles_set.add(title) # Ensure it's now "existing"
+            return new_issue
+
+    # This is what the tests will use to set up pre-existing state and check results.
+    fixture_data_access = {
         "existing_issue_titles_set": existing_issue_titles_set,
         "existing_milestones_map": existing_milestones_map,
-        "mock_issues_created": mock_issues_created,
-        "mock_milestones_created": mock_milestones_created
+        "pre_existing_issues_map": pre_existing_issues_map,
+        "mock_issues_created": mock_issues_created_list, # Renamed for clarity
+        "mock_milestones_created": mock_milestones_created_list # Renamed for clarity
     }
+
+    # Patch the GitHubClient class in the context of scaffold.cli module
+    # When scaffold.cli.GitHubClient(token, repo) is called, it will now call this lambda,
+    # which returns an instance of our MockedGitHubClientInstance.
+    monkeypatch.setattr("scaffold.cli.GitHubClient", lambda token, repo_full_name: MockedGitHubClientInstance(token, repo_full_name))
+    
+    return fixture_data_access
 
 
 @pytest.fixture
@@ -231,12 +262,16 @@ def test_sync_some_items_exist(runner, sample_roadmap_file, mock_github_client, 
     monkeypatch.setattr("click.confirm", lambda prompt, default: True) # Confirm yes for new items
     monkeypatch.setattr("scaffold.cli.enrich_issue_description", lambda title, body, context: body)
 
-    # Add a pre-existing milestone
-    existing_m1 = mock_github_client["mock_milestones_created"].append(
-        type('MockMilestone', (), {'title': 'M1: Setup', 'number': 1})
-    )
-    mock_github_client["existing_milestones_map"]["M1: Setup"] = existing_m1
-
+    # Add a pre-existing milestone to the map that _find_milestone will check
+    pre_existing_m1_obj = MockMilestone(title='M1: Setup', number=1, due_on="2025-01-01")
+    mock_github_client["existing_milestones_map"]["M1: Setup"] = pre_existing_m1_obj
+    
+    # Simulate "Feature A: Core Logic" already exists "remotely" and has an issue number.
+    # This allows _find_issue to return it, which is needed for parent task linking.
+    pre_existing_feature_a_obj = MockIssue(title="Feature A: Core Logic", number=90, milestone=pre_existing_m1_obj)
+    mock_github_client["pre_existing_issues_map"]["Feature A: Core Logic"] = pre_existing_feature_a_obj
+    # Task A.1 also pre-exists by title, but we don't need its object for this specific test's assertions yet,
+    # unless we were testing linking *to* it or its properties.
 
     result = runner.invoke(cli, [
         'sync', str(sample_roadmap_file),
