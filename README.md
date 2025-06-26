@@ -99,21 +99,19 @@ Use `sync` to compare a roadmap file with an existing GitHub repository. It will
 ```sh
 # Sync with a Markdown roadmap, extracting issues with AI
 # This is useful if your roadmap is in a Markdown file like docs/example_roadmap.md
-# Ensure OPENAI_API_KEY is set in your .env file or environment for --ai-extract and --ai-enrich
+# Ensure GITHUB_TOKEN and OPENAI_API_KEY are set in your .env file or environment.
 gitscaffold sync docs/example_roadmap.md \
-  --repo owner/repo \
-  --token $GITHUB_TOKEN \
+  --repo josephedward/gitscaffold \
   --ai-extract \
   --ai-enrich # Optional: to also enrich descriptions of extracted issues
 
 # Simulate the sync process without making any changes (dry run)
 gitscaffold sync docs/example_roadmap.md \
-  --repo owner/repo \
-  --token $GITHUB_TOKEN \
+  --repo josephedward/gitscaffold \
   --ai-extract \
   --dry-run
 ```
-**Note:** The `sync` command also supports structured YAML/JSON roadmap files if you don't use the `--ai-extract` flag.
+**Note:** The `sync` command also supports structured YAML/JSON roadmap files if you don't use the `--ai-extract` flag. The `--token` option can be used to override the `GITHUB_TOKEN` from the environment or `.env` file.
 
 ### Delete closed issues
 Use `delete-closed` to permanently remove all closed issues from a specified repository. This action is irreversible and requires confirmation.
