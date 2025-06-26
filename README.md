@@ -3,6 +3,16 @@
 
 Gitscaffold is a command-line tool and GitHub Action that primarily converts unstructured Markdown documents into GitHub issues and milestones using AI-driven extraction and enrichment. It also supports structured roadmap files (YAML/JSON) when you need strict schemas and milestones.
 
+## Key Features
+
+*   **AI-Powered Issue Extraction**: Convert free-form Markdown documents into structured GitHub issues using OpenAI.
+*   **Structured Roadmap Support**: Generate issues and milestones from YAML or JSON roadmap files.
+*   **Roadmap Synchronization (`sync`)**: Compare your roadmap with an existing GitHub repository and interactively create missing issues to keep them aligned.
+*   **Bulk Delete Closed Issues (`delete-closed`)**: Clean up your repository by permanently removing all closed issues, with dry-run and confirmation steps.
+*   **AI Enrichment**: Enhance issue descriptions with AI-generated content for clarity and context.
+*   **Roadmap Initialization**: Quickly scaffold a new roadmap template file.
+*   **Flexible Authentication**: Supports GitHub tokens and OpenAI keys via environment variables, `.env` files, or command-line options.
+
 ## Installation
 ```sh
 pip install gitscaffold
