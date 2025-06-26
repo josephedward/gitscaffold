@@ -43,11 +43,31 @@ def get_github_token():
     return token
 
 
+def get_openai_api_key():
+    """
+    Retrieves the OpenAI API key from .env file or environment.
+    Assumes load_dotenv() has already been called.
+    """
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        # Unlike GitHub token, we won't prompt for OpenAI key for now,
+        # as it's usually less interactive and more of a setup step.
+        # We also won't save it back to .env from here.
+        click.echo(
+            "Error: OPENAI_API_KEY not found. Please set it in your environment or .env file. "
+            "Ensure the .env file is in the directory where you are running gitscaffold.",
+            err=True
+        )
+        return None
+    return api_key
+
+
 def _populate_repo_from_roadmap(
     gh_client: GitHubClient,
     roadmap_data,
     dry_run: bool,
     ai_enrich: bool,
+    openai_api_key: str, # Added openai_api_key
     context_text: str,
     roadmap_file_path: Path # For context if needed, though context_text is passed
 ):
@@ -69,9 +89,9 @@ def _populate_repo_from_roadmap(
         if ai_enrich:
             if dry_run:
                 click.echo(f"[dry-run] Would AI-enrich feature: {feat.title}")
-            else:
+            elif openai_api_key: # Only enrich if key is available
                 click.echo(f"AI-enriching feature: {feat.title}...")
-                body = enrich_issue_description(feat.title, body, context_text)
+                body = enrich_issue_description(feat.title, body, openai_api_key, context_text)
         
         if dry_run:
             click.echo(f"[dry-run] Would create or fetch feature issue: {feat.title}")
@@ -94,9 +114,9 @@ def _populate_repo_from_roadmap(
             if ai_enrich:
                 if dry_run:
                     click.echo(f"[dry-run] Would AI-enrich sub-task: {task.title}")
-                else:
+                elif openai_api_key: # Only enrich if key is available
                     click.echo(f"AI-enriching sub-task: {task.title}...")
-                    t_body = enrich_issue_description(task.title, t_body, context_text)
+                    t_body = enrich_issue_description(task.title, t_body, openai_api_key, context_text)
             
             if dry_run:
                 parent_info = f"(parent: #{feat_issue_number})"
@@ -131,11 +151,18 @@ def create(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     path = Path(roadmap_file)
     suffix = path.suffix.lower()
 
+    openai_api_key_for_ai = None
+    if ai_extract or ai_enrich:
+        openai_api_key_for_ai = get_openai_api_key()
+        if not openai_api_key_for_ai:
+            # get_openai_api_key already printed an error, so just return
+            return 1 # Indicate error
+
     if ai_extract:
         if suffix not in ('.md', '.markdown'):
             raise click.UsageError('--ai-extract only supported for Markdown files')
         click.echo(f"AI-extracting issues from {roadmap_file}...")
-        features = extract_issues_from_markdown(roadmap_file)
+        features = extract_issues_from_markdown(roadmap_file, api_key=openai_api_key_for_ai)
         # TODO: AI extraction might need to provide milestones too, or a default one.
         # For now, assuming it primarily extracts features/tasks.
         raw_roadmap_data = {'name': path.stem, 'description': 'Roadmap extracted by AI.', 'milestones': [], 'features': features}
@@ -160,6 +187,7 @@ def create(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
         roadmap_data=validated_roadmap,
         dry_run=dry_run,
         ai_enrich=ai_enrich,
+        openai_api_key=openai_api_key_for_ai,
         context_text=context_text,
         roadmap_file_path=path
     )
@@ -183,11 +211,17 @@ def setup_repository(roadmap_file, token, repo_name, org, private, dry_run, ai_e
     path = Path(roadmap_file)
     suffix = path.suffix.lower()
 
+    openai_api_key_for_ai = None
+    if ai_extract or ai_enrich:
+        openai_api_key_for_ai = get_openai_api_key()
+        if not openai_api_key_for_ai:
+            return 1
+
     if ai_extract:
         if suffix not in ('.md', '.markdown'):
             raise click.UsageError('--ai-extract only supported for Markdown files')
         click.echo(f"AI-extracting issues from {roadmap_file}...")
-        features = extract_issues_from_markdown(roadmap_file)
+        features = extract_issues_from_markdown(roadmap_file, api_key=openai_api_key_for_ai)
         raw_roadmap_data = {'name': path.stem, 'description': f'Repository for {path.stem}', 'milestones': [], 'features': features}
     else:
         raw_roadmap_data = parse_roadmap(roadmap_file)
@@ -247,6 +281,7 @@ def setup_repository(roadmap_file, token, repo_name, org, private, dry_run, ai_e
         roadmap_data=validated_roadmap,
         dry_run=dry_run, # This dry_run flag controls population behavior
         ai_enrich=ai_enrich,
+        openai_api_key=openai_api_key_for_ai,
         context_text=context_text,
         roadmap_file_path=path
     )
@@ -258,6 +293,7 @@ def _sync_issues_from_roadmap(
     existing_issue_titles: set[str],
     dry_run: bool,
     ai_enrich: bool,
+    openai_api_key: str, # Added openai_api_key
     context_text: str
 ):
     """Helper function to sync roadmap items to GitHub, creating missing ones after prompt."""
@@ -291,9 +327,9 @@ def _sync_issues_from_roadmap(
                 click.echo(f"[dry-run] Feature '{feat.title}' not found. Would prompt to create.")
             elif click.confirm(f"Feature '{feat.title}' not found in GitHub issues. Create it?", default=False):
                 body = feat.description or ''
-                if ai_enrich:
+                if ai_enrich and openai_api_key: # Only enrich if key is available
                     click.echo(f"AI-enriching new feature: {feat.title}...")
-                    body = enrich_issue_description(feat.title, body, context_text)
+                    body = enrich_issue_description(feat.title, body, openai_api_key, context_text)
                 
                 click.echo(f"Creating feature issue: {feat.title}")
                 feat_issue_obj = gh_client.create_issue(
@@ -320,9 +356,9 @@ def _sync_issues_from_roadmap(
                     click.echo(f"[dry-run] Task '{task.title}' (for feature '{feat.title}') not found. Would prompt to create.")
                 elif click.confirm(f"Task '{task.title}' (for feature '{feat.title}') not found in GitHub issues. Create it?", default=False):
                     t_body = task.description or ''
-                    if ai_enrich:
+                    if ai_enrich and openai_api_key: # Only enrich if key is available
                         click.echo(f"AI-enriching new task: {task.title}...")
-                        t_body = enrich_issue_description(task.title, t_body, context_text)
+                        t_body = enrich_issue_description(task.title, t_body, openai_api_key, context_text)
                     
                     content = t_body
                     # Attempt to link to parent feature if it was just created or already existed
@@ -366,11 +402,17 @@ def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     path = Path(roadmap_file)
     suffix = path.suffix.lower()
 
+    openai_api_key_for_ai = None
+    if ai_extract or ai_enrich:
+        openai_api_key_for_ai = get_openai_api_key()
+        if not openai_api_key_for_ai:
+            return 1
+
     if ai_extract:
         if suffix not in ('.md', '.markdown'):
             raise click.UsageError('--ai-extract only supported for Markdown files')
         click.echo(f"AI-extracting issues from {roadmap_file}...")
-        features = extract_issues_from_markdown(roadmap_file)
+        features = extract_issues_from_markdown(roadmap_file, api_key=openai_api_key_for_ai)
         raw_roadmap_data = {'name': path.stem, 'description': 'Roadmap extracted by AI.', 'milestones': [], 'features': features}
     else:
         raw_roadmap_data = parse_roadmap(roadmap_file)
@@ -395,6 +437,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
         existing_issue_titles=existing_issue_titles,
         dry_run=dry_run,
         ai_enrich=ai_enrich,
+        openai_api_key=openai_api_key_for_ai,
         context_text=context_text
     )
     click.echo("Sync command finished.")
