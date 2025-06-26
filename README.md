@@ -72,21 +72,48 @@ gitscaffold import-md owner/repo markdown_roadmap.md \
   --heading-level 1 --token $GITHUB_TOKEN
 ```
 
-### Generate issues from structured YAML/JSON roadmap
-Use `create` for structured YAML or JSON roadmaps:
+### Create issues from a Markdown roadmap (AI-powered)
+Use `create` with `--ai-extract` to generate issues from a Markdown roadmap.
 
 ```sh
-# Create GitHub issues from a structured roadmap file
-gitscaffold create ROADMAP.yml \
-  --repo owner/repo \
-  --token $GITHUB_TOKEN
-
-# Validate without creating issues (dry run)
-gitscaffold create ROADMAP.yml \
+# Create GitHub issues from a Markdown roadmap file using AI extraction
+# Ensure OPENAI_API_KEY is set in your .env file or environment
+gitscaffold create your-roadmap.md \
   --repo owner/repo \
   --token $GITHUB_TOKEN \
+  --ai-extract \
+  --ai-enrich # Optional: to also enrich descriptions
+
+# Preview extracted issues without creating them (dry run)
+gitscaffold create your-roadmap.md \
+  --repo owner/repo \
+  --token $GITHUB_TOKEN \
+  --ai-extract \
   --dry-run
 ```
+**Note:** The `create` command also supports structured YAML/JSON roadmap files for manual issue definition if you don't use the `--ai-extract` flag.
+
+### Sync roadmap with an existing repository
+Use `sync` to compare a roadmap file with an existing GitHub repository. It will identify roadmap items that don't have corresponding entries in GitHub and prompt you to create them. This is particularly useful for Markdown roadmaps using AI extraction.
+
+```sh
+# Sync with a Markdown roadmap, extracting issues with AI
+# This is useful if your roadmap is in a Markdown file like docs/example_roadmap.md
+# Ensure OPENAI_API_KEY is set in your .env file or environment for --ai-extract and --ai-enrich
+gitscaffold sync docs/example_roadmap.md \
+  --repo owner/repo \
+  --token $GITHUB_TOKEN \
+  --ai-extract \
+  --ai-enrich # Optional: to also enrich descriptions of extracted issues
+
+# Simulate the sync process without making any changes (dry run)
+gitscaffold sync docs/example_roadmap.md \
+  --repo owner/repo \
+  --token $GITHUB_TOKEN \
+  --ai-extract \
+  --dry-run
+```
+**Note:** The `sync` command also supports structured YAML/JSON roadmap files if you don't use the `--ai-extract` flag.
 
 ### Delete closed issues
 Use `delete-closed` to permanently remove all closed issues from a specified repository. This action is irreversible and requires confirmation.

@@ -212,8 +212,8 @@ features:
         labels: [feature, github-integration]
         assignees: []
       - title: Roadmap diffing and updating ("sync" command)
-        description: Implement a command to compare the current state of GitHub issues/milestones with the roadmap file and report differences or apply updates.
-        labels: [feature, cli, github-sync]
+        description: Implemented. The `sync` command compares a roadmap with GitHub issues and prompts to create missing ones. Currently emphasizes Markdown roadmaps with AI extraction (`--ai-extract`).
+        labels: [feature, cli, github-sync, implemented]
         assignees: []
       - title: Option for sub-tasks as checklist items
         description: Provide an option (e.g., per feature or globally) to create tasks as checklist items within the body of their parent feature's issue, rather than separate issues.
