@@ -65,7 +65,7 @@ features:
         labels: [implementation, cli, github]
         assignees: []
       - title: Implement `delete-closed` command (from gitscaffold.py)
-        description: Port and integrate the `delete-closed` command. Based on `gitscaffold.py::delete-closed`.
+        description: Port and integrate the `delete-closed` command. Based on `gitscaffold.py::delete-closed`. This is now implemented as `scaffold delete-closed`.
         labels: [implementation, cli, github]
         assignees: []
 

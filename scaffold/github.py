@@ -85,3 +85,68 @@ class GitHubClient:
             # Consider more robust error handling or logging if needed
             print(f"Warning: Error fetching issue titles: {e}. Proceeding with an empty list of existing titles.")
         return titles
+
+    def get_closed_issues_for_deletion(self) -> list[dict]:
+        """
+        Fetch all closed issues with their numbers and node IDs for deletion.
+        Handles pagination.
+        """
+        query = """
+        query($owner: String!, $repo: String!, $after: String) {
+          repository(owner: $owner, name: $repo) {
+            issues(states: CLOSED, first: 100, after: $after) {
+              pageInfo { hasNextPage, endCursor }
+              nodes { id, number, title }
+            }
+          }
+        }
+        """
+        issues_to_delete = []
+        after = None
+        owner, repo_name = self.repo.full_name.split('/')
+        while True:
+            variables = {"owner": owner, "repo": repo_name, "after": after}
+            try:
+                # PyGitHub's Github object has a direct graphql method
+                data = self.github.graphql(query, variables=variables) 
+            except GithubException as e: # More specific exception if PyGitHub's graphql raises one
+                print(f"Error fetching closed issues via GraphQL: {e}")
+                # Depending on desired robustness, could raise or return partial/empty
+                return [] # Or raise a custom error
+            except Exception as e: # Catch other potential errors like network issues
+                print(f"An unexpected error occurred fetching closed issues: {e}")
+                return []
+
+
+            if not data or "repository" not in data or not data["repository"] or "issues" not in data["repository"]:
+                print(f"Warning: Unexpected GraphQL response structure: {data}")
+                break # Avoid erroring out on unexpected structure
+
+            nodes = data["repository"]["issues"]["nodes"]
+            issues_to_delete.extend([{"id": node["id"], "number": node["number"], "title": node["title"]} for node in nodes])
+            
+            page_info = data["repository"]["issues"]["pageInfo"]
+            if not page_info["hasNextPage"]:
+                break
+            after = page_info["endCursor"]
+        return issues_to_delete
+
+    def delete_issue_by_node_id(self, node_id: str) -> bool:
+        """Delete an issue by its GraphQL node ID."""
+        mutation = """
+        mutation($issueId: ID!) {
+          deleteIssue(input: {issueId: $issueId}) {
+            clientMutationId # Can be anything, just need to request something
+          }
+        }
+        """
+        variables = {"issueId": node_id}
+        try:
+            self.github.graphql(mutation, variables=variables)
+            return True
+        except GithubException as e:
+            print(f"Error deleting issue {node_id} via GraphQL: {e}")
+            return False
+        except Exception as e:
+            print(f"An unexpected error occurred deleting issue {node_id}: {e}")
+            return False

@@ -398,6 +398,65 @@ def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     click.echo("Sync command finished.")
 
 
+@cli.command(name='delete-closed')
+@click.option('--repo', help='GitHub repository (owner/repo)', required=True)
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env if not provided)')
+@click.option('--dry-run', is_flag=True, help='List closed issues that would be deleted, without actually deleting them')
+@click.confirmation_option(prompt='Are you absolutely sure you want to delete closed issues? This action is irreversible. Type "yes" to confirm.')
+def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected by confirmation_option
+    """Permanently delete all closed issues in a repository. Requires confirmation."""
+    if not yes and not dry_run: # Check if confirmation was given, unless it's a dry run
+        click.echo("Confirmation not received. Aborting.")
+        return
+
+    actual_token = token if token else get_github_token()
+    if not actual_token:
+        return
+
+    gh_client = GitHubClient(actual_token, repo)
+    click.echo(f"Fetching closed issues from '{repo}'...")
+    
+    closed_issues = gh_client.get_closed_issues_for_deletion()
+
+    if not closed_issues:
+        click.echo("No closed issues found to delete.")
+        return
+
+    click.echo(f"Found {len(closed_issues)} closed issues:")
+    for issue in closed_issues:
+        click.echo(f"  - #{issue['number']}: {issue['title']} (Node ID: {issue['id']})")
+
+    if dry_run:
+        click.echo("\n[dry-run] No issues were deleted.")
+        return
+
+    # Double-check confirmation, as click.confirmation_option might not be enough for such a destructive action
+    # The `yes` parameter from `confirmation_option` already handles the initial prompt.
+    # If we reach here and it's not a dry_run, 'yes' must have been true.
+    # An additional, more specific prompt can be added if desired:
+    # specific_confirmation = click.prompt(f"To confirm deletion of {len(closed_issues)} issues from '{repo}', please type the repository name ('{repo}')")
+    # if specific_confirmation != repo:
+    #     click.echo("Repository name not matched. Aborting deletion.")
+    #     return
+    
+    click.echo("\nProceeding with deletion...")
+    deleted_count = 0
+    failed_count = 0
+    for issue in closed_issues:
+        click.echo(f"Deleting issue #{issue['number']}: {issue['title']}...")
+        if gh_client.delete_issue_by_node_id(issue['id']):
+            click.echo(f"  Successfully deleted #{issue['number']}.")
+            deleted_count += 1
+        else:
+            click.echo(f"  Failed to delete #{issue['number']}.")
+            failed_count += 1
+    
+    click.echo("\nDeletion process finished.")
+    click.echo(f"Successfully deleted: {deleted_count} issues.")
+    if failed_count > 0:
+        click.echo(f"Failed to delete: {failed_count} issues. Check logs for errors.", err=True)
+
+
 @cli.command(name='import-md')
 @click.argument('repo_full_name', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')
