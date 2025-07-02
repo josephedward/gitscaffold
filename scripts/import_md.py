@@ -28,10 +28,13 @@ load_dotenv(find_dotenv())
 @click.option('--max-tokens', 'max_tokens', type=int, default=int(os.getenv('OPENAI_MAX_TOKENS', '800')), show_default=True,
               help='OpenAI max tokens')
 @click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
 @click.option('--heading', 'heading', type=int, default=1, show_default=True,
               help='Markdown heading level to split issues (1 for "#", 2 for "##")')
-def main(repo, markdown_file, token, openai_key, model, temperature, max_tokens, dry_run, heading):
+def main(repo, markdown_file, token, openai_key, model, temperature, max_tokens, dry_run, verbose, heading):
     """Import issues from an unstructured markdown file, enriching via OpenAI LLM."""
+    if verbose:
+        click.echo(f"Authenticating to GitHub repository '{repo}'", err=True)
     # GitHub authentication
     token = token or os.getenv('GITHUB_TOKEN')
     if not token:
@@ -49,6 +52,8 @@ def main(repo, markdown_file, token, openai_key, model, temperature, max_tokens,
         click.echo('Error: OpenAI API key required. Set OPENAI_API_KEY or pass --openai-key.', err=True)
         sys.exit(1)
     openai.api_key = openai_key
+    if verbose:
+        click.echo(f"Reading markdown file: {markdown_file}", err=True)
 
     def call_llm(title: str, raw: str) -> str:
         system = {"role": "system", "content": "You are an expert software engineer and technical writer specializing in GitHub issues."}
@@ -89,10 +94,16 @@ def main(repo, markdown_file, token, openai_key, model, temperature, max_tokens,
     if not issues:
         click.echo('No headings found; nothing to import.', err=True)
         sys.exit(1)
+    if verbose:
+        click.echo(f"Found {len(issues)} headings at level {heading}", err=True)
 
     # Create and enrich issues
-    for title, raw_body in issues:
+    for idx, (title, raw_body) in enumerate(issues, start=1):
+        if verbose:
+            click.echo(f"[{idx}/{len(issues)}] Processing issue: {title}", err=True)
         # Enrich issue body via OpenAI
+        if verbose:
+            click.echo("  Calling OpenAI to generate enriched description...", err=True)
         try:
             enriched = call_llm(title, raw_body)
         except Exception as e:

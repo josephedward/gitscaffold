@@ -147,14 +147,17 @@ features:
 @click.option('--token', help='GitHub token override')
 @click.option('--openai-key', 'openai_key', help='OpenAI API key override')
 @click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
 @click.option('--heading-level', type=int, help='Markdown heading level to consider for issue creation (e.g., 1 for #, 2 for ##). Passed as --heading to the underlying script.')
 # The --apply flag is removed for import-md as it always applies enrichment if not dry-run.
-def import_md(repo, markdown_file, token, openai_key, dry_run, heading_level):
+def import_md(repo, markdown_file, token, openai_key, dry_run, verbose, heading_level):
     """Import and enrich issues from an unstructured markdown file via AI."""
     script = os.path.join(os.path.dirname(__file__), 'scripts', 'import_md.py')
     cmd = [sys.executable, script, repo, markdown_file]
     if dry_run:
         cmd.append('--dry-run')
+    if verbose:
+        cmd.append('--verbose')
     if token:
         cmd.extend(['--token', token])
     if openai_key:

@@ -67,6 +67,10 @@ export OPENAI_API_KEY=<your-openai-key>
 gitscaffold import-md owner/repo markdown_roadmap.md \
   --heading-level 1 --dry-run --token $GITHUB_TOKEN
 
+# Show detailed progress logs during extraction and enrichment
+gitscaffold import-md owner/repo markdown_roadmap.md \
+  --heading-level 1 --dry-run --verbose --token $GITHUB_TOKEN --openai-key $OPENAI_API_KEY
+
 # Create enriched issues on GitHub
 gitscaffold import-md owner/repo markdown_roadmap.md \
   --heading-level 1 --token $GITHUB_TOKEN
@@ -144,6 +148,10 @@ You can clone this repository and use the top-level `gitscaffold.py` script:
 
 ## Import from unstructured Markdown (via AI)
 ./gitscaffold.py import-md owner/repo markdown_roadmap.md --heading-level 2 --token $GITHUB_TOKEN
+
+# Show detailed progress logs during import
+./gitscaffold.py import-md owner/repo markdown_roadmap.md \
+  --heading-level 2 --dry-run --verbose --token $GITHUB_TOKEN --openai-key $OPENAI_API_KEY
 
 ## Initialize a new roadmap YAML template
 ./gitscaffold.py init ROADMAP.yml
