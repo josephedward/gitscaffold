@@ -563,12 +563,8 @@ def import_md_command(repo_full_name, markdown_file, token, openai_key, dry_run,
         env['GITHUB_TOKEN'] = actual_token
         env['OPENAI_API_KEY'] = actual_openai_key
         
-        process = subprocess.run(cmd, check=False, capture_output=True, text=True, env=env)
-        if process.stdout:
-            click.echo(process.stdout)
-        if process.stderr:
-            click.echo(process.stderr, err=True)
-        if process.returncode != 0:
-            click.echo(f"Error: Script {script_path.name} failed with exit code {process.returncode}.", err=True)
+        click.echo(f"Running import script: {script_path.name}")
+        process = subprocess.run(cmd, check=False, env=env)
+        return process.returncode
     except Exception as e:
         click.echo(f"Failed to execute {script_path.name}: {e}", err=True)
