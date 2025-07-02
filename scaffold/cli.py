@@ -508,11 +508,12 @@ def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var if not provided)')
 @click.option('--openai-key', envvar='OPENAI_API_KEY', help='OpenAI API key (reads from .env or OPENAI_API_KEY env var if not provided)')
 @click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
 @click.option('--heading-level', 'heading_level', type=int, default=1, show_default=True,
-              help='Markdown heading level to split issues (1 for "#", 2 for "##"). Passed as --heading to the underlying script.')
+                   help='Markdown heading level to split issues (1 for "#", 2 for "##"). Passed as --heading to the underlying script.')
 # Options from scripts/import_md.py that might be useful to expose: --model, --temperature, --max-tokens
 # For now, keeping it simple and letting the script use its defaults or env vars for those.
-def import_md_command(repo_full_name, markdown_file, token, openai_key, dry_run, heading_level):
+def import_md_command(repo_full_name, markdown_file, token, openai_key, dry_run, verbose, heading_level):
     """Import issues from an unstructured markdown file, enriching via OpenAI LLM.
     
     This command calls the scripts/import_md.py script.
@@ -540,6 +541,8 @@ def import_md_command(repo_full_name, markdown_file, token, openai_key, dry_run,
 
     if dry_run:
         cmd.append('--dry-run')
+    if verbose:
+        cmd.append('--verbose')
     
     # Pass token and openai_key to the script if provided, otherwise script will use env vars
     if token: # Pass explicitly if given via CLI option to this command
