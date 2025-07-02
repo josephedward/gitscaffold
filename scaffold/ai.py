@@ -49,8 +49,8 @@ def extract_issues_from_markdown(md_file, api_key: str, model_name=None, tempera
             if text.endswith("```"):
                 text = text.rsplit("```", 1)[0]
         elif text.startswith("```"): # Generic code fence
-             text = text.split("```", 1)[1]
-             if text.endswith("```"):
+            text = text.split("```", 1)[1]
+            if text.endswith("```"):
                 text = text.rsplit("```", 1)[0]
         text = text.strip()
         
