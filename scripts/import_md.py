@@ -69,7 +69,7 @@ def main(repo, markdown_file, token, openai_key, model, temperature, max_tokens,
     # Read and parse markdown into (title, body) pairs
     with open(markdown_file, encoding='utf-8') as f:
         lines = f.readlines()
-    pattern = re.compile(r'^\s*' + ('#' * heading) + r'\s+(.*)')
+    pattern = re.compile(r'^\s*' + ('#' * heading) + r'\s*(.*)')
     issues = []
     current_title = None
     current_body = []
