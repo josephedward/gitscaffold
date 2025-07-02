@@ -532,6 +532,7 @@ def import_md_command(repo_full_name, markdown_file, token, openai_key, dry_run,
         click.echo("Error: OpenAI API key required. Set OPENAI_API_KEY env var or use --openai-key.", err=True)
         return 1 # Indicate error
 
+    # Go up one level from scaffold/ to find the sibling scripts/ directory
     script_path = Path(__file__).parent.parent / 'scripts' / 'import_md.py'
     if not script_path.exists():
         click.echo(f"Error: The script import_md.py was not found at {script_path}", err=True)
