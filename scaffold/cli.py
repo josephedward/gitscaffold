@@ -135,13 +135,13 @@ def _populate_repo_from_roadmap(
                 click.echo(f"Sub-task created or exists: {task.title}")
 
 
-@cli.command()
-@click.argument('roadmap_file', type=click.Path(exists=True))
-@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env if not provided)')
-@click.option('--repo', help='GitHub repository (owner/repo)', required=True)
-@click.option('--dry-run', is_flag=True, help='Validate without creating issues')
-@click.option('--ai-extract', is_flag=True, help='Use AI to extract issues from Markdown')
-@click.option('--ai-enrich', is_flag=True, help='Use AI to enrich issue descriptions')
+@cli.command(name="create", help="Populate an existing GitHub repository with issues from a roadmap file.")
+@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--dry-run', is_flag=True, help='Simulate the process without creating any issues on GitHub.')
+@click.option('--ai-extract', is_flag=True, help='Use AI to parse issues from an unstructured Markdown file.')
+@click.option('--ai-enrich', is_flag=True, help='Use AI to enrich issue descriptions with more details.')
 def create(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     """Populate an EXISTING GitHub repository with issues from a roadmap file."""
     actual_token = token if token else get_github_token()
@@ -193,15 +193,15 @@ def create(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     )
 
 
-@cli.command(name="setup-repository")
-@click.argument('roadmap_file', type=click.Path(exists=True))
-@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env if not provided)')
-@click.option('--repo-name', help='Name for the new GitHub repository (default: derived from roadmap name)')
-@click.option('--org', help='GitHub organization to create the repository in (default: user account)')
-@click.option('--private', is_flag=True, help='Create a private repository')
-@click.option('--dry-run', is_flag=True, help='Simulate repository creation and issue population')
-@click.option('--ai-extract', is_flag=True, help='Use AI to extract issues from Markdown (if roadmap is Markdown)')
-@click.option('--ai-enrich', is_flag=True, help='Use AI to enrich issue descriptions')
+@cli.command(name="setup-repository", help="Create a new GitHub repository and populate it with issues from a roadmap.")
+@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+@click.option('--repo-name', help='Name for the new repository (defaults to roadmap name).')
+@click.option('--org', help='GitHub organization to create the repository in (defaults to user).')
+@click.option('--private', is_flag=True, help='Make the new repository private.')
+@click.option('--dry-run', is_flag=True, help='Simulate the process without creating a repository or issues.')
+@click.option('--ai-extract', is_flag=True, help='Use AI to parse issues from an unstructured Markdown file.')
+@click.option('--ai-enrich', is_flag=True, help='Use AI to enrich issue descriptions with more details.')
 def setup_repository(roadmap_file, token, repo_name, org, private, dry_run, ai_extract, ai_enrich):
     """Create a new GitHub repository from a roadmap file and populate it with issues."""
     actual_token = token if token else get_github_token()
@@ -386,13 +386,13 @@ def _sync_issues_from_roadmap(
     click.echo("Roadmap sync processing finished.")
 
 
-@cli.command()
-@click.argument('roadmap_file', type=click.Path(exists=True))
-@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env if not provided)')
-@click.option('--repo', help='GitHub repository (owner/repo)', required=True)
-@click.option('--dry-run', is_flag=True, help='Simulate and show what would be created without making changes')
-@click.option('--ai-extract', is_flag=True, help='Use AI to extract issues from Markdown (if roadmap is Markdown)')
-@click.option('--ai-enrich', is_flag=True, help='Use AI to enrich descriptions of new issues')
+@cli.command(name="sync", help="Sync a roadmap with a GitHub repository, creating missing issues.")
+@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--dry-run', is_flag=True, help='Simulate and show what would be created, without making changes.')
+@click.option('--ai-extract', is_flag=True, help='Use AI to parse issues from an unstructured Markdown file.')
+@click.option('--ai-enrich', is_flag=True, help='Use AI to enrich descriptions of new issues being created.')
 def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     """Compare roadmap with an existing GitHub repository and prompt to create missing issues."""
     actual_token = token if token else get_github_token()
@@ -443,11 +443,11 @@ def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     click.echo("Sync command finished.")
 
 
-@cli.command(name='delete-closed')
-@click.option('--repo', help='GitHub repository (owner/repo)', required=True)
-@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env if not provided)')
-@click.option('--dry-run', is_flag=True, help='List closed issues that would be deleted, without actually deleting them')
-@click.confirmation_option(prompt='Are you absolutely sure you want to delete closed issues? This action is irreversible. Type "yes" to confirm.')
+@cli.command(name='delete-closed', help='Permanently delete all closed issues in a repository.')
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+@click.option('--dry-run', is_flag=True, help='List issues that would be deleted, without actually deleting them.')
+@click.confirmation_option(prompt='Are you sure you want to permanently delete all closed issues? This is irreversible.')
 def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected by confirmation_option
     """Permanently delete all closed issues in a repository. Requires confirmation."""
     if not yes and not dry_run: # Check if confirmation was given, unless it's a dry run
@@ -502,15 +502,15 @@ def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected
         click.echo(f"Failed to delete: {failed_count} issues. Check logs for errors.", err=True)
 
 
-@cli.command(name='import-md')
+@cli.command(name='import-md', help='Import issues from a Markdown file, using AI to structure them.')
 @click.argument('repo_full_name', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')
-@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var if not provided)')
-@click.option('--openai-key', envvar='OPENAI_API_KEY', help='OpenAI API key (reads from .env or OPENAI_API_KEY env var if not provided)')
-@click.option('--dry-run', is_flag=True, help='List issues without creating them')
-@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+@click.option('--openai-key', envvar='OPENAI_API_KEY', help='OpenAI API key (reads from .env or OPENAI_API_KEY env var).')
+@click.option('--dry-run', is_flag=True, help='Simulate and print issues without creating them on GitHub.')
+@click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging to see script progress.')
 @click.option('--heading-level', 'heading_level', type=int, default=1, show_default=True,
-                   help='Markdown heading level to split issues (1 for "#", 2 for "##"). Passed as --heading to the underlying script.')
+                   help='Markdown heading level to split issues by (e.g., 1 for #, 2 for ##).')
 # Options from scripts/import_md.py that might be useful to expose: --model, --temperature, --max-tokens
 # For now, keeping it simple and letting the script use its defaults or env vars for those.
 def import_md_command(repo_full_name, markdown_file, token, openai_key, dry_run, verbose, heading_level):
