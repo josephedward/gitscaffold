@@ -18,6 +18,13 @@ jobs:
         run: pip install --upgrade build twine
       - name: Build distribution
         run: python -m build --sdist --wheel
+      - name: Verify version
+        run: |
+          PACKAGE_VERSION=$(python -c 'from scaffold import __version__; print(__version__)')
+          if [ "v$PACKAGE_VERSION" != "${{ github.ref_name }}" ]; then
+            echo "Version in __init__.py (v$PACKAGE_VERSION) does not match tag (${{ github.ref_name }})"
+            exit 1
+          fi
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@v1.5.1
         with:
