@@ -32,7 +32,16 @@ load_dotenv(find_dotenv())
 @click.option('--heading', 'heading', type=int, default=1, show_default=True,
               help='Markdown heading level to split issues (1 for "#", 2 for "##")')
 def main(repo, markdown_file, token, openai_key, model, temperature, max_tokens, dry_run, verbose, heading):
-    """Import issues from an unstructured markdown file, enriching via OpenAI LLM."""
+    """Import issues from an unstructured markdown file using AI.
+
+    This script parses a Markdown file, treating sections under headings of a specified
+    level as potential GitHub issues. It uses an AI model to generate a title and a
+    well-structured description for each issue. These are then created in the target
+    GitHub repository.
+
+    This is useful for quickly converting documents like meeting notes or brainstorming
+    sessions into actionable GitHub issues.
+    """
     if verbose:
         click.echo(f"Authenticating to GitHub repository '{repo}'", err=True)
     # GitHub authentication
