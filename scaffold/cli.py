@@ -737,6 +737,84 @@ def cleanup_issue_titles_command(repo, token, dry_run):
     if failed_count > 0:
         click.secho(f"Failed to update: {failed_count} issues.", fg="red", err=True)
 
+
+@cli.command(name='deduplicate-issues', help='Find and close duplicate issues in a repository.')
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+@click.option('--dry-run', is_flag=True, help='List duplicate issues that would be closed, without actually closing them.')
+def deduplicate_issues_command(repo, token, dry_run):
+    """Finds and closes duplicate open issues (based on title)."""
+    click.echo("Starting 'deduplicate-issues' command...")
+    actual_token = token if token else get_github_token()
+    if not actual_token:
+        click.echo("GitHub token is required to proceed. Exiting.", err=True)
+        sys.exit(1)
+
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.echo("Could not determine repository from git config. Please use --repo. Exiting.", err=True)
+            sys.exit(1)
+        click.echo(f"Using repository from current git config: {repo}")
+    else:
+        click.echo(f"Using repository provided via --repo flag: {repo}")
+
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        click.echo(f"Successfully connected to repository '{repo}'.")
+    except GithubException as e:
+        if e.status == 404:
+            click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", err=True)
+        elif e.status == 401:
+            click.echo("Error: GitHub token is invalid or has insufficient permissions.", err=True)
+        else:
+            click.echo(f"An unexpected GitHub error occurred: {e}", err=True)
+        sys.exit(1)
+
+    click.echo(f"Finding duplicate open issues in '{repo}'...")
+    duplicate_sets = gh_client.find_duplicate_issues()
+
+    if not duplicate_sets:
+        click.secho("No duplicate open issues found.", fg="green")
+        return
+
+    issues_to_close = []
+    click.secho(f"Found {len(duplicate_sets)} sets of duplicate issues:", fg="yellow")
+    for title, issues in duplicate_sets.items():
+        original = issues['original']
+        duplicates = issues['duplicates']
+        click.echo(f"\n- Title: '{title}'")
+        click.echo(f"  - Original: #{original.number} (created {original.created_at})")
+        for dup in duplicates:
+            click.echo(f"  - Duplicate to close: #{dup.number} (created {dup.created_at})")
+            issues_to_close.append(dup)
+
+    if dry_run:
+        click.secho(f"\n[dry-run] Would close {len(issues_to_close)} issues. No changes were made.", fg="cyan")
+        return
+
+    prompt_text = click.style(f"\nProceed with closing {len(issues_to_close)} duplicate issues in '{repo}'?", fg="yellow", bold=True)
+    if not click.confirm(prompt_text, default=False):
+        click.echo("Aborting.")
+        return
+
+    closed_count = 0
+    failed_count = 0
+    for issue in issues_to_close:
+        click.echo(f"Closing issue #{issue.number} ('{issue.title}')...")
+        try:
+            issue.edit(state='closed')
+            click.secho(f"  Successfully closed issue #{issue.number}.", fg="green")
+            closed_count += 1
+        except GithubException as e:
+            click.secho(f"  Failed to close issue #{issue.number}: {e}", fg="red", err=True)
+            failed_count += 1
+    
+    click.echo("\nDeduplication process finished.")
+    click.secho(f"Successfully closed: {closed_count} issues.", fg="green")
+    if failed_count > 0:
+        click.secho(f"Failed to close: {failed_count} issues.", fg="red", err=True)
+
 @cli.command(name='diff', help='Diff a local Markdown roadmap against GitHub issues.')
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
