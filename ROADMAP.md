@@ -129,9 +129,6 @@ Add an `--ai-extract` option to the `create` command to use LLM-based issue extr
 
 Add an `--ai-enrich` option to the `create` command to use LLM-based description enrichment. Link to `scaffold/cli.py::create`.
 
-#### Implement `import-md` command
-
-Port and integrate the `import-md` command for importing issues from an unstructured Markdown file, using AI to generate titles and descriptions. Based on `scaffold/cli.py::import_md_command`.
 
 #### Implement `enrich` command
 
@@ -165,21 +162,12 @@ Add commands to help users identify and focus on their next tasks.
 
 Create a `next` command to show next action items from the earliest active milestone. Based on `scaffold/cli.py::next_command`.
 
-#### Implement `next-task` command
-
-Create a `next-task` command to show the next open task for the current roadmap phase. Based on `scaffold/cli.py::next_task`.
 
 #### Enhance `diff` command
 
 Enhance the `diff` command to include issue numbers and state in its output, and allow filtering by issue state.
 
-#### Implement `deduplicate-issues` command
 
-Create a `deduplicate-issues` command to find and close duplicate open issues. Based on `scaffold/cli.py::deduplicate_issues_command`.
-
-#### Implement `cleanup-issue-titles` command
-
-Create a `cleanup-issue-titles` command to sanitize issue titles by removing leading markdown characters. Based on `scaffold/cli.py::cleanup_issue_titles_command`.
 
 ### Testing Framework and Coverage
 
