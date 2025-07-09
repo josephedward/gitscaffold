@@ -394,19 +394,37 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
     if not existing_issue_titles:
         click.secho("Repository is empty. Populating with issues from roadmap.", fg="green")
         
-        if not dry_run and not yes:
-            prompt = click.style(
-                f"Proceed with populating '{repo}' with issues from '{roadmap_file}'?", fg="yellow", bold=True
-            )
-            if not click.confirm(prompt, default=False):
-                click.secho("Aborting.", fg="red")
-                return
-
         context_text = path.read_text(encoding='utf-8') if ai_enrich else ''
+        
+        # Display what will be done. This is effectively a dry run preview.
         _populate_repo_from_roadmap(
             gh_client=gh_client,
             roadmap_data=validated_roadmap,
-            dry_run=dry_run,
+            dry_run=True,
+            ai_enrich=ai_enrich,
+            openai_api_key=openai_api_key_for_ai,
+            context_text=context_text,
+            roadmap_file_path=path
+        )
+        
+        if dry_run:
+            # If this was a real dry run, we are done.
+            click.secho("\n[dry-run] No changes were made.", fg="blue")
+            return
+
+        if not yes:
+            prompt = click.style(
+                f"\nProceed with populating '{repo}' with issues from '{roadmap_file}'?", fg="yellow", bold=True
+            )
+            if not click.confirm(prompt, default=True):
+                click.secho("Aborting.", fg="red")
+                return
+        
+        click.secho("\nApplying changes...", fg="cyan")
+        _populate_repo_from_roadmap(
+            gh_client=gh_client,
+            roadmap_data=validated_roadmap,
+            dry_run=False,
             ai_enrich=ai_enrich,
             openai_api_key=openai_api_key_for_ai,
             context_text=context_text,
