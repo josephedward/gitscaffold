@@ -13,14 +13,6 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
 
 ## Features
 
-### Milestones
-
-Refer to the roadmap milestones defined above.
-
-### Features
-
-Main feature list to plan issue creation.
-
 ### Core CLI Framework
 
 Setup basic CLI structure and command handling for gitscaffold.  
