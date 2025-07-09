@@ -187,6 +187,10 @@ Use the provided `scripts/audit.sh` to run cleanup, deduplicate, and diff in one
 bash scripts/audit.sh
 ```
 
+## Test Coverage
+<!-- COVERAGE_START -->
+<!-- COVERAGE_END -->
+
 ## GitHub Action Usage
 ```
 name: Sync Roadmap to Issues
