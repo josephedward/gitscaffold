@@ -13,6 +13,7 @@ class Task(BaseModel):
     description: Optional[str] = None
     labels: List[str] = Field(default_factory=list)
     assignees: List[str] = Field(default_factory=list)
+    tests: List[str] = Field(default_factory=list)
 
 class Feature(BaseModel):
     title: str
