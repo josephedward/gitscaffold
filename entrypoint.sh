@@ -2,7 +2,7 @@
 set -e
 
 # Map action inputs to variables (hyphens replaced by underscores)
-: "${INPUT_ROADMAP_FILE:=roadmap.yml}"
+: "${INPUT_ROADMAP_FILE:=roadmap.md}"
 : "${INPUT_REPO:?repo input is required}"
 : "${INPUT_GITHUB_TOKEN:=}"
 : "${INPUT_DRY_RUN:=false}"
