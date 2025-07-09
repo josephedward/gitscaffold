@@ -49,16 +49,22 @@ def parse_markdown(md_file):
     has_features_section = any(line.startswith('## Features') for line in lines)
     if has_features_section:
         in_features = False
+        current_feat = None
+        current_task = None
         for line in lines:
             if line.startswith('## Features'):
                 in_features = True
                 continue
             if not in_features:
                 continue
+            
+            if line.startswith('```'):
+                break # Stop parsing at a code fence.
+
             if line.startswith('### '):
-                if 'current_task' in locals() and current_task and current_feat:
+                if current_task and current_feat:
                     current_feat['tasks'].append(current_task)
-                if 'current_feat' in locals() and current_feat:
+                if current_feat:
                     features.append(current_feat)
                 current_feat = {'title': line[4:].strip(), 'description': '', 'milestone': None, 'labels': [], 'assignees': [], 'tasks': []}
                 current_task = None
@@ -94,9 +100,9 @@ def parse_markdown(md_file):
                 target['description'] += '\n' + content
             else:
                 target['description'] = content
-        if 'current_task' in locals() and current_task and current_feat:
+        if current_task and current_feat:
             current_feat['tasks'].append(current_task)
-        if 'current_feat' in locals() and current_feat:
+        if current_feat:
             features.append(current_feat)
     else:
         current_feat = None
