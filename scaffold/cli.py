@@ -70,7 +70,7 @@ def run_repl(ctx):
 
 @click.group(invoke_without_command=True)
 @click.version_option(version=__version__, prog_name="gitscaffold")
-@click.option('--interactive', is_flag=True, help='Enter interactive REPL mode.')
+@click.option('--interactive', is_flag=True, help='Enter an interactive REPL to run multiple commands.')
 @click.pass_context
 def cli(ctx, interactive):
     """Scaffold – Convert roadmaps to GitHub issues."""
@@ -924,7 +924,7 @@ def sanitize_command(repo, token, dry_run):
         click.secho(f"Failed to update: {failed_count} issues", fg="red", err=True)
 
 
-@cli.command(name='deduplicate-issues', help=click.style('Close duplicate open issues', fg='cyan'))
+@cli.command(name='deduplicate', help=click.style('Close duplicate open issues', fg='cyan'))
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', help='GitHub API token (prompts if not set).')
 @click.option('--dry-run', is_flag=True, help='List duplicate issues that would be closed, without actually closing them.')
@@ -1005,7 +1005,7 @@ def deduplicate_command(repo, token, dry_run):
         click.secho(f"Failed to close: {failed_count} issues.", fg="red", err=True)
 
 # Alias deduplicate-issues command to 'deduplicate' for legacy calls
-cli.add_command(deduplicate_command, name='deduplicate')
+# cli.add_command(deduplicate_command, name='deduplicate')
 
 @cli.command(name='import-md', help=click.style('Import issues from Markdown (AI-powered)', fg='cyan'))
 @click.argument('repo_full_name', metavar='REPO')
