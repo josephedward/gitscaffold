@@ -80,11 +80,13 @@ def enrich(repo, issue_number, batch, path, csv_file, interactive, apply_changes
 @cli.command()
 @click.argument('output_file')
 def init(output_file):
-    """Initialize a new roadmap file with example structure. Generates YAML or Markdown based on file extension."""
+    """Initialize a new Markdown roadmap file with example structure."""
     ext = os.path.splitext(output_file)[1].lower()
-    if ext in ('.md', '.markdown'):
-        # Markdown template
-        example = '''# My Project Roadmap
+    if ext not in ('.md', '.markdown'):
+        click.echo("Error: init only supports Markdown (.md/.markdown)", err=True)
+        sys.exit(1)
+    # Markdown template
+    example = '''# My Project Roadmap
 
 A brief description of your project roadmap.
 
@@ -105,37 +107,6 @@ Enumerate fields and filters for reports.
 
 ## Task: Build UI Components
 Develop charts and tables for the dashboard.
-'''
-    else:
-        # YAML template
-        example = '''name: My Project
-description: A brief description of your project roadmap.
-milestones:
-  - name: MVP
-    due_date: 2025-08-01
-  - name: Beta
-    due_date: 2025-09-15
-features:
-  - title: User Authentication
-    description: Implement sign-up, login, and password reset flows.
-    milestone: MVP
-    labels: [authentication, core]
-    assignees: [username1]
-    tasks:
-      - title: Design Sign-up Form
-        description: Create wireframes for the registration page.
-      - title: Implement Backend API
-        description: Build authentication endpoints using JWT.
-  - title: Reporting Dashboard
-    description: Provide analytics and reporting capabilities.
-    milestone: Beta
-    labels: [analytics]
-    assignees: [username2]
-    tasks:
-      - title: Define Report Schema
-        description: Enumerate fields and filters for reports.
-      - title: Build UI Components
-        description: Develop charts and tables for the dashboard.
 '''
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(example)
