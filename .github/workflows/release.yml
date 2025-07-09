@@ -1,23 +1,50 @@
-name: Release Package & Action
+name: Publish & Notify Release
 
 on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
 
 jobs:
-  publish-action:
+  publish:
+    name: Build and Publish to PyPI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install build tools
+        run: pip install --upgrade build twine
+      - name: Build distribution
+        run: python -m build --sdist --wheel
+      - name: Verify version matches tag
+        run: |
+          PACKAGE_VERSION=$(python -c 'from scaffold import __version__; print(__version__)')
+          if [ "v$PACKAGE_VERSION" != "${{ github.ref_name }}" ]; then
+            echo "Version in __init__.py (v$PACKAGE_VERSION) does not match tag (${{ github.ref_name }})"
+            exit 1
+          fi
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.5.1
+        with:
+          username: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+  notify:
     name: 🚀 Notify Release Triggered
     runs-on: ubuntu-latest
-    # This job no longer depends on a local PyPI publish,
-    # as pypi-publish.yml handles the actual publishing.
+    needs: publish
     steps:
       - uses: peter-evans/create-or-update-comment@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: 1 # Ensure this issue number is where you want notifications
+          issue-number: 1
           body: |
             ### Release ${{ github.ref_name }} Initiated
             A new release tag ${{ github.ref_name }} has been pushed.
-            • PyPI package publishing is being handled by the 'Publish Python package' workflow.
+            • PyPI package publishing is handled by this workflow.
             • Check the Actions tab for its status.
