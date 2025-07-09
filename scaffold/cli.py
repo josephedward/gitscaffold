@@ -431,85 +431,107 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
             roadmap_file_path=path
         )
     else:
-        roadmap_titles = {f.title for f in validated_roadmap.features}
-        for f in validated_roadmap.features:
-            for t in f.tasks:
-                roadmap_titles.add(t.title)
+        click.secho(f"Repository has {len(existing_issue_titles)} issues. Comparing with roadmap to find missing items...", fg="yellow")
 
-        missing_titles = sorted(list(roadmap_titles - existing_issue_titles))
-
-        if not missing_titles:
-            click.secho("✓ Roadmap is already in sync with GitHub. No new issues to create.", fg="green")
-            return
-
-        click.secho(f"\nFound {len(missing_titles)} items in your roadmap that are not on GitHub:", fg="yellow", bold=True)
+        # 1. Collect what needs to be created
+        milestones_to_create = [m for m in validated_roadmap.milestones if not gh_client._find_milestone(m.name)]
+        features_to_create = [f for f in validated_roadmap.features if f.title not in existing_issue_titles]
         
-        table = Table(show_header=True, header_style="bold magenta")
-        table.add_column("Items to Create on GitHub", style="green")
-        for title in missing_titles:
-            table.add_row(f"+ {title}")
-        
-        console = Console()
-        console.print(table)
-
-        if not dry_run and not yes:
-            prompt = click.style(
-                f"\nProceed with creating {len(missing_titles)} missing items in '{repo}'?", fg="yellow", bold=True
-            )
-            if not click.confirm(prompt, default=False):
-                click.secho("Aborting.", fg="red")
-                return
-        elif dry_run:
-            click.secho("\n[dry-run] No changes will be made.", fg="blue")
-            return
-
-        click.echo("\nCreating missing items...")
-
-        # Process milestones
-        for m in validated_roadmap.milestones:
-            existing_m = gh_client._find_milestone(m.name)
-            if not existing_m:
-                click.echo(f"Milestone '{m.name}' not found. Creating...")
-                gh_client.create_milestone(name=m.name, due_on=m.due_date)
-                click.echo(f"Milestone created: {m.name}")
-            else:
-                click.echo(f"Milestone '{m.name}' already exists.")
-
-        # Process features and tasks
+        tasks_to_create = defaultdict(list)
         for feat in validated_roadmap.features:
-            feat_issue_obj = None # To hold the issue object for parent linking
-
-            if feat.title not in existing_issue_titles:
-                click.echo(f"Creating feature issue: {feat.title}")
-                feat_issue_obj = gh_client.create_issue(
-                    title=feat.title,
-                    body=feat.description or '',
-                    assignees=feat.assignees,
-                    labels=feat.labels,
-                    milestone=feat.milestone
-                )
-                click.echo(f"Feature issue created: #{feat_issue_obj.number} {feat.title}")
-            else:
-                click.echo(f"Feature '{feat.title}' already exists. Checking its tasks...")
-                # We need the issue object for tasks, so find it
-                feat_issue_obj = gh_client._find_issue(feat.title)
-
             for task in feat.tasks:
                 if task.title not in existing_issue_titles:
-                    click.echo(f"Creating task issue: {task.title}")
-                    content = task.description or ''
-                    if feat_issue_obj:
-                        content = f"{content}\n\nParent issue: #{feat_issue_obj.number}"
-                    task_issue = gh_client.create_issue(
-                        title=task.title,
-                        body=content,
-                        assignees=task.assignees,
-                        labels=task.labels,
-                        milestone=feat.milestone
-                    )
-                    click.echo(f"Task issue created: #{task_issue.number} {task.title}")
-                else:
-                    click.echo(f"Task '{task.title}' already exists.")
+                    tasks_to_create[feat.title].append(task)
+        
+        total_tasks = sum(len(ts) for ts in tasks_to_create.values())
+        total_new_items = len(milestones_to_create) + len(features_to_create) + total_tasks
+
+        if total_new_items == 0:
+            click.secho("No new items to create. Repository is up-to-date with the roadmap.", fg="green")
+            return
+
+        # 2. Display summary of what will be created
+        click.secho(f"\nFound {total_new_items} new items to create:", fg="yellow", bold=True)
+        if milestones_to_create:
+            click.secho("\nMilestones to be created:", fg="cyan")
+            for m in milestones_to_create:
+                click.secho(f"  - {m.name}")
+
+        if features_to_create:
+            click.secho("\nFeatures to be created:", fg="cyan")
+            for f in features_to_create:
+                click.secho(f"  - {f.title}")
+
+        if tasks_to_create:
+            click.secho("\nTasks to be created:", fg="cyan")
+            new_feature_titles = {f.title for f in features_to_create}
+            for feat_title, tasks in tasks_to_create.items():
+                label = "new" if feat_title in new_feature_titles else "existing"
+                click.secho(f"  Under {label} feature '{feat_title}':")
+                for task in tasks:
+                    click.secho(f"    - {task.title}")
+
+        # 3. Handle dry run
+        if dry_run:
+            click.secho("\n[dry-run] No changes were made.", fg="blue")
+            return
+
+        # 4. Confirm before proceeding
+        if not yes:
+            prompt = click.style(f"\nProceed with creating {total_new_items} new items in '{repo}'?", fg="yellow", bold=True)
+            if not click.confirm(prompt, default=True):
+                click.secho("Aborting.", fg="red")
+                return
+
+        # 5. Apply changes
+        click.secho("\nApplying changes...", fg="cyan")
+        context_text = path.read_text(encoding='utf-8') if ai_enrich else ''
+
+        for m in milestones_to_create:
+            click.echo(f"Creating milestone: {m.name}")
+            gh_client.create_milestone(name=m.name, due_on=m.due_date)
+
+        feature_object_map = {}
+        for feat in features_to_create:
+            click.echo(f"Creating feature issue: {feat.title.strip()}")
+            body = feat.description or ''
+            if ai_enrich and openai_api_key_for_ai:
+                click.echo(f"  AI-enriching feature: {feat.title}...")
+                body = enrich_issue_description(feat.title, body, openai_api_key_for_ai, context_text)
+            
+            feat_issue_obj = gh_client.create_issue(
+                title=feat.title.strip(), body=body, assignees=feat.assignees,
+                labels=feat.labels, milestone=feat.milestone
+            )
+            feature_object_map[feat.title] = feat_issue_obj
+            click.echo(f"  -> Feature issue created: #{feat_issue_obj.number}")
+
+        # Create all tasks, whether for new or existing features
+        for feat_title, tasks in tasks_to_create.items():
+            parent_issue_obj = feature_object_map.get(feat_title)
+            if not parent_issue_obj:
+                parent_issue_obj = gh_client._find_issue(feat_title)
+
+            if not parent_issue_obj:
+                click.secho(f"Warning: Cannot find parent issue '{feat_title}' for tasks. Skipping them.", fg="magenta")
+                continue
+
+            roadmap_feat = next((f for f in validated_roadmap.features if f.title == feat_title), None)
+            milestone = roadmap_feat.milestone if roadmap_feat else None
+
+            for task in tasks:
+                click.echo(f"Creating task issue: {task.title.strip()} (under #{parent_issue_obj.number})")
+                body = task.description or ''
+                if ai_enrich and openai_api_key_for_ai:
+                    click.echo(f"  AI-enriching task: {task.title}...")
+                    body = enrich_issue_description(task.title, body, openai_api_key_for_ai, context_text)
+                
+                content = f"{body}\n\nParent issue: #{parent_issue_obj.number}".strip()
+                task_issue = gh_client.create_issue(
+                    title=task.title.strip(), body=content, assignees=task.assignees,
+                    labels=task.labels, milestone=milestone
+                )
+                click.echo(f"  -> Task issue created: #{task_issue.number}")
 
     click.echo("Sync command finished.")
     
