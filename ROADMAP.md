@@ -334,6 +334,8 @@ Enhance error reporting with more specific, user-friendly messages.
 #### Enforce strict code style and linting
 
 Maintain high code quality by applying linters (Ruff, Black) and type checking (Mypy) in CI.
+
+```yaml
 name: GitScaffold Project Roadmap
 description: A tool to manage GitHub projects using declarative roadmap files, with AI-powered issue enrichment and creation.
 
@@ -721,3 +723,4 @@ features:
         labels: [quality, tooling, ci]
         tests:
           - CI pipeline includes steps for linting and type checking, failing the build on errors.
+```
