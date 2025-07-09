@@ -1,5 +1,3 @@
-<!-- Markdown roadmap based on GITCAFFOLD_ROADMAP.md; ensure all items from the roadmap spec are included below -->
-<!-- See full roadmap specification: GITCAFFOLD_ROADMAP.md -->
 # GitScaffold Project Roadmap
 
 A tool to manage GitHub projects using declarative roadmap files, with AI-powered issue enrichment and creation.
@@ -25,9 +23,16 @@ Setup basic CLI structure and command handling for gitscaffold.
 
 Establish the main entry point and command structure for the CLI using the Click library. This will be based on `scaffold/cli.py` and `gitscaffold.py`.
 
-#### Implement `init` command
+#### Implement `init` command for project bootstrapping
 
-Develop the `init` command to generate a template roadmap file. This is based on the functionality in `gitscaffold.py::init`.
+Develop an `init` command that can initialize a project in multiple ways:
+- Generate a template `ROADMAP.md` file for users to fill out.
+- From an existing `ROADMAP.md` or `README.md`, create a new GitHub repository and bootstrap it with issues. This will streamline project setup from a document-first approach.
+
+**Tests:**
+- Test `init` with no arguments creates `ROADMAP.md` in the current directory.
+- Test `init --create-repo` successfully creates a new repository on GitHub.
+- Test `init --from-readme` correctly parses a `README.md` and creates issues.
 
 ### Roadmap Parsing and Validation
 
@@ -49,9 +54,17 @@ Develop functionality to interact with the GitHub API for creating and managing 
 **Milestone:** v0.2 GitHub Integration  
 **Labels:** core, github
 
+#### Wrap `gh` CLI for core GitHub operations
+
+Integrate with the `gh` CLI to leverage its robust functionality for core operations like listing, creating, and deleting issues. This will provide a reliable foundation and reduce the need to re-implement complex API interactions.
+
+**Tests:**
+- Verify that core commands (e.g., `issue list`) call the `gh` subprocess.
+- Test for graceful failure when the `gh` CLI is not installed on the system.
+
 #### Implement GitHub client wrapper
 
-Create a robust client for GitHub API interactions, encapsulating PyGitHub calls. Based on `scaffold/github.py::GitHubClient`.
+Create a robust client for GitHub API interactions, encapsulating PyGitHub calls for functionality not covered by the `gh` CLI wrapper. Based on `scaffold/github.py::GitHubClient`.
 
 #### Implement `create` command
 
@@ -64,6 +77,15 @@ Create a new GitHub repository from a roadmap file and populate it with issues. 
 #### Implement `delete-closed` command
 
 Port and integrate the `delete-closed` command. Based on `gitscaffold.py::delete-closed`.
+
+#### Implement `delete-issue` command
+
+Create a command to delete one or more specified issues from GitHub. This will likely wrap `gh issue delete`.
+
+**Tests:**
+- Test deleting a single issue by its number.
+- Test deleting multiple issues in a single command.
+- Verify that the command prompts for confirmation before deleting.
 
 #### Wrap GitHub CLI for issue management
 
@@ -135,6 +157,24 @@ Port and integrate the `import-md` command for importing issues from an unstruct
 #### Implement `enrich` command
 
 Port and integrate the `enrich` command for AI-powered enrichment of issues. Based on `gitscaffold.py::enrich` and `scripts/enrich.py`.
+
+#### Implement `find-issue` command with natural language
+
+Create a `find-issue` command that uses an LLM to search for a GitHub issue based on a natural language query. This will involve fetching issues, creating embeddings for their content, and performing a semantic search to find the most relevant results.
+
+**Tests:**
+- Mock LLM/GitHub: Test with a query that should clearly match a specific issue title or body.
+- Test with a query that has no obvious matches to ensure it returns no results or a helpful message.
+- Verify that issue embeddings can be cached to improve performance on subsequent searches.
+
+#### Implement `create-one` command for single-issue creation
+
+Develop a command to create a single issue from a title, with an option to auto-generate and enrich the description using an LLM based on context from the roadmap.
+
+**Tests:**
+- Test creating a simple issue with just a title.
+- Mock LLM: Test that the `--enrich` flag successfully generates and applies an issue body.
+- Verify that standard options like `--label` and `--milestone` can be passed and are applied correctly.
 
 ### Workflow and Productivity Features
 
