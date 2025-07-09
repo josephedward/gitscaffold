@@ -502,7 +502,7 @@ def next_command(repo, token):
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--dry-run', is_flag=True, help='List issues that would be deleted, without actually deleting them.')
-@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt and immediately delete issues.')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt and immediately delete all closed issues.')
 def delete_closed_issues_command(repo, token, dry_run, yes):
     """Permanently delete all closed issues in a repository. Requires confirmation."""
     actual_token = token if token else get_github_token()
