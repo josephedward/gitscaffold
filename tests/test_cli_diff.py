@@ -5,13 +5,17 @@ from unittest.mock import MagicMock
 from scaffold.cli import cli
 
 SAMPLE_ROADMAP_MD = """\
-# Feature A
+# Test Project for Diff
+
+## Features
+
+### Feature A
 Core feature.
 
-## Task A.1
-## Task A.2
+#### Task A.1
+#### Task A.2
 
-# Feature B
+### Feature B
 """
 
 

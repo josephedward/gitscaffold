@@ -1,7 +1,7 @@
 import pytest
 from click.testing import CliRunner
 from pathlib import Path
-import yaml
+import json
 
 from scaffold.cli import cli # Main CLI entry point
 from scaffold.github import GitHubClient # To mock its methods
@@ -169,10 +169,10 @@ def mock_github_client(monkeypatch):
 
 @pytest.fixture
 def sample_roadmap_file(tmp_path):
-    """Creates a temporary roadmap YAML file."""
-    roadmap_file = tmp_path / "roadmap.yaml"
+    """Creates a temporary roadmap JSON file."""
+    roadmap_file = tmp_path / "roadmap.json"
     with open(roadmap_file, 'w') as f:
-        yaml.dump(SAMPLE_ROADMAP_DATA, f)
+        json.dump(SAMPLE_ROADMAP_DATA, f, indent=2)
     return roadmap_file
 
 def test_sync_dry_run_empty_repo(runner, sample_roadmap_file, mock_github_client, monkeypatch):
