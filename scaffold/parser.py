@@ -78,7 +78,7 @@ def parse_markdown(md_file):
     }
 
 def parse_roadmap(roadmap_file):
-    """Parse the roadmap file (YAML/JSON or Markdown) and return a dictionary."""
+    """Parse the roadmap file (JSON or Markdown) and return a dictionary."""
     logging.info(f"Parsing roadmap file: {roadmap_file}")
     suffix = Path(roadmap_file).suffix.lower()
     with open(roadmap_file, 'r', encoding='utf-8') as f:
@@ -97,7 +97,7 @@ def parse_roadmap(roadmap_file):
         logging.info("Using markdown heading parser for markdown file.")
         return parse_markdown(roadmap_file)
 
-    # For other file types, assume YAML/JSON.
+    # For other file types, assume JSON.
     logging.info("Using YAML parser for non-markdown file.")
     data = yaml.safe_load(content)
     if not isinstance(data, dict):
@@ -155,7 +155,7 @@ def write_roadmap(roadmap_file, data):
         with open(path, 'w', encoding='utf-8') as f:
             f.write(content_to_write)
     else:
-        # For non-markdown files (.yml, .json), just overwrite the whole file.
+        # For non-markdown files (.md, .json), just overwrite the whole file.
         with open(path, 'w', encoding='utf-8') as f:
             f.write(new_yaml_content)
     

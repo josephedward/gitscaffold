@@ -5,7 +5,7 @@ from scaffold.parser import parse_roadmap
 
 def test_parse_valid(tmp_path):
     data = {'key': 'value', 'list': [1, 2, 3]}
-    path = tmp_path / 'roadmap.yml'
+    path = tmp_path / 'roadmap.md'
     path.write_text(yaml.dump(data))
     result = parse_roadmap(str(path))
     assert isinstance(result, dict)
@@ -13,7 +13,7 @@ def test_parse_valid(tmp_path):
 
 def test_parse_invalid_not_mapping(tmp_path):
     # Top-level must be a mapping
-    path = tmp_path / 'roadmap.yml'
+    path = tmp_path / 'roadmap.md'
     # Write a YAML list
     path.write_text(yaml.dump([1, 2, 3]))
     with pytest.raises(ValueError) as exc:
