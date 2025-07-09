@@ -5,6 +5,7 @@ import os
 import sys
 import subprocess
 import logging
+import shlex
 from pathlib import Path
 from dotenv import load_dotenv, set_key
 from github import Github, GithubException
@@ -25,14 +26,26 @@ from collections import defaultdict
 from rich.console import Console
 from rich.table import Table
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(version=__version__, prog_name="gitscaffold")
-def cli():
+@click.option('--interactive', is_flag=True, help='Enter interactive REPL mode.')
+@click.pass_context
+def cli(ctx, interactive):
     """Scaffold – Convert roadmaps to GitHub issues."""
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     load_dotenv()  # Load .env file at the start of CLI execution
     logging.info("CLI execution started.")
-    pass
+
+    # If --interactive is passed, we want to enter the REPL.
+    # We should not proceed to execute any subcommand that might have been passed.
+    if interactive:
+        run_repl(ctx)
+        # Prevent further execution of a subcommand if one was passed, e.g., `gitscaffold --interactive init`
+        ctx.exit()
+
+    # If no subcommand is invoked and not in interactive mode, show help.
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
 
 
 def get_github_token():
