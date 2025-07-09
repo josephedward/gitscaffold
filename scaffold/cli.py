@@ -564,7 +564,8 @@ def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--dry-run', is_flag=True, help='List issues that would be changed, without actually changing them.')
-def sanitize_command(repo, token, dry_run):
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt and immediately apply updates.')
+def sanitize_command(repo, token, dry_run, yes):
     """Scan all issues and remove leading markdown characters like '#' from their titles."""
     click.echo("Starting 'sanitize' command...")
     actual_token = token if token else get_github_token()
@@ -620,6 +621,11 @@ def sanitize_command(repo, token, dry_run):
         return
 
     click.secho("\nApplying cleanup updates...", fg="cyan")
+    if not yes:
+        prompt_text = click.style(f"Proceed with updating {len(issues_to_update)} issue titles in '{repo}'?", fg="yellow", bold=True)
+        if not click.confirm(prompt_text):
+            click.secho("Aborting.", fg="red")
+            return
 
     updated_count = 0
     failed_count = 0
