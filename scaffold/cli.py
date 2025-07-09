@@ -893,7 +893,7 @@ def deduplicate_command(repo, token, dry_run):
 
     try:
         gh_client = GitHubClient(actual_token, repo)
-    click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+        click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
     except GithubException as e:
         if e.status == 404:
             click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", err=True)
