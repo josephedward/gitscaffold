@@ -624,6 +624,7 @@ def diff(roadmap_file, repo, token):
 @click.option('--token', help='GitHub API token (prompts if not set).')
 def next_command(repo, token):
     """Shows open issues from the earliest active milestone."""
+    # Determine GitHub token: use --token or prompt via get_github_token()
     actual_token = token if token else get_github_token()
     if not actual_token:
         raise click.ClickException("GitHub token is required.")
