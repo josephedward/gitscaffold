@@ -285,22 +285,22 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
     If the repository is empty, it populates it with issues from the roadmap.
     If the repository has issues, it performs a diff between the roadmap and the issues.
     """
-    click.echo("Starting 'sync' command...")
+    click.secho("Starting 'sync' command...", fg='cyan', bold=True)
     actual_token = token if token else get_github_token()
     if not actual_token:
         click.echo("GitHub token is required to proceed. Exiting.", err=True)
         sys.exit(1)
     
-    click.echo("Successfully obtained GitHub token.")
+    click.secho("Successfully obtained GitHub token.", fg='green')
     if not repo:
-        click.echo("No --repo provided, attempting to find repository from git config...")
+        click.secho("No --repo provided, attempting to find repository from git config...", fg='yellow')
         repo = get_repo_from_git_config()
         if not repo:
             click.echo("Could not determine repository from git config. Please use --repo. Exiting.", err=True)
             sys.exit(1)
-        click.echo(f"Using repository from current git config: {repo}")
+        click.secho(f"Using repository from current git config: {repo}", fg='magenta')
     else:
-        click.echo(f"Using repository provided via --repo flag: {repo}")
+        click.secho(f"Using repository provided via --repo flag: {repo}", fg='magenta')
 
     path = Path(roadmap_file)
     # Load and validate roadmap data (supports Markdown, YAML, or JSON)
@@ -388,7 +388,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
             click.secho(f"[dry-run] Would have updated '{roadmap_file}' with {len(extra_titles)} new items.", fg="blue")
         return
 
-    click.echo("Fetching existing issue titles...")
+    click.secho("Fetching existing issue titles...", fg='cyan')
     existing_issue_titles = gh_client.get_all_issue_titles()
 
     if not existing_issue_titles:
@@ -437,7 +437,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
         milestones_to_create = []
         for m in validated_roadmap.milestones:
             if gh_client._find_milestone(m.name):
-                click.echo(f"Milestone '{m.name}' already exists.")
+                click.secho(f"Milestone '{m.name}' already exists.", fg="green")
             else:
                 milestones_to_create.append(m)
 
@@ -445,13 +445,13 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
         tasks_to_create = defaultdict(list)
         for feat in validated_roadmap.features:
             if feat.title in existing_issue_titles:
-                click.echo(f"Feature '{feat.title}' already exists in GitHub issues. Checking its tasks...")
+                click.secho(f"Feature '{feat.title}' already exists in GitHub issues. Checking its tasks...", fg="green")
             else:
                 features_to_create.append(feat)
 
             for task in feat.tasks:
                 if task.title in existing_issue_titles:
-                    click.echo(f"Task '{task.title}' (for feature '{feat.title}') already exists in GitHub issues.")
+                    click.secho(f"Task '{task.title}' (for feature '{feat.title}') already exists in GitHub issues.", fg="green")
                 else:
                     tasks_to_create[feat.title].append(task)
         
@@ -459,7 +459,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
         total_new_items = len(milestones_to_create) + len(features_to_create) + total_tasks
 
         if total_new_items == 0:
-            click.secho("No new items to create. Repository is up-to-date with the roadmap.", fg="green")
+            click.secho("No new items to create. Repository is up-to-date with the roadmap.", fg="green", bold=True)
             return
 
         # 2. Display summary of what will be created
@@ -467,21 +467,21 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
         if milestones_to_create:
             click.secho("\nMilestones to be created:", fg="cyan")
             for m in milestones_to_create:
-                click.secho(f"  - {m.name}")
+                click.secho(f"  - {m.name}", fg="magenta")
 
         if features_to_create:
             click.secho("\nFeatures to be created:", fg="cyan")
             for f in features_to_create:
-                click.secho(f"  - {f.title}")
+                click.secho(f"  - {f.title}", fg="magenta")
 
         if tasks_to_create:
             click.secho("\nTasks to be created:", fg="cyan")
             new_feature_titles = {f.title for f in features_to_create}
             for feat_title, tasks in tasks_to_create.items():
                 label = "new" if feat_title in new_feature_titles else "existing"
-                click.secho(f"  Under {label} feature '{feat_title}':")
+                click.secho(f"  Under {label} feature '{feat_title}':", fg="cyan")
                 for task in tasks:
-                    click.secho(f"    - {task.title}")
+                    click.secho(f"    - {task.title}", fg="magenta")
 
         # 3. Handle dry run
         if dry_run:
@@ -500,12 +500,13 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
         context_text = path.read_text(encoding='utf-8') if ai_enrich else ''
 
         for m in milestones_to_create:
-            click.echo(f"Creating milestone: {m.name}")
+            click.secho(f"Creating milestone: {m.name}", fg="cyan")
             gh_client.create_milestone(name=m.name, due_on=m.due_date)
+            click.secho(f"  -> Milestone created: {m.name}", fg="green")
 
         feature_object_map = {}
         for feat in features_to_create:
-            click.echo(f"Creating feature issue: {feat.title.strip()}")
+            click.secho(f"Creating feature issue: {feat.title.strip()}", fg="cyan")
             body = feat.description or ''
             if ai_enrich and openai_api_key_for_ai:
                 click.echo(f"  AI-enriching feature: {feat.title}...")
@@ -516,7 +517,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
                 labels=feat.labels, milestone=feat.milestone
             )
             feature_object_map[feat.title] = feat_issue_obj
-            click.echo(f"  -> Feature issue created: #{feat_issue_obj.number}")
+            click.secho(f"  -> Feature issue created: #{feat_issue_obj.number}", fg="green")
 
         # Create all tasks, whether for new or existing features
         for feat_title, tasks in tasks_to_create.items():
@@ -532,7 +533,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
             milestone = roadmap_feat.milestone if roadmap_feat else None
 
             for task in tasks:
-                click.echo(f"Creating task issue: {task.title.strip()} (under #{parent_issue_obj.number})")
+                click.secho(f"Creating task issue: {task.title.strip()} (under #{parent_issue_obj.number})", fg="cyan")
                 body = task.description or ''
                 if ai_enrich and openai_api_key_for_ai:
                     click.echo(f"  AI-enriching task: {task.title}...")
@@ -543,7 +544,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
                     title=task.title.strip(), body=content, assignees=task.assignees,
                     labels=task.labels, milestone=milestone
                 )
-                click.echo(f"  -> Task issue created: #{task_issue.number}")
+                click.secho(f"  -> Task issue created: #{task_issue.number}", fg="green")
 
     click.echo("Sync command finished.")
     
