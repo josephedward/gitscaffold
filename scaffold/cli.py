@@ -41,6 +41,21 @@ def run_repl(ctx):
             if not args:
                 continue
 
+            # Handle `help` command explicitly.
+            if args[0] == 'help':
+                if len(args) == 1:
+                    # `help`
+                    click.echo(ctx.get_help())
+                elif args[1] in cli.commands:
+                    # `help <command>`
+                    cmd_obj = cli.commands[args[1]]
+                    with cmd_obj.make_context(args[1], ['--help']) as sub_ctx:
+                        click.echo(sub_ctx.get_help())
+                else:
+                    # `help <unknown-command>`
+                    click.secho(f"Error: Unknown command '{args[1]}'", fg='red')
+                continue
+
             cmd_name = args[0]
             if cmd_name not in cli.commands:
                 click.secho(f"Error: Unknown command '{cmd_name}'", fg='red')
@@ -50,6 +65,7 @@ def run_repl(ctx):
             
             try:
                 # `standalone_mode=False` prevents sys.exit on error.
+                # This will also handle `--help` on subcommands by raising PrintHelpMessage.
                 cmd_obj.main(args=args[1:], prog_name=cmd_name, standalone_mode=False)
             except click.exceptions.ClickException as e:
                 e.show()
