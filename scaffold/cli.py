@@ -595,6 +595,62 @@ def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected
         click.echo(f"Failed to delete: {failed_count} issues. Check logs for errors.", err=True)
 
 
+@cli.command(name='cleanup-issue-titles', help='Remove leading markdown characters from issue titles.')
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+@click.option('--dry-run', is_flag=True, help='List issues that would be changed, without actually changing them.')
+def cleanup_issue_titles_command(repo, token, dry_run):
+    """Scan all issues and remove leading markdown characters like '#' from their titles."""
+    actual_token = token if token else get_github_token()
+    if not actual_token:
+        return
+
+    gh_client = GitHubClient(actual_token, repo)
+    click.echo(f"Fetching all issues from '{repo}'...")
+
+    all_issues = gh_client.get_all_issues() 
+
+    issues_to_update = []
+    for issue in all_issues:
+        original_title = issue.title
+        cleaned_title = original_title.lstrip('# ').strip()
+        if original_title != cleaned_title:
+            issues_to_update.append((issue, cleaned_title))
+
+    if not issues_to_update:
+        click.echo("No issues with titles that need cleaning up.")
+        return
+
+    click.echo(f"Found {len(issues_to_update)} issues to clean up:")
+    for issue, new_title in issues_to_update:
+        click.echo(f"  - #{issue.number}: '{issue.title}' -> '{new_title}'")
+    
+    if dry_run:
+        click.echo("\n[dry-run] No issues were updated.")
+        return
+
+    if not click.confirm(f"\nProceed with updating {len(issues_to_update)} issue titles in '{repo}'?"):
+        click.echo("Aborting.")
+        return
+
+    updated_count = 0
+    failed_count = 0
+    for issue, new_title in issues_to_update:
+        click.echo(f"Updating issue #{issue.number}...")
+        try:
+            issue.edit(title=new_title)
+            click.echo(f"  Successfully updated issue #{issue.number}.")
+            updated_count += 1
+        except GithubException as e:
+            click.echo(f"  Failed to update issue #{issue.number}: {e}", err=True)
+            failed_count += 1
+    
+    click.echo("\nCleanup process finished.")
+    click.echo(f"Successfully updated: {updated_count} issues.")
+    if failed_count > 0:
+        click.echo(f"Failed to update: {failed_count} issues.", err=True)
+
+
 @cli.command(name='import-md', help='Import issues from a Markdown file, using AI to structure them.')
 @click.argument('repo_full_name', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')
