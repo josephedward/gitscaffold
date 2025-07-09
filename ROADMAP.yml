@@ -68,6 +68,14 @@ features:
         description: Port and integrate the `delete-closed` command. Based on `gitscaffold.py::delete-closed`. This is now implemented as `scaffold delete-closed`.
         labels: [implementation, cli, github]
         assignees: []
+  - title: Implement `diff` command
+    description: Add a `diff` command to compare local roadmap items with GitHub issues and list missing and extra items.
+    labels: [implementation, cli, github]
+    assignees: []
+      - title: Implement `cleanup-issue-titles` command
+        description: Add a CLI command to strip leading Markdown header markers (e.g., `#`) from existing issue titles and update them via the GitHub API.
+        labels: [implementation, cli, github]
+        assignees: []
 
   - title: AI-Powered Features
     description: Integrate AI/LLM capabilities for extracting issues from Markdown and enriching issue descriptions.
@@ -168,6 +176,10 @@ features:
       - title: Write developer documentation
         description: Include information on project structure, development setup, contribution guidelines, how to run tests, and coding conventions.
         labels: [documentation, contributing]
+        assignees: []
+      - title: Document `next` and `next-task` commands
+        description: Add detailed usage examples and help text for the `next` and `next-task` CLI commands to README.md and developer documentation.
+        labels: [documentation, cli]
         assignees: []
 
   - title: CI/CD and Release Management
