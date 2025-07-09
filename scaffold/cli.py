@@ -13,6 +13,7 @@ from .validator import validate_roadmap
 from .github import GitHubClient
 from .ai import extract_issues_from_markdown, enrich_issue_description
 from datetime import date
+import re
 import random
 import webbrowser
 
@@ -63,6 +64,30 @@ def get_openai_api_key():
         )
         return None
     return api_key
+
+
+def get_repo_from_git_config():
+    """Retrieves the 'owner/repo' from the git config."""
+    try:
+        url = subprocess.check_output(
+            ['git', 'config', '--get', 'remote.origin.url'],
+            text=True,
+            stderr=subprocess.DEVNULL
+        ).strip()
+
+        # Handle SSH URLs: git@github.com:owner/repo.git
+        ssh_match = re.search(r'github\.com:([^/]+/[^/]+?)(\.git)?$', url)
+        if ssh_match:
+            return ssh_match.group(1)
+
+        # Handle HTTPS URLs: https://github.com/owner/repo.git
+        https_match = re.search(r'github\.com/([^/]+/[^/]+?)(\.git)?$', url)
+        if https_match:
+            return https_match.group(1)
+
+        return None
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
 
 
 def _populate_repo_from_roadmap(
@@ -447,13 +472,20 @@ def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
 
 
 @cli.command(name="next", help="Show next action items from the earliest active milestone.")
-@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 def next_command(repo, token):
     """Shows open issues from the earliest active milestone."""
     actual_token = token if token else get_github_token()
     if not actual_token:
         return
+
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
+            return
+        click.echo(f"Using repository from current git config: {repo}")
 
     gh_client = GitHubClient(actual_token, repo)
     
@@ -610,10 +642,10 @@ def import_md_command(repo_full_name, markdown_file, token, openai_key, dry_run,
     except Exception as e:
         click.echo(f"Failed to execute {script_path.name}: {e}", err=True)
     
-@cli.command(name='next', help='Show your next open task for the current roadmap phase.')
+@cli.command(name='next-task', help='Show your next open task for the current roadmap phase.')
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
-@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--pick', is_flag=True, help='Pick a random open task (default: oldest).')
 @click.option('--browse', is_flag=True, help='Open the selected issue in your default web browser.')
 def next_task(roadmap_file, token, repo, pick, browse):
@@ -623,6 +655,13 @@ def next_task(roadmap_file, token, repo, pick, browse):
     actual_token = token if token else get_github_token()
     if not actual_token:
         return
+
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
+            return
+        click.echo(f"Using repository from current git config: {repo}")
 
     raw = parse_roadmap(roadmap_file)
     validated = validate_roadmap(raw)
