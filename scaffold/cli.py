@@ -483,6 +483,63 @@ def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
         context_text=context_text
     )
     click.echo("Sync command finished.")
+    
+@cli.command(name='diff', help='Compare local roadmap file with GitHub issues, showing missing and extra items.')
+@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+@click.option('--ai-extract', is_flag=True, help='Use AI to parse issues from an unstructured Markdown file.')
+@click.option('--heading-level', 'heading_level', type=int, default=1, show_default=True,
+               help='Markdown heading level to split issues by.')
+def diff(roadmap_file, repo, token, ai_extract, heading_level):
+    """Compare a local roadmap file with GitHub issues and list missing and extra items."""
+    actual_token = token if token else get_github_token()
+    if not actual_token:
+        return
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
+            return
+        click.echo(f"Using repository from git config: {repo}")
+    path = Path(roadmap_file)
+    suffix = path.suffix.lower()
+    if ai_extract:
+        if suffix not in ('.md', '.markdown'):
+            raise click.UsageError('--ai-extract only supported for Markdown files')
+        openai_key = get_openai_api_key()
+        if not openai_key:
+            return
+        click.echo(f"AI-extracting issues from {roadmap_file}...")
+        features = extract_issues_from_markdown(roadmap_file, api_key=openai_key)
+        raw = {'name': path.stem, 'description': 'Roadmap extracted by AI.', 'milestones': [], 'features': features}
+    else:
+        raw = parse_roadmap(roadmap_file)
+    validated = validate_roadmap(raw)
+    # Gather titles from features and tasks
+    roadmap_titles = set()
+    for feat in validated.features:
+        roadmap_titles.add(feat.title)
+        for task in feat.tasks:
+            roadmap_titles.add(task.title)
+    gh_client = GitHubClient(actual_token, repo)
+    click.echo(f"Fetching existing issue titles from '{repo}'...")
+    gh_titles = gh_client.get_all_issue_titles()
+    click.echo(f"Local roadmap items: {len(roadmap_titles)}, GitHub issues: {len(gh_titles)}")
+    missing = sorted(roadmap_titles - gh_titles)
+    extra = sorted(gh_titles - roadmap_titles)
+    if missing:
+        click.echo("\nMissing on GitHub:")
+        for title in missing:
+            click.echo(f"  - {title}")
+    else:
+        click.echo("\nNo missing issues.")
+    if extra:
+        click.echo("\nExtra issues on GitHub:")
+        for title in extra:
+            click.echo(f"  - {title}")
+    else:
+        click.echo("\nNo extra issues.")
 
 
 @cli.command(name="next", help="Show next action items from the earliest active milestone.")
