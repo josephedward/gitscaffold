@@ -443,6 +443,43 @@ def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     click.echo("Sync command finished.")
 
 
+@cli.command(name="next", help="Show next action items from the earliest active milestone.")
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+def next_command(repo, token):
+    """Shows open issues from the earliest active milestone."""
+    actual_token = token if token else get_github_token()
+    if not actual_token:
+        return
+
+    gh_client = GitHubClient(actual_token, repo)
+    
+    click.echo(f"Finding next action items in repository '{repo}'...")
+    
+    milestone, issues = gh_client.get_next_action_items()
+    
+    if not milestone:
+        click.echo("No active milestones with open issues found.")
+        return
+
+    due_date_str = f"(due {milestone.due_on.strftime('%Y-%m-%d')})" if milestone.due_on else "(no due date)"
+    click.secho(f"\nNext actions from milestone: '{milestone.title}' {due_date_str}", fg="green", bold=True)
+    
+    if not issues:
+        # This case should be rare if get_next_action_items filters by m.open_issues > 0, but good to have
+        click.echo("  No open issues found in this milestone.")
+        return
+        
+    for issue in issues:
+        assignee_str = ""
+        if issue.assignees:
+            assignees_str = ", ".join([f"@{a.login}" for a in issue.assignees])
+            assignee_str = f" (assigned to {assignees_str})"
+        click.echo(f"  - #{issue.number}: {issue.title}{assignee_str}")
+        
+    click.echo("\nCommand finished.")
+
+
 @cli.command(name='delete-closed', help='Permanently delete all closed issues in a repository.')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')

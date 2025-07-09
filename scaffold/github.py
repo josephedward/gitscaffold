@@ -86,6 +86,31 @@ class GitHubClient:
             print(f"Warning: Error fetching issue titles: {e}. Proceeding with an empty list of existing titles.")
         return titles
 
+    def get_next_action_items(self):
+        """
+        Finds the earliest active milestone and returns it along with its open issues.
+        The earliest milestone is determined by the due date.
+        Milestones without a due date are considered after those with one.
+        An active milestone is one that is open and has open issues.
+        """
+        open_milestones = self.repo.get_milestones(state='open')
+
+        # Filter for milestones with open issues
+        active_milestones = [m for m in open_milestones if m.open_issues > 0]
+
+        if not active_milestones:
+            return None, []
+
+        # Sort milestones by due date, None dates go last.
+        active_milestones.sort(key=lambda m: (m.due_on is None, m.due_on))
+        
+        earliest_milestone = active_milestones[0]
+        
+        # Get open issues for the earliest milestone
+        issues = self.repo.get_issues(milestone=earliest_milestone, state='open')
+        
+        return earliest_milestone, list(issues)
+
     def get_closed_issues_for_deletion(self) -> list[dict]:
         """
         Fetch all closed issues with their numbers and node IDs for deletion.
