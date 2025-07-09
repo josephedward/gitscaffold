@@ -496,11 +496,14 @@ def next_command(repo, token):
         sys.exit(1)
 
     if not repo:
+        click.echo("No --repo provided, attempting to find repository from git config...")
         repo = get_repo_from_git_config()
         if not repo:
-            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
+            click.echo("Could not determine repository from git config. Please use --repo. Exiting.", err=True)
             sys.exit(1)
         click.echo(f"Using repository from current git config: {repo}")
+    else:
+        click.echo(f"Using repository provided via --repo flag: {repo}")
 
     gh_client = GitHubClient(actual_token, repo)
     
@@ -602,10 +605,13 @@ def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected
 @click.option('--dry-run', is_flag=True, help='List issues that would be changed, without actually changing them.')
 def cleanup_issue_titles_command(repo, token, dry_run):
     """Scan all issues and remove leading markdown characters like '#' from their titles."""
+    click.echo("Starting 'cleanup-issue-titles' command...")
     actual_token = token if token else get_github_token()
     if not actual_token:
-        click.echo("GitHub token is required.", err=True)
+        click.echo("GitHub token is required to proceed. Exiting.", err=True)
         sys.exit(1)
+    
+    click.echo("Successfully obtained GitHub token.")
 
     if not repo:
         repo = get_repo_from_git_config()
