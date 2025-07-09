@@ -78,14 +78,6 @@ Create a new GitHub repository from a roadmap file and populate it with issues. 
 
 Port and integrate the `delete-closed` command. Based on `gitscaffold.py::delete-closed`.
 
-#### Implement `delete-issue` command
-
-Create a command to delete one or more specified issues from GitHub. This will likely wrap `gh issue delete`.
-
-**Tests:**
-- Test deleting a single issue by its number.
-- Test deleting multiple issues in a single command.
-- Verify that the command prompts for confirmation before deleting.
 
 #### Implement `delete` command
 
