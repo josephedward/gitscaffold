@@ -32,7 +32,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@v1.5.1
         with:
           username: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          password: ${{ secrets.PYPI_TOKEN }}
 
   notify:
     name: 🚀 Notify Release Triggered
@@ -41,7 +41,7 @@ jobs:
     steps:
       - uses: peter-evans/create-or-update-comment@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PERSONAL_TOKEN }}
           issue-number: 1
           body: |
             ### Release ${{ github.ref_name }} Initiated
