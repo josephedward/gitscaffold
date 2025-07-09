@@ -153,9 +153,17 @@ def parse_markdown(md_file):
     }
 
 def parse_roadmap(roadmap_file):
-    """Parse a roadmap file as Markdown and return a dictionary."""
+    """Parse a roadmap file (JSON or Markdown) and return a dictionary."""
+    path = Path(roadmap_file)
     logging.info(f"Parsing roadmap file: {roadmap_file}")
-    logging.info("Using markdown parser.")
+
+    if path.suffix == '.json':
+        import json
+        logging.info("Using JSON parser.")
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    
+    logging.info("Using markdown parser for non-JSON file.")
     return parse_markdown(roadmap_file)
 
 
