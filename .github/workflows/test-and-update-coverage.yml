@@ -32,17 +32,3 @@ jobs:
       - name: Run tests and generate coverage report
         run: pytest --cov=scaffold --cov-report=term-missing > coverage.txt || echo "Tests failed, skipping coverage update."
 
-      - name: Update README with coverage
-        run: python scripts/update_coverage.py coverage.txt README.md
-
-      - name: Commit and push if README.md changed
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add README.md
-          if git diff --staged --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "docs: Update test coverage in README"
-            git push
-          fi
