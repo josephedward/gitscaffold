@@ -36,13 +36,13 @@ Develop an `init` command that can initialize a project in multiple ways:
 
 ### Roadmap Parsing and Validation
 
-Implement logic to parse roadmap files (YAML/Markdown) and validate their structure and content.  
+Implement logic to parse roadmap files (Markdown) and validate their structure and content.  
 **Milestone:** v0.1 Foundation (CLI & Basic Parsing)  
 **Labels:** core, parser, validator
 
-#### Implement Markdown/YAML parser for roadmap
+#### Implement Markdown parser for roadmap
 
-Create parsing functions for roadmap files, supporting both Markdown and YAML formats. Based on `scaffold/parser.py::parse_roadmap` and `parse_markdown`.
+Create parsing functions for roadmap files, supporting Markdown format. Based on `scaffold/parser.py::parse_markdown`.
 
 #### Implement Pydantic models for validation
 
@@ -153,6 +153,21 @@ Add commands to help users identify and focus on their next tasks.
 #### Implement `next` command
 
 Create a `next` command to show next action items from the earliest active milestone. Based on `scaffold/cli.py::next_command`.
+#### Implement `next-task` command
+
+Create a `next-task` command to show the next open task for the current roadmap phase. Based on `scaffold/cli.py::next_task`.
+#### Implement `deduplicate-issues` command
+
+Create a `deduplicate-issues` command to find and close duplicate open issues, based on title matching. Based on `scaffold/cli.py::deduplicate_command`.
+**Tests:**
+- Test `gitscaffold deduplicate-issues --dry-run` to list duplicates.
+- Confirm `gitscaffold deduplicate-issues` closes duplicates when applied.
+#### Implement `cleanup-issue-titles` command
+
+Create a `cleanup-issue-titles` command to sanitize issue titles by removing leading markdown characters. Based on `scaffold/cli.py::sanitize_command`.
+**Tests:**
+- Test `gitscaffold sanitize --dry-run` to preview title changes.
+- Confirm `gitscaffold sanitize` applies cleaned titles correctly.
 
 
 #### Enhance `diff` command
@@ -211,7 +226,7 @@ Include project overview, features, installation instructions, quick start guide
 
 #### Document roadmap file format
 
-Provide a detailed specification of the roadmap file structure (YAML/Markdown).
+Provide a detailed specification of the roadmap file structure (Markdown).
 
 #### Document all CLI commands and options
 
@@ -273,7 +288,7 @@ Enhance the tool’s flexibility through better configuration and a plugin archi
 
 #### Global and project-level configuration file
 
-Allow users to define default settings in a configuration file (`~/.gitscaffold/config.yml` or `.gitscaffold.yml`).
+Allow users to define default settings in a configuration file (`~/.gitscaffold/config.md` or `.gitscaffold.md`).
 
 #### Basic plugin system
 
@@ -356,7 +371,7 @@ features:
           - Test behavior when the output file already exists.
 
   - title: Roadmap Parsing and Validation
-    description: Implement logic to parse roadmap files (YAML/Markdown) and validate their structure and content.
+    description: Implement logic to parse roadmap files (Markdown) and validate their structure and content.
     milestone: v0.1 Foundation (CLI & Basic Parsing)
     labels: [core, parser, validator]
     assignees: []
@@ -365,7 +380,6 @@ features:
         description: Create parsing functions for roadmap files, supporting both Markdown and YAML formats. Based on `scaffold/parser.py::parse_roadmap` and `parse_markdown`.
         labels: [implementation, parser]
         tests:
-          - Test parsing of a valid YAML roadmap file.
           - Test parsing of a valid Markdown roadmap file (if syntax differs).
           - Verify correct extraction of project name, description, milestones, features, and tasks.
           - Test error handling for malformed roadmap files (syntax errors, incorrect types).
@@ -455,7 +469,7 @@ features:
         description: Add an `--ai-enrich` option to the `create` command to use LLM-based description enrichment. Link to `scaffold/cli.py::create`.
         labels: [integration, cli, ai]
         tests:
-          - Test `gitscaffold create --ai-enrich <roadmap_file.yml>` (mocking LLM and GitHub).
+          - Test `gitscaffold create --ai-enrich <roadmap_file.md>` (mocking LLM and GitHub).
           - Verify that issue descriptions are passed through the enrichment process before GitHub creation.
       - title: Implement `enrich` command (from gitscaffold.py)
         description: Port and integrate the `enrich` command for AI-powered enrichment of issues. Based on `gitscaffold.py::enrich` and `scripts/enrich.py`.
@@ -544,7 +558,7 @@ features:
           - Peer review of README for clarity, accuracy, and completeness.
           - Verify installation instructions work.
       - title: Document roadmap file format
-        description: Provide a detailed specification of the roadmap file structure (YAML/Markdown), including all fields, their types, and whether they are required or optional.
+        description: Provide a detailed specification of the roadmap file structure (Markdown), including all fields, their types, and whether they are required or optional.
         labels: [documentation]
         tests:
           - Review documentation against the Pydantic models and parser logic.
@@ -556,7 +570,7 @@ features:
           - Verify that `gitscaffold <command> --help` output is clear and matches documented options.
           - Check that all options are explained.
       - title: Create example roadmap files
-        description: Develop a diverse set of example roadmap files showcasing different features and use cases. This should include examples for structured YAML, structured Markdown (similar to `docs/example_roadmap.md` and `gitscaffold init` output), and unstructured Markdown suitable for AI extraction (`import-md` command).
+        description: Develop a diverse set of example roadmap files showcasing different features and use cases. This should include examples for structured Markdown (similar to `docs/example_roadmap.md` and `gitscaffold init` output), and unstructured Markdown suitable for AI extraction (`import-md` command).
         labels: [documentation, example]
         tests:
           - Validate all structured example roadmaps using `gitscaffold create --dry-run`.
@@ -574,19 +588,19 @@ features:
     assignees: []
     tasks:
       - title: Setup GitHub Actions for CI
-        description: Configure workflows to run linters (e.g., Ruff, Black) and execute the test suite on every push and pull request. (Partially exists with `pypi-publish.yml`, `release.yml`).
+        description: Configure workflows to run linters (e.g., Ruff, Black) and execute the test suite on every push and pull request. (Partially exists with `pypi-publish.md`, `release.md`).
         labels: [ci, automation]
         tests:
           - Verify CI workflow triggers correctly.
           - Confirm tests and linters run and pass in CI.
       - title: Automate PyPI publishing on release
-        description: Enhance or confirm GitHub Actions workflow (`.github/workflows/pypi-publish.yml`) to build and publish the package to PyPI when a new release is tagged.
+        description: Enhance or confirm GitHub Actions workflow (`.github/workflows/pypi-publish.md`) to build and publish the package to PyPI when a new release is tagged.
         labels: [release, automation, pypi]
         tests:
           - Test publishing to TestPyPI first.
           - Verify successful publishing to official PyPI on a real release.
       - title: Automate GitHub Releases creation
-        description: Enhance or confirm GitHub Actions workflow (`.github/workflows/release.yml`) to automatically create GitHub releases, potentially with generated changelogs.
+        description: Enhance or confirm GitHub Actions workflow (`.github/workflows/release.md`) to automatically create GitHub releases, potentially with generated changelogs.
         labels: [release, automation, github]
         tests:
           - Test that a new tag triggers the release creation.
@@ -598,7 +612,7 @@ features:
           - Ensure `gitscaffold --version` reflects the correct version from `scaffold/__init__.py`.
           - CI check to ensure version is updated consistently in PRs for release.
       - title: Test and Maintain GitHub Action
-        description: Ensure the GitHub Action defined in `action.yml` is well-tested and maintained. This includes testing its inputs (`roadmap-file`, `repo`, `github-token`, `dry-run`, `openai-key`, `apply`) and overall functionality.
+        description: Ensure the GitHub Action defined in `action.md` is well-tested and maintained. This includes testing its inputs (`roadmap-file`, `repo`, `github-token`, `dry-run`, `openai-key`, `apply`) and overall functionality.
         labels: [ci, github-action, testing]
         tests:
           - Create example workflows that use the action with different input combinations.
@@ -646,7 +660,7 @@ features:
     assignees: []
     tasks:
       - title: Global and project-level configuration file
-        description: Allow users to define default settings (e.g., GitHub repository, token path, default AI model, common labels) in a configuration file (`~/.gitscaffold/config.yml` or `.gitscaffold.yml` in project).
+        description: Allow users to define default settings (e.g., GitHub repository, token path, default AI model, common labels) in a configuration file (`~/.gitscaffold/config.md` or `.gitscaffold.md` in project).
         labels: [feature, usability, configuration]
         tests:
           - Test loading of settings from global and project config files.
