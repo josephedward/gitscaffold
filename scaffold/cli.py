@@ -570,8 +570,8 @@ def sanitize_command(repo, token, dry_run, yes):
     click.echo("Starting 'sanitize' command...")
     actual_token = token if token else get_github_token()
     if not actual_token:
-        click.echo("GitHub token is required to proceed. Exiting.")
-        sys.exit(1)
+        click.secho("GitHub token is required to proceed.", fg="red", err=True)
+        return
     
     click.echo("Successfully obtained GitHub token.")
 
@@ -579,8 +579,8 @@ def sanitize_command(repo, token, dry_run, yes):
         click.echo("No --repo provided, attempting to find repository from git config...")
         repo = get_repo_from_git_config()
         if not repo:
-            click.echo("Could not determine repository from git config. Please use --repo. Exiting.")
-            sys.exit(1)
+            click.secho("Could not determine repository from git config. Please use --repo.", fg="red", err=True)
+            return
         click.echo(f"Using repository from current git config: {repo}")
     else:
         click.echo(f"Using repository provided via --repo flag: {repo}")
@@ -590,12 +590,12 @@ def sanitize_command(repo, token, dry_run, yes):
         click.echo(f"Successfully connected to repository '{repo}'.")
     except GithubException as e:
         if e.status == 404:
-            click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.")
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
         elif e.status == 401:
-            click.echo("Error: GitHub token is invalid or has insufficient permissions.")
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
         else:
-            click.echo(f"An unexpected GitHub error occurred: {e}")
-        sys.exit(1)
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+        return
     click.secho("Fetching all issues...", fg="cyan")
     # PaginatedList has no len(), so convert to list first
     all_issues = list(gh_client.get_all_issues())
