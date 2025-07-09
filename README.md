@@ -1,17 +1,21 @@
 <!-- Gitscaffold README -->
-# Gitscaffold – Generate GitHub Issues from Markdown & YAML Roadmaps
+# Gitscaffold – Generate GitHub Issues from Markdown Roadmaps
 
-Gitscaffold is a command-line tool and GitHub Action that primarily converts unstructured Markdown documents into GitHub issues and milestones using AI-driven extraction and enrichment. It also supports structured roadmap files (YAML/JSON) when you need strict schemas and milestones.
+Gitscaffold is a command-line tool and GitHub Action that converts Markdown-based roadmaps into GitHub issues and milestones using AI-driven extraction and enrichment.
 
 ## Key Features
 
 *   **AI-Powered Issue Extraction**: Convert free-form Markdown documents into structured GitHub issues using OpenAI.
-*   **Structured Roadmap Support**: Generate issues and milestones from YAML or JSON roadmap files.
-*   **Roadmap Synchronization (`sync`)**: Compare your roadmap with an existing GitHub repository and interactively create missing issues to keep them aligned.
+*   **Roadmap Synchronization (`sync`)**: Compare your Markdown roadmap with an existing GitHub repository and interactively create missing issues to keep them aligned.
 *   **Bulk Delete Closed Issues (`delete-closed`)**: Clean up your repository by permanently removing all closed issues, with dry-run and confirmation steps.
+*   **Cleanup Issue Titles (`cleanup-issue-titles`)**: Strip leading Markdown header characters from existing GitHub issue titles, with preview and confirmation.
 *   **AI Enrichment**: Enhance issue descriptions with AI-generated content for clarity and context.
 *   **Roadmap Initialization**: Quickly scaffold a new roadmap template file.
+*   **Show Next Action Items (`next`)**: Display open issues for the earliest active milestone.
+*   **Show Next Task (`next-task`)**: Display or select your next open task for the current roadmap phase, with optional random pick and browser opening.
+*   **Diff Local Roadmap vs GitHub Issues (`diff`)**: Compare your local Markdown roadmap file against your repository’s open and closed issues.
 *   **Flexible Authentication**: Supports GitHub tokens and OpenAI keys via environment variables, `.env` files, or command-line options.
+*   **Diff Roadmap and Issues (`diff`)**: Compare your local roadmap file with GitHub issues to list missing and extra items.
 
 ## Installation
 ```sh
@@ -43,7 +47,7 @@ If a token/key is provided via a command-line option, it will take precedence ov
 
 
 ### Import and enrich from unstructured Markdown
-When you have a free-form Markdown document instead of a structured YAML roadmap, use `import-md` to extract and enrich issues.
+When you have a free-form Markdown document, use `import-md` to extract and enrich issues.
 
 **Example Markdown roadmap** (`markdown_roadmap.md`):
 ```markdown
@@ -95,27 +99,26 @@ gitscaffold create your-roadmap.md \
   --ai-extract \
   --dry-run
 ```
-**Note:** The `create` command also supports structured YAML/JSON roadmap files for manual issue definition if you don't use the `--ai-extract` flag.
+**Note:** The `create` command only supports Markdown roadmap files; use plain Markdown or AI extraction via `--ai-extract`.
 
 ### Sync roadmap with an existing repository
 Use `sync` to compare a roadmap file with an existing GitHub repository. It will identify roadmap items that don't have corresponding entries in GitHub and prompt you to create them. This is particularly useful for Markdown roadmaps using AI extraction.
 
 ```sh
 # Sync with a Markdown roadmap, extracting issues with AI
-# This is useful if your roadmap is in a Markdown file like docs/example_roadmap.md
-# Ensure GITHUB_TOKEN and OPENAI_API_KEY are set in your .env file or environment.
-gitscaffold sync docs/example_roadmap.md \
+# This is useful if your roadmap is in a Markdown file like demo/example_roadmap.md
+gitscaffold sync demo/example_roadmap.md \
   --repo josephedward/gitscaffold \
   --ai-extract \
   --ai-enrich # Optional: to also enrich descriptions of extracted issues
 
-# Simulate the sync process without making any changes (dry run)
-gitscaffold sync docs/example_roadmap.md \
+// Simulate the sync process without making any changes (dry run)
+// (Oops, using wrong comment style, ignore)
   --repo josephedward/gitscaffold \
   --ai-extract \
   --dry-run
 ```
-**Note:** The `sync` command also supports structured YAML/JSON roadmap files if you don't use the `--ai-extract` flag. The `--token` option can be used to override the `GITHUB_TOKEN` from the environment or `.env` file.
+**Note:** The `sync` command only supports Markdown roadmap files; use plain Markdown or AI extraction via `--ai-extract`.
 
 ### Delete closed issues
 Use `delete-closed` to permanently remove all closed issues from a specified repository. This action is irreversible and requires confirmation.
@@ -128,9 +131,55 @@ gitscaffold delete-closed --repo owner/repo --token $GITHUB_TOKEN --dry-run
 gitscaffold delete-closed --repo owner/repo --token $GITHUB_TOKEN
 ```
 
+### Cleanup Issue Titles
+
+Use `cleanup-issue-titles` to remove leading Markdown header markers (e.g., `#`) from existing issue titles in a repository.
+
+```sh
+# Dry-run: list titles that need cleanup
+gitscaffold cleanup-issue-titles --repo owner/repo --token $GITHUB_TOKEN --dry-run
+
+# Apply fixes (will prompt for confirmation)
+gitscaffold cleanup-issue-titles --repo owner/repo --token $GITHUB_TOKEN
+```
+
+### Show Next Action Items
+
+Use `next` to view all open issues from the earliest active milestone in your repository.
+
+```sh
+gitscaffold next --repo owner/repo --token $GITHUB_TOKEN
+```
+
+### Show Next Task for Current Phase
+
+Use `next-task` to pick your next open task for the current roadmap phase. By default, the oldest task is shown; use `--pick` to choose randomly and `--browse` to open it in your browser.
+
+```sh
+gitscaffold next-task ROADMAP_FILE --repo owner/repo --token $GITHUB_TOKEN [--pick] [--browse]
+```
+
+### Diff Roadmap and GitHub Issues
+
+Use `diff` to compare a local roadmap file against GitHub issues. It lists items present in your roadmap but missing on GitHub, and issues on GitHub not in your roadmap.
+
+```sh
+gitscaffold diff ROADMAP_FILE \
+  --repo owner/repo \
+  [--ai-extract] [--heading-level N]
+```
+
+### Diff Local Roadmap vs GitHub Issues
+
+Use `diff` to compare your local Markdown roadmap with existing GitHub issues.
+
+```sh
+gitscaffold diff ROADMAP.md --repo owner/repo --token $GITHUB_TOKEN
+```
+
 ### Initialize a roadmap template
 ```sh
-gitscaffold init example-roadmap.yml
+gitscaffold init example-roadmap.md
 ```
 
 ### From the source checkout
@@ -153,8 +202,16 @@ You can clone this repository and use the top-level `gitscaffold.py` script:
 ./gitscaffold.py import-md owner/repo markdown_roadmap.md \
   --heading-level 2 --dry-run --verbose --token $GITHUB_TOKEN --openai-key $OPENAI_API_KEY
 
-## Initialize a new roadmap YAML template
-./gitscaffold.py init ROADMAP.yml
+## Initialize a new roadmap Markdown template
+./gitscaffold.py init ROADMAP.md
+```
+
+### Audit Repository (cleanup, deduplicate, diff)
+
+Use the provided `scripts/audit.sh` to run cleanup, deduplicate, and diff in one go. It will prompt for your GitHub repo, token, and local roadmap file.
+
+```sh
+bash scripts/audit.sh
 ```
 
 ## GitHub Action Usage
@@ -169,7 +226,7 @@ jobs:
       - name: Run Gitscaffold CLI
         uses: your-org/gitscaffold-action@vX.Y.Z
         with:
-          roadmap-file: roadmap.yml
+          roadmap-file: docs/example_roadmap.md
           repo: ${{ github.repository }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           dry-run: 'true'
