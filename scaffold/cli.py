@@ -603,7 +603,8 @@ def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected
 
     actual_token = token if token else get_github_token()
     if not actual_token:
-        return
+        click.echo("GitHub token is required.", err=True)
+        return 1
     # Determine repository: use --repo or infer from local git
     if not repo:
         repo = get_repo_from_git_config()
@@ -822,7 +823,7 @@ def next_task(roadmap_file, token, repo, pick, browse):
         repo = get_repo_from_git_config()
         if not repo:
             click.echo("Could not determine repository from git config. Please use --repo.", err=True)
-            return
+            return 1
         click.echo(f"Using repository from current git config: {repo}")
 
     raw = parse_roadmap(roadmap_file)
