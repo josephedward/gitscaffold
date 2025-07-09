@@ -69,10 +69,10 @@ def mock_github_client_for_dedup(monkeypatch):
     monkeypatch.setattr('scaffold.cli.GitHubClient', mock_client_class)
     return mock_client_class, mock_issues
 
-def test_deduplicate_issues_dry_run(runner, mock_github_client_for_dedup):
+def test_deduplicate_dry_run(runner, mock_github_client_for_dedup):
     """Test deduplicate issues in dry-run mode."""
     mock_client, mock_issues = mock_github_client_for_dedup
-    result = runner.invoke(cli, ['deduplicate-issues', '--repo', 'owner/repo', '--dry-run', '--token', 'fake'])
+    result = runner.invoke(cli, ['deduplicate', '--repo', 'owner/repo', '--dry-run', '--token', 'fake'])
 
     assert result.exit_code == 0
     assert "Found 2 sets of duplicate issues" in result.output
@@ -88,10 +88,10 @@ def test_deduplicate_issues_dry_run(runner, mock_github_client_for_dedup):
     for issue in mock_issues:
         issue.edit.assert_not_called()
 
-def test_deduplicate_issues_live_run_confirm_yes(runner, mock_github_client_for_dedup):
+def test_deduplicate_live_run_confirm_yes(runner, mock_github_client_for_dedup):
     """Test deduplicate issues in live mode with confirmation."""
     mock_client, mock_issues = mock_github_client_for_dedup
-    result = runner.invoke(cli, ['deduplicate-issues', '--repo', 'owner/repo', '--token', 'fake'], input='y\n')
+    result = runner.invoke(cli, ['deduplicate', '--repo', 'owner/repo', '--token', 'fake'], input='y\n')
 
     assert result.exit_code == 0
     assert "Proceed with closing 2 duplicate issues" in result.output
@@ -112,10 +112,10 @@ def test_deduplicate_issues_live_run_confirm_yes(runner, mock_github_client_for_
     issue_4.edit.assert_not_called()
 
 
-def test_deduplicate_issues_live_run_confirm_no(runner, mock_github_client_for_dedup):
+def test_deduplicate_live_run_confirm_no(runner, mock_github_client_for_dedup):
     """Test deduplicate issues in live mode with user aborting."""
     mock_client, mock_issues = mock_github_client_for_dedup
-    result = runner.invoke(cli, ['deduplicate-issues', '--repo', 'owner/repo', '--token', 'fake'], input='n\n')
+    result = runner.invoke(cli, ['deduplicate', '--repo', 'owner/repo', '--token', 'fake'], input='n\n')
 
     assert result.exit_code == 0
     assert "Proceed with closing 2 duplicate issues" in result.output
@@ -131,7 +131,7 @@ def test_deduplicate_no_duplicates_found(MockGitHubClient, runner):
     mock_instance = MockGitHubClient.return_value
     mock_instance.find_duplicate_issues.return_value = {}
 
-    result = runner.invoke(cli, ['deduplicate-issues', '--repo', 'owner/repo', '--token', 'fake'])
+    result = runner.invoke(cli, ['deduplicate', '--repo', 'owner/repo', '--token', 'fake'])
 
     assert result.exit_code == 0
     assert "No duplicate open issues found." in result.output

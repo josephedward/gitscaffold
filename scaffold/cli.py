@@ -729,13 +729,13 @@ def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected
         click.echo(f"Failed to delete: {failed_count} issues. Check logs for errors.", err=True)
 
 
-@cli.command(name='cleanup-issue-titles', help='Remove leading markdown characters from issue titles.')
+@cli.command(name='sanitize', help='Remove leading markdown characters from issue titles.')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--dry-run', is_flag=True, help='List issues that would be changed, without actually changing them.')
-def cleanup_issue_titles_command(repo, token, dry_run):
+def sanitize_command(repo, token, dry_run):
     """Scan all issues and remove leading markdown characters like '#' from their titles."""
-    click.echo("Starting 'cleanup-issue-titles' command...")
+    click.echo("Starting 'sanitize' command...")
     actual_token = token if token else get_github_token()
     if not actual_token:
         click.echo("GitHub token is required to proceed. Exiting.")
@@ -810,13 +810,13 @@ def cleanup_issue_titles_command(repo, token, dry_run):
         click.secho(f"Failed to update: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='deduplicate-issues', help='Find and close duplicate issues in a repository.')
+@cli.command(name='deduplicate', help='Find and close duplicate issues in a repository.')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--dry-run', is_flag=True, help='List duplicate issues that would be closed, without actually closing them.')
-def deduplicate_issues_command(repo, token, dry_run):
+def deduplicate_command(repo, token, dry_run):
     """Finds and closes duplicate open issues (based on title)."""
-    click.echo("Starting 'deduplicate-issues' command...")
+    click.echo("Starting 'deduplicate' command...")
     actual_token = token if token else get_github_token()
     if not actual_token:
         click.echo("GitHub token is required to proceed. Exiting.", err=True)
@@ -955,61 +955,6 @@ def import_md_command(repo_full_name, markdown_file, token, openai_key, dry_run,
     except Exception as e:
         click.echo(f"Failed to execute {script_path.name}: {e}", err=True)
     
-@cli.command(name='next-task', help='Show your next open task for the current roadmap phase.')
-@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
-@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
-@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
-@click.option('--pick', is_flag=True, help='Pick a random open task (default: oldest).')
-@click.option('--browse', is_flag=True, help='Open the selected issue in your default web browser.')
-def next_task(roadmap_file, token, repo, pick, browse):
-    """
-    Show the current phase (milestone) based on today’s date and pick an open task from that phase.
-    """
-    actual_token = token if token else get_github_token()
-    if not actual_token:
-        return
-
-    if not repo:
-        repo = get_repo_from_git_config()
-        if not repo:
-            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
-            return 1
-        click.echo(f"Using repository from current git config: {repo}")
-
-    raw = parse_roadmap(roadmap_file)
-    validated = validate_roadmap(raw)
-
-    gh = GitHubClient(actual_token, repo)
-
-    # Determine current milestone (phase) by due_date
-    today = date.today()
-    upcoming = [m for m in validated.milestones if m.due_date and m.due_date >= today]
-    if upcoming:
-        current = min(upcoming, key=lambda m: m.due_date)
-    else:
-        past = [m for m in validated.milestones if m.due_date]
-        if past:
-            current = max(past, key=lambda m: m.due_date)
-        else:
-            click.echo("No milestones with due dates found in roadmap.")
-            return
-
-    click.echo(f"Current phase: {current.name} (due: {current.due_date})")
-
-    # Fetch open issues for this milestone
-    issues = gh.get_open_issues_by_milestone(current.name)
-    if not issues:
-        click.echo("No open issues found for this phase.")
-        return
-
-    # Pick issue: random if --pick, else oldest
-    issue = random.choice(issues) if pick else sorted(issues, key=lambda i: i.created_at)[0]
-
-    click.secho(f"Next task: #{issue.number} {issue.title}", fg="bright_blue", bold=True)
-    if browse:
-        click.echo(f"Opening in browser: {issue.html_url}")
-        webbrowser.open(issue.html_url)
-
 
 @cli.command(name='start-demo', help='Run the Streamlit demo application.')
 def start_demo():

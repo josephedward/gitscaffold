@@ -45,10 +45,10 @@ def mock_github_client_for_cleanup(monkeypatch):
     monkeypatch.setattr("scaffold.cli.GitHubClient", MockedGitHubClientInstance)
     return mock_issues
 
-def test_cleanup_issue_titles_dry_run(runner, mock_github_client_for_cleanup):
-    """Test cleanup-issue-titles with --dry-run."""
+def test_sanitize_dry_run(runner, mock_github_client_for_cleanup):
+    """Test sanitize with --dry-run."""
     result = runner.invoke(cli, [
-        'cleanup-issue-titles',
+        'sanitize',
         '--repo', 'owner/repo',
         '--token', 'fake-token',
         '--dry-run'
@@ -67,12 +67,12 @@ def test_cleanup_issue_titles_dry_run(runner, mock_github_client_for_cleanup):
     for issue in mock_github_client_for_cleanup:
         issue.edit.assert_not_called()
 
-def test_cleanup_issue_titles_live_run_confirm_yes(runner, mock_github_client_for_cleanup, monkeypatch):
-    """Test cleanup-issue-titles in a live run where user confirms."""
+def test_sanitize_live_run_confirm_yes(runner, mock_github_client_for_cleanup, monkeypatch):
+    """Test sanitize in a live run where user confirms."""
     monkeypatch.setattr("click.confirm", lambda prompt: True)
     
     result = runner.invoke(cli, [
-        'cleanup-issue-titles',
+        'sanitize',
         '--repo', 'owner/repo',
         '--token', 'fake-token',
     ])
@@ -106,12 +106,12 @@ def test_cleanup_issue_titles_live_run_confirm_yes(runner, mock_github_client_fo
     issue4.edit.assert_called_once_with(title="Spaced and hashed title")
     issue5.edit.assert_called_once_with(title="NoSpaceHash")
 
-def test_cleanup_issue_titles_live_run_confirm_no(runner, mock_github_client_for_cleanup, monkeypatch):
-    """Test cleanup-issue-titles in a live run where user aborts."""
+def test_sanitize_live_run_confirm_no(runner, mock_github_client_for_cleanup, monkeypatch):
+    """Test sanitize in a live run where user aborts."""
     monkeypatch.setattr("click.confirm", lambda prompt: False)
     
     result = runner.invoke(cli, [
-        'cleanup-issue-titles',
+        'sanitize',
         '--repo', 'owner/repo',
         '--token', 'fake-token',
     ])
@@ -122,8 +122,8 @@ def test_cleanup_issue_titles_live_run_confirm_no(runner, mock_github_client_for
     for issue in mock_github_client_for_cleanup:
         issue.edit.assert_not_called()
 
-def test_cleanup_no_issues_to_clean(runner, monkeypatch):
-    """Test cleanup when no issues need title changes."""
+def test_sanitize_no_issues_to_clean(runner, monkeypatch):
+    """Test sanitize when no issues need title changes."""
     class MockedGitHubClientInstance:
         def __init__(self, token, repo_full_name):
             self.repo = MagicMock()
@@ -134,7 +134,7 @@ def test_cleanup_no_issues_to_clean(runner, monkeypatch):
     monkeypatch.setattr("scaffold.cli.GitHubClient", MockedGitHubClientInstance)
     
     result = runner.invoke(cli, [
-        'cleanup-issue-titles',
+        'sanitize',
         '--repo', 'owner/repo',
         '--token', 'fake-token',
     ])
@@ -143,8 +143,8 @@ def test_cleanup_no_issues_to_clean(runner, monkeypatch):
     assert "No issues with titles that need cleaning up." in result.output
 
 
-def test_cleanup_fails_on_bad_repo(runner, monkeypatch):
-    """Test that cleanup command fails gracefully with a bad repository name."""
+def test_sanitize_fails_on_bad_repo(runner, monkeypatch):
+    """Test that sanitize command fails gracefully with a bad repository name."""
 
     # This mock will raise a 404 exception when GitHubClient is instantiated
     def mock_init_raises_404(self, token, repo_full_name):
@@ -153,7 +153,7 @@ def test_cleanup_fails_on_bad_repo(runner, monkeypatch):
     monkeypatch.setattr("scaffold.cli.GitHubClient.__init__", mock_init_raises_404)
 
     result = runner.invoke(cli, [
-        'cleanup-issue-titles',
+        'sanitize',
         '--repo', 'owner/bad-repo',
         '--token', 'fake-token'
     ])
@@ -162,8 +162,8 @@ def test_cleanup_fails_on_bad_repo(runner, monkeypatch):
     assert "Error: Repository 'owner/bad-repo' not found." in result.output
 
 
-def test_cleanup_fails_on_bad_token(runner, monkeypatch):
-    """Test that cleanup command fails gracefully with a bad token."""
+def test_sanitize_fails_on_bad_token(runner, monkeypatch):
+    """Test that sanitize command fails gracefully with a bad token."""
 
     def mock_init_raises_401(self, token, repo_full_name):
         raise GithubException(status=401, data={"message": "Bad credentials"})
@@ -171,7 +171,7 @@ def test_cleanup_fails_on_bad_token(runner, monkeypatch):
     monkeypatch.setattr("scaffold.cli.GitHubClient.__init__", mock_init_raises_401)
 
     result = runner.invoke(cli, [
-        'cleanup-issue-titles',
+        'sanitize',
         '--repo', 'owner/repo',
         '--token', 'fake-token'
     ])
