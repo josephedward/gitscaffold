@@ -79,44 +79,29 @@ gitscaffold import-md owner/repo markdown_roadmap.md \
   --heading-level 1 --token $GITHUB_TOKEN
 ```
 
-### Create issues from a Markdown roadmap (AI-powered)
-Use `create` with `--ai-extract` to generate issues from a Markdown roadmap.
+### Sync Roadmap with Repository
+Use `sync` to create and update GitHub issues from a roadmap file. It compares the roadmap with the repository and creates any missing milestones or issues.
+
+It supports two kinds of roadmaps:
+1.  **Structured Roadmap**: A file containing YAML or JSON structure. With the latest changes, it can parse this format from any file type, including `.md` files.
+2.  **Unstructured Markdown**: A free-form markdown document (e.g., `notes.md`). Use the `--ai-extract` flag to parse this with an LLM.
 
 ```sh
-# Create GitHub issues from a Markdown roadmap file using AI extraction
-# Ensure OPENAI_API_KEY is set in your .env file or environment
-gitscaffold create your-roadmap.md \
+# Sync with a structured roadmap file (can be .md, .yml, etc.)
+gitscaffold sync ROADMAP.md --repo owner/repo
+
+# To enrich descriptions of new issues with AI during sync
+gitscaffold sync ROADMAP.md --repo owner/repo --ai-enrich
+
+# Sync with an unstructured Markdown file, using AI to extract issues
+# Make sure OPENAI_API_KEY is set in your environment or .env file
+gitscaffold sync design_notes.md \
   --repo owner/repo \
-  --token $GITHUB_TOKEN \
-  --ai-extract \
-  --ai-enrich # Optional: to also enrich descriptions
+  --ai-extract
 
-# Preview extracted issues without creating them (dry run)
-gitscaffold create your-roadmap.md \
-  --repo owner/repo \
-  --token $GITHUB_TOKEN \
-  --ai-extract \
-  --dry-run
+# Simulate any sync operation without making changes
+gitscaffold sync ROADMAP.md --repo owner/repo --dry-run
 ```
-**Note:** The `create` command only supports Markdown roadmap files; use plain Markdown or AI extraction via `--ai-extract`.
-
-### Sync roadmap with an existing repository
-Use `sync` to compare a roadmap file with an existing GitHub repository. It will identify roadmap items that don't have corresponding entries in GitHub and prompt you to create them. This is particularly useful for Markdown roadmaps using AI extraction.
-
-```sh
-# Sync with a Markdown roadmap, extracting issues with AI
-# This is useful if your roadmap is in a Markdown file like demo/example_roadmap.md
-gitscaffold sync demo/example_roadmap.md \
-  --repo josephedward/gitscaffold \
-  --ai-extract \
-  --ai-enrich # Optional: to also enrich descriptions of extracted issues
-
-# Simulate the sync process without making any changes (dry run)
-  --repo josephedward/gitscaffold \
-  --ai-extract \
-  --dry-run
-```
-**Note:** The `sync` command only supports Markdown roadmap files; use plain Markdown or AI extraction via `--ai-extract`.
 
 ### Delete closed issues
 Use `delete-closed` to permanently remove all closed issues from a specified repository. This action is irreversible and requires confirmation.

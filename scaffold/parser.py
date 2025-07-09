@@ -81,12 +81,25 @@ def parse_roadmap(roadmap_file):
     """Parse the roadmap file (YAML/JSON or Markdown) and return a dictionary."""
     logging.info(f"Parsing roadmap file: {roadmap_file}")
     suffix = Path(roadmap_file).suffix.lower()
-    if suffix in ('.md', '.markdown'):
-        logging.info("Using markdown parser.")
-        return parse_markdown(roadmap_file)
-    logging.info("Using YAML parser.")
     with open(roadmap_file, 'r', encoding='utf-8') as f:
-        data = yaml.safe_load(f)
+        content = f.read()
+
+    # If it's a markdown file, try to parse it as structured YAML first.
+    if suffix in ('.md', '.markdown'):
+        try:
+            data = yaml.safe_load(content)
+            if isinstance(data, dict) and 'name' in data:
+                logging.info("Parsed markdown file as a structured roadmap.")
+                return data
+        except yaml.YAMLError:
+            pass  # Not YAML, so parse as regular markdown below.
+
+        logging.info("Using markdown heading parser for markdown file.")
+        return parse_markdown(roadmap_file)
+
+    # For other file types, assume YAML/JSON.
+    logging.info("Using YAML parser for non-markdown file.")
+    data = yaml.safe_load(content)
     if not isinstance(data, dict):
         raise ValueError(f"Roadmap file must contain a mapping at the top level, got {type(data).__name__}")
     return data
