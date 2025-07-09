@@ -31,8 +31,8 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@v1.5.1
         with:
-          username: __token__
-          password: ${{ secrets.PYPI_TOKEN }}
+          pypi_token: ${{ secrets.PYPI_TOKEN }}
+          skip_existing: true
 
   notify:
     name: 🚀 Notify Release Triggered
