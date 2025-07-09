@@ -214,8 +214,8 @@ tests/test_validator.py ...                                              [100%]
 =================================== FAILURES ===================================
 ________________________ test_next_no_active_milestones ________________________
 
-runner = <click.testing.CliRunner object at 0x7f50a5380090>
-mock_github_client_for_next = <MagicMock id='139984346026448'>
+runner = <click.testing.CliRunner object at 0x7fc41fb71810>
+mock_github_client_for_next = <MagicMock id='140480322408528'>
 
     def test_next_no_active_milestones(runner, mock_github_client_for_next):
         """Test `next` command when no active milestones are found."""
@@ -233,8 +233,8 @@ tests/test_cli_next.py:58: AssertionError
 WARNING  root:cli.py:118 GitHub PAT not found in environment or .env file.
 __________________ test_next_with_active_milestone_and_issues __________________
 
-runner = <click.testing.CliRunner object at 0x7f50a538c290>
-mock_github_client_for_next = <MagicMock id='139984345812688'>
+runner = <click.testing.CliRunner object at 0x7fc41fb74f90>
+mock_github_client_for_next = <MagicMock id='140480323090768'>
 
     def test_next_with_active_milestone_and_issues(runner, mock_github_client_for_next):
         """Test `next` command with an active milestone and open issues."""
@@ -256,8 +256,8 @@ tests/test_cli_next.py:74: AssertionError
 WARNING  root:cli.py:118 GitHub PAT not found in environment or .env file.
 _____________________ test_next_milestone_with_no_due_date _____________________
 
-runner = <click.testing.CliRunner object at 0x7f50a5408c10>
-mock_github_client_for_next = <MagicMock id='139984346579152'>
+runner = <click.testing.CliRunner object at 0x7fc41fb75dd0>
+mock_github_client_for_next = <MagicMock id='140480322592592'>
 
     def test_next_milestone_with_no_due_date(runner, mock_github_client_for_next):
         """Test `next` command with a milestone that has no due date."""
@@ -276,8 +276,8 @@ tests/test_cli_next.py:88: AssertionError
 WARNING  root:cli.py:118 GitHub PAT not found in environment or .env file.
 ____________________ test_next_with_no_issues_in_milestone _____________________
 
-runner = <click.testing.CliRunner object at 0x7f50a53ba0d0>
-mock_github_client_for_next = <MagicMock id='139984346267216'>
+runner = <click.testing.CliRunner object at 0x7fc41fb8e610>
+mock_github_client_for_next = <MagicMock id='140480322525328'>
 
     def test_next_with_no_issues_in_milestone(runner, mock_github_client_for_next):
         """Test `next` command when the earliest milestone has no open issues listed (edge case)."""
@@ -297,9 +297,9 @@ tests/test_cli_next.py:101: AssertionError
 WARNING  root:cli.py:118 GitHub PAT not found in environment or .env file.
 _________________ test_next_without_repo_flag_uses_git_config __________________
 
-mock_get_repo = <MagicMock name='get_repo_from_git_config' id='139984347725072'>
-runner = <click.testing.CliRunner object at 0x7f50a551d4d0>
-mock_github_client_for_next = <MagicMock id='139984347712464'>
+mock_get_repo = <MagicMock name='get_repo_from_git_config' id='140480322703376'>
+runner = <click.testing.CliRunner object at 0x7fc41fbbbd90>
+mock_github_client_for_next = <MagicMock id='140480322709648'>
 
     @patch('scaffold.cli.get_repo_from_git_config', return_value='git/repo')
     def test_next_without_repo_flag_uses_git_config(mock_get_repo, runner, mock_github_client_for_next):
@@ -317,8 +317,8 @@ tests/test_cli_next.py:113: AssertionError
 WARNING  root:cli.py:118 GitHub PAT not found in environment or .env file.
 _________________ test_next_fails_if_no_repo_provided_or_found _________________
 
-mock_get_repo = <MagicMock name='get_repo_from_git_config' id='139984346254864'>
-runner = <click.testing.CliRunner object at 0x7f50a53ba110>
+mock_get_repo = <MagicMock name='get_repo_from_git_config' id='140480321310544'>
+runner = <click.testing.CliRunner object at 0x7fc41fa669d0>
 
     @patch('scaffold.cli.get_repo_from_git_config', return_value=None)
     def test_next_fails_if_no_repo_provided_or_found(mock_get_repo, runner):
@@ -386,7 +386,7 @@ Please enter your GitHub Personal Access Token (PAT):
 
 Aborted!
 ' = <Result SystemExit(1)>.output
-=================== 6 failed, 29 passed, 1 warning in 1.94s ====================
+=================== 6 failed, 29 passed, 1 warning in 1.84s ====================
 ```
 
 <!-- COVERAGE_END -->
