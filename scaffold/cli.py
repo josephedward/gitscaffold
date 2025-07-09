@@ -683,7 +683,7 @@ def cleanup_issue_titles_command(repo, token, dry_run):
     click.echo("Starting 'cleanup-issue-titles' command...")
     actual_token = token if token else get_github_token()
     if not actual_token:
-        click.echo("GitHub token is required to proceed. Exiting.", err=True)
+        click.echo("GitHub token is required to proceed. Exiting.")
         sys.exit(1)
     
     click.echo("Successfully obtained GitHub token.")
@@ -692,7 +692,7 @@ def cleanup_issue_titles_command(repo, token, dry_run):
         click.echo("No --repo provided, attempting to find repository from git config...")
         repo = get_repo_from_git_config()
         if not repo:
-            click.echo("Could not determine repository from git config. Please use --repo. Exiting.", err=True)
+            click.echo("Could not determine repository from git config. Please use --repo. Exiting.")
             sys.exit(1)
         click.echo(f"Using repository from current git config: {repo}")
     else:
@@ -703,11 +703,11 @@ def cleanup_issue_titles_command(repo, token, dry_run):
         click.echo(f"Successfully connected to repository '{repo}'.")
     except GithubException as e:
         if e.status == 404:
-            click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", err=True)
+            click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.")
         elif e.status == 401:
-            click.echo("Error: GitHub token is invalid or has insufficient permissions.", err=True)
+            click.echo("Error: GitHub token is invalid or has insufficient permissions.")
         else:
-            click.echo(f"An unexpected GitHub error occurred: {e}", err=True)
+            click.echo(f"An unexpected GitHub error occurred: {e}")
         sys.exit(1)
     click.echo(f"Fetching all issues from '{repo}'...")
 
