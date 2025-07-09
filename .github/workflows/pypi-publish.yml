@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # Allow manual dispatch via GitHub UI or CLI
+  workflow_dispatch:
 
 jobs:
   publish:
