@@ -3,6 +3,7 @@
 import re
 import logging
 from pathlib import Path
+import yaml
 
 def parse_markdown(md_file):
     """Parse a Markdown roadmap file into a structured dictionary."""
@@ -34,13 +35,35 @@ def parse_markdown(md_file):
         sec_content = sections[i+1]
         
         if re.match(r'^##\s*Milestones', header):
-            for line in sec_content.strip().split('\n'):
-                if line.strip().startswith('- '):
-                    m_line = line.strip()[2:].strip()
-                    m_name, m_due = (m_line.split('—', 1) + [None])[:2]
-                    m_name = m_name.strip().strip('**')
-                    m_due = m_due.strip() if m_due else None
-                    data['milestones'].append({'name': m_name, 'due_date': m_due})
+            lines = sec_content.strip().split('\n')
+            # Detect table vs list format
+            if any(l.strip().startswith('|') for l in lines):
+                # Parse pipe-delimited table rows
+                for row in lines:
+                    row = row.strip()
+                    if not row.startswith('|'):
+                        continue
+                    # Skip separator row (e.g., |---|---|)
+                    if re.match(r'^\|\s*-+', row):
+                        continue
+                    # Split columns and strip
+                    cols = [c.strip() for c in row.strip().strip('|').split('|')]
+                    # Skip header row with column names
+                    if cols and cols[0].lower().startswith('milestone'):
+                        continue
+                    if len(cols) >= 2:
+                        name_val = cols[0]
+                        due_val = cols[1] or None
+                        data['milestones'].append({'name': name_val, 'due_date': due_val})
+            else:
+                # Parse old dash list format
+                for line in lines:
+                    if line.strip().startswith('- '):
+                        m_line = line.strip()[2:].strip()
+                        m_name, m_due = (m_line.split('—', 1) + [None])[:2]
+                        m_name = m_name.strip().strip('**')
+                        m_due = m_due.strip() if m_due else None
+                        data['milestones'].append({'name': m_name, 'due_date': m_due})
         
         elif re.match(r'^##\s*Features', header):
             # Split this section into features by H3
@@ -115,18 +138,40 @@ def parse_markdown(md_file):
     return data
 
 def parse_roadmap(roadmap_file):
-    """Parse a roadmap file (JSON or Markdown) and return a dictionary."""
+    """Parse a roadmap file (YAML/JSON or Markdown) and return a dictionary."""
     path = Path(roadmap_file)
     logging.info(f"Parsing roadmap file: {roadmap_file}")
-
-    if path.suffix == '.json':
+    suffix = path.suffix.lower()
+    # Load raw content
+    content = path.read_text(encoding='utf-8')
+    # If markdown file, attempt YAML front-matter first
+    if suffix in ('.md', '.markdown'):
+        try:
+            data = yaml.safe_load(content)
+        except yaml.YAMLError:
+            data = None
+        if isinstance(data, dict):
+            logging.info("Parsed markdown file as a structured roadmap.")
+            return data
+        if isinstance(data, list):
+            raise ValueError(f"Roadmap file must contain a mapping at the top level, got list")
+        # Fallback to heading-based markdown parser
+        logging.info("Using markdown parser for non-structured markdown file.")
+        return parse_markdown(roadmap_file)
+    # If JSON file
+    if suffix == '.json':
         import json
         logging.info("Using JSON parser.")
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    
-    logging.info("Using markdown parser for non-JSON file.")
-    return parse_markdown(roadmap_file)
+        return json.loads(content)
+    # Otherwise, treat as YAML file
+    try:
+        data = yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        raise ValueError(f"Roadmap file must contain a mapping at the top level, got YAML error: {e}")
+    if not isinstance(data, dict):
+        raise ValueError(f"Roadmap file must contain a mapping at the top level, got {type(data).__name__}")
+    logging.info("Parsed file as structured roadmap.")
+    return data
 
 
 def write_roadmap(roadmap_file, data):
