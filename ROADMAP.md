@@ -13,6 +13,14 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
 
 ## Features
 
+### Milestones
+
+Refer to the roadmap milestones defined above.
+
+### Features
+
+Main feature list to plan issue creation.
+
 ### Core CLI Framework
 
 Setup basic CLI structure and command handling for gitscaffold.  
@@ -53,6 +61,7 @@ Define Pydantic models for roadmap elements (Roadmap, Milestone, Feature, Task) 
 Develop functionality to interact with the GitHub API for creating and managing milestones and issues.  
 **Milestone:** v0.2 GitHub Integration  
 **Labels:** core, github
+
 
 #### Wrap `gh` CLI for core GitHub operations
 
@@ -216,7 +225,7 @@ Create and maintain comprehensive documentation for users and developers.
 **Milestone:** v0.4 Advanced Features & Usability  
 **Labels:** documentation
 
-#### Write comprehensive README.md
+#### Write comprehensive `README.md`
 
 Include project overview, features, installation instructions, quick start guide, and basic usage examples.
 
@@ -546,7 +555,7 @@ features:
     labels: [documentation]
     assignees: []
     tasks:
-      - title: Write comprehensive README.md
+      - title: Write comprehensive `README.md`
         description: Include project overview, features, installation instructions, quick start guide, and basic usage examples.
         labels: [documentation]
         tests:
