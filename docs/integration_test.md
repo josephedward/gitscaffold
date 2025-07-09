@@ -40,9 +40,9 @@
 
  ## 3. Test as a GitHub Action
 
-In your test repo (e.g. `your-user/test-gitscaffold`), add `markdown_roadmap.md` and a workflow file under `.github/workflows/scaffold-md.yml`:
+In your test repo (e.g. `your-user/test-gitscaffold`), add `markdown_roadmap.md` and a workflow file under `.github/workflows/scaffold-md.md`:
 
-```yaml
+```
 name: Scaffold Markdown Test
 on: [push]
 jobs:
