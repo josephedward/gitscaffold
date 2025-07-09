@@ -8,14 +8,13 @@ Gitscaffold is a command-line tool and GitHub Action that converts Markdown-base
 *   **AI-Powered Issue Extraction**: Convert free-form Markdown documents into structured GitHub issues using OpenAI.
 *   **Roadmap Synchronization (`sync`)**: Compare your Markdown roadmap with an existing GitHub repository and interactively create missing issues to keep them aligned.
 *   **Bulk Delete Closed Issues (`delete-closed`)**: Clean up your repository by permanently removing all closed issues, with dry-run and confirmation steps.
-*   **Cleanup Issue Titles (`cleanup-issue-titles`)**: Strip leading Markdown header characters from existing GitHub issue titles, with preview and confirmation.
+*   **Cleanup Issue Titles (`sanitize`)**: Strip leading Markdown header characters from existing GitHub issue titles, with preview and confirmation.
 *   **AI Enrichment**: Enhance issue descriptions with AI-generated content for clarity and context.
 *   **Roadmap Initialization**: Quickly scaffold a new roadmap template file.
 *   **Show Next Action Items (`next`)**: Display open issues for the earliest active milestone.
 *   **Show Next Task (`next-task`)**: Display or select your next open task for the current roadmap phase, with optional random pick and browser opening.
 *   **Diff Local Roadmap vs GitHub Issues (`diff`)**: Compare your local Markdown roadmap file against your repository’s open and closed issues.
 *   **Flexible Authentication**: Supports GitHub tokens and OpenAI keys via environment variables, `.env` files, or command-line options.
-*   **Diff Roadmap and Issues (`diff`)**: Compare your local roadmap file with GitHub issues to list missing and extra items.
 
 ## Installation
 ```sh
@@ -112,8 +111,7 @@ gitscaffold sync demo/example_roadmap.md \
   --ai-extract \
   --ai-enrich # Optional: to also enrich descriptions of extracted issues
 
-// Simulate the sync process without making any changes (dry run)
-// (Oops, using wrong comment style, ignore)
+# Simulate the sync process without making any changes (dry run)
   --repo josephedward/gitscaffold \
   --ai-extract \
   --dry-run
@@ -131,16 +129,16 @@ gitscaffold delete-closed --repo owner/repo --token $GITHUB_TOKEN --dry-run
 gitscaffold delete-closed --repo owner/repo --token $GITHUB_TOKEN
 ```
 
-### Cleanup Issue Titles
+### Sanitize Issue Titles
 
-Use `cleanup-issue-titles` to remove leading Markdown header markers (e.g., `#`) from existing issue titles in a repository.
+Use `sanitize` to remove leading Markdown header markers (e.g., `#`) from existing issue titles in a repository.
 
 ```sh
 # Dry-run: list titles that need cleanup
-gitscaffold cleanup-issue-titles --repo owner/repo --token $GITHUB_TOKEN --dry-run
+gitscaffold sanitize --repo owner/repo --token $GITHUB_TOKEN --dry-run
 
 # Apply fixes (will prompt for confirmation)
-gitscaffold cleanup-issue-titles --repo owner/repo --token $GITHUB_TOKEN
+gitscaffold sanitize --repo owner/repo --token $GITHUB_TOKEN
 ```
 
 ### Show Next Action Items
@@ -162,16 +160,6 @@ gitscaffold next-task ROADMAP_FILE --repo owner/repo --token $GITHUB_TOKEN [--pi
 ### Diff Roadmap and GitHub Issues
 
 Use `diff` to compare a local roadmap file against GitHub issues. It lists items present in your roadmap but missing on GitHub, and issues on GitHub not in your roadmap.
-
-```sh
-gitscaffold diff ROADMAP_FILE \
-  --repo owner/repo \
-  [--ai-extract] [--heading-level N]
-```
-
-### Diff Local Roadmap vs GitHub Issues
-
-Use `diff` to compare your local Markdown roadmap with existing GitHub issues.
 
 ```sh
 gitscaffold diff ROADMAP.md --repo owner/repo --token $GITHUB_TOKEN
