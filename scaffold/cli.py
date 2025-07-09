@@ -915,14 +915,14 @@ def deduplicate_command(repo, token, dry_run):
     for title, issues in duplicate_sets.items():
         original = issues['original']
         duplicates = issues['duplicates']
-        click.secho(f"\nGroup: '{title}'", fg="white", bold=True)
-        click.secho(f" Original : #{original.number} (created {original.created_at})", fg="green")
+        click.secho(f"\n- Title: '{title}'", fg="white", bold=True)
+        click.echo(f"  - Original: #{original.number} (created {original.created_at})")
         for dup in duplicates:
             click.echo(f"  - Duplicate to close: #{dup.number} (created {dup.created_at})")
             issues_to_close.append(dup)
 
     if dry_run:
-        click.secho(f"\n[dry-run] Would close {len(issues_to_close)} issues. No changes made.", fg="blue")
+        click.secho(f"\n[dry-run] Would close {len(issues_to_close)} issues. No changes were made.", fg="blue")
         return
 
     click.secho("Step 4: Executing closures...", fg="cyan")
