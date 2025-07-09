@@ -640,7 +640,7 @@ def diff(roadmap_file, repo, token, ai_extract, heading_level):
 
     try:
         gh_client = GitHubClient(actual_token, repo)
-    click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+        click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
     except GithubException as e:
         if e.status == 404:
             click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", err=True)
@@ -863,7 +863,7 @@ def sanitize_command(repo, token, dry_run):
             failed_count += 1
     
     click.secho("\nCleanup process finished.", fg="bright_green", bold=True)
-    click.secho(f"Successfully updated: {updated_count} issues", fg="bright_blue")
+    click.secho(f"Successfully updated: {updated_count} issues.", fg="bright_blue")
     if failed_count > 0:
         click.secho(f"Failed to update: {failed_count} issues", fg="red", err=True)
 
