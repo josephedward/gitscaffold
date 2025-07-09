@@ -64,10 +64,6 @@ Create a new GitHub repository from a roadmap file and populate it with issues. 
 
 Port and integrate the `delete-closed` command. Based on `gitscaffold.py::delete-closed`.
 
-#### Implement `diff` command
-
-Add a `diff` command to compare a local roadmap file with existing GitHub issues and show missing and extra entries.
-
 #### Implement `cleanup-issue-titles` command
 
 Add a CLI command to strip leading Markdown header markers (e.g., `#`) from existing issue titles and update them via the GitHub API.
@@ -119,6 +115,10 @@ Create a `next` command to show next action items from the earliest active miles
 #### Implement `next-task` command
 
 Create a `next-task` command to show the next open task for the current roadmap phase. Based on `scaffold/cli.py::next_task`.
+
+#### Enhance `diff` command
+
+Enhance the `diff` command to include issue numbers and state in its output, and allow filtering by issue state.
 
 ### Testing Framework and Coverage
 
