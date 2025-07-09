@@ -175,3 +175,16 @@ class GitHubClient:
         except Exception as e:
             print(f"An unexpected error occurred deleting issue {node_id}: {e}")
             return False
+    
+    def get_open_issues_by_milestone(self, milestone_name: str):
+        """
+        Fetch all open issues in a given milestone by its title.
+        """
+        m = self._find_milestone(milestone_name)
+        if not m:
+            return []
+        try:
+            open_issues = self.repo.get_issues(state='open')
+            return [issue for issue in open_issues if issue.milestone and issue.milestone.title == milestone_name]
+        except GithubException:
+            return []

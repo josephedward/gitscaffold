@@ -166,15 +166,22 @@ def _populate_repo_from_roadmap(
 @cli.command(name="create", help="Populate an existing GitHub repository with issues from a roadmap file.")
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
-@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--dry-run', is_flag=True, help='Simulate the process without creating any issues on GitHub.')
 @click.option('--ai-extract', is_flag=True, help='Use AI to parse issues from an unstructured Markdown file.')
 @click.option('--ai-enrich', is_flag=True, help='Use AI to enrich issue descriptions with more details.')
 def create(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     """Populate an EXISTING GitHub repository with issues from a roadmap file."""
     actual_token = token if token else get_github_token()
-    if not actual_token: # get_github_token might prompt and exit or ask to re-run
+    if not actual_token:
         return
+    # Determine repository: use --repo or infer from local git
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
+            return
+        click.echo(f"Using repository from git config: {repo}")
 
     path = Path(roadmap_file)
     suffix = path.suffix.lower()
@@ -417,7 +424,7 @@ def _sync_issues_from_roadmap(
 @cli.command(name="sync", help="Sync a roadmap with a GitHub repository, creating missing issues.")
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
-@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--dry-run', is_flag=True, help='Simulate and show what would be created, without making changes.')
 @click.option('--ai-extract', is_flag=True, help='Use AI to parse issues from an unstructured Markdown file.')
 @click.option('--ai-enrich', is_flag=True, help='Use AI to enrich descriptions of new issues being created.')
@@ -426,6 +433,13 @@ def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     actual_token = token if token else get_github_token()
     if not actual_token:
         return
+    # Determine repository: use --repo or infer from local git
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
+            return
+        click.echo(f"Using repository from git config: {repo}")
 
     path = Path(roadmap_file)
     suffix = path.suffix.lower()
@@ -516,7 +530,7 @@ def next_command(repo, token):
 
 
 @cli.command(name='delete-closed', help='Permanently delete all closed issues in a repository.')
-@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--dry-run', is_flag=True, help='List issues that would be deleted, without actually deleting them.')
 @click.confirmation_option(prompt='Are you sure you want to permanently delete all closed issues? This is irreversible.')
@@ -529,6 +543,13 @@ def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected
     actual_token = token if token else get_github_token()
     if not actual_token:
         return
+    # Determine repository: use --repo or infer from local git
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
+            return
+        click.echo(f"Using repository from git config: {repo}")
 
     gh_client = GitHubClient(actual_token, repo)
     click.echo(f"Fetching closed issues from '{repo}'...")
