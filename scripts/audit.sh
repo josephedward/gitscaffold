@@ -1,44 +1,30 @@
 #!/usr/bin/env bash
-#
-# Audit script to run cleanup, deduplicate, and diff operations in one go.
-#
+# Gitscaffold Audit: cleanup, deduplicate, and diff in one go
 set -euo pipefail
 
-echo "This script will perform the following actions in sequence:"
-echo " 1. cleanup-issue-titles"
-echo " 2. deduplicate-issues"
-echo " 3. diff"
+echo "=== Gitscaffold Audit ==="
+echo "Steps: 1) Cleanup titles, 2) Deduplication, 3) Diff vs GitHub"
+echo
 
-# Prompt for GitHub repository
-read -rp "Enter GitHub repository (owner/repo): " REPO
+# Get inputs
+read -rp "GitHub repo (owner/repo): " REPO
+read -rsp "GitHub token: " TOKEN; echo
+read -rp "Roadmap Markdown file (.md): " ROADMAP_FILE; echo
 
-# Prompt for GitHub token if not set
-if [ -z "${GITHUB_TOKEN:-}" ]; then
-  read -rsp "Enter GitHub token: " GITHUB_TOKEN
-  echo
-fi
-export GITHUB_TOKEN
-
-# Prompt for roadmap file path
-read -rp "Enter path to local roadmap file (YAML/Markdown): " ROADMAP
+# Validate
+[[ -z "$REPO" ]] && { echo "Error: repo required." >&2; exit 1; }
+[[ -z "$TOKEN" ]] && { echo "Error: token required." >&2; exit 1; }
+[[ ! "$ROADMAP_FILE" =~ \.(md|markdown)$ ]] && { echo "Error: Only Markdown (.md) supported." >&2; exit 1; }
+[[ ! -f "$ROADMAP_FILE" ]] && { echo "Error: File not found: $ROADMAP_FILE" >&2; exit 1; }
 
 echo
-echo "Running cleanup-issue-titles..."
-gitscaffold cleanup-issue-titles \
-  --repo "$REPO" \
-  --token "$GITHUB_TOKEN"
-
+echo "--- Step 1: Cleanup issue titles ---"
+gitscaffold cleanup-issue-titles --repo "$REPO" --token "$TOKEN"
 echo
-echo "Running deduplicate-issues..."
-gitscaffold deduplicate-issues \
-  --repo "$REPO" \
-  --token "$GITHUB_TOKEN"
-
+echo "--- Step 2: Deduplicate issues ---"
+gitscaffold deduplicate --repo "$REPO" --token "$TOKEN"
 echo
-echo "Running diff..."
-gitscaffold diff "$ROADMAP" \
-  --repo "$REPO" \
-  --token "$GITHUB_TOKEN"
-
+echo "--- Step 3: Diff roadmap vs GitHub ---"
+gitscaffold diff "$ROADMAP_FILE" --repo "$REPO" --token "$TOKEN"
 echo
-echo "Audit complete."
+echo "=== Audit Complete ==="
