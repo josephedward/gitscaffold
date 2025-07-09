@@ -492,13 +492,14 @@ def next_command(repo, token):
     """Shows open issues from the earliest active milestone."""
     actual_token = token if token else get_github_token()
     if not actual_token:
-        return
+        click.echo("GitHub token is required.", err=True)
+        sys.exit(1)
 
     if not repo:
         repo = get_repo_from_git_config()
         if not repo:
             click.echo("Could not determine repository from git config. Please use --repo.", err=True)
-            return
+            sys.exit(1)
         click.echo(f"Using repository from current git config: {repo}")
 
     gh_client = GitHubClient(actual_token, repo)
