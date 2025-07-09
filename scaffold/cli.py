@@ -564,15 +564,24 @@ def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
                help='Markdown heading level to split issues by.')
 def diff(roadmap_file, repo, token, ai_extract, heading_level):
     """Compare a local roadmap file with GitHub issues and list missing and extra items."""
+    click.echo("Starting 'diff' command...")
     actual_token = token if token else get_github_token()
     if not actual_token:
-        return
+        click.echo("GitHub token is required to proceed. Exiting.", err=True)
+        sys.exit(1)
+    
+    click.echo("Successfully obtained GitHub token.")
+
     if not repo:
+        click.echo("No --repo provided, attempting to find repository from git config...")
         repo = get_repo_from_git_config()
         if not repo:
-            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
-            return
-        click.echo(f"Using repository from git config: {repo}")
+            click.echo("Could not determine repository from git config. Please use --repo. Exiting.", err=True)
+            sys.exit(1)
+        click.echo(f"Using repository from current git config: {repo}")
+    else:
+        click.echo(f"Using repository provided via --repo flag: {repo}")
+
     path = Path(roadmap_file)
     suffix = path.suffix.lower()
     if ai_extract:
@@ -593,7 +602,19 @@ def diff(roadmap_file, repo, token, ai_extract, heading_level):
         roadmap_titles.add(feat.title)
         for task in feat.tasks:
             roadmap_titles.add(task.title)
-    gh_client = GitHubClient(actual_token, repo)
+
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        click.echo(f"Successfully connected to repository '{repo}'.")
+    except GithubException as e:
+        if e.status == 404:
+            click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", err=True)
+        elif e.status == 401:
+            click.echo("Error: GitHub token is invalid or has insufficient permissions.", err=True)
+        else:
+            click.echo(f"An unexpected GitHub error occurred: {e}", err=True)
+        sys.exit(1)
+
     click.echo(f"Fetching existing issue titles from '{repo}'...")
     gh_titles = gh_client.get_all_issue_titles()
     click.echo(f"Local roadmap items: {len(roadmap_titles)}, GitHub issues: {len(gh_titles)}")
