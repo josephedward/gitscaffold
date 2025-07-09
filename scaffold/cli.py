@@ -193,8 +193,8 @@ def _populate_repo_from_roadmap(
 ):
     """Helper function to populate a repository with milestones and issues from roadmap data."""
     logging.info(f"Populating repo '{gh_client.repo.full_name}' from roadmap '{roadmap_data.name}'. Dry run: {dry_run}")
-    click.echo(f"Processing roadmap '{roadmap_data.name}' for repository '{gh_client.repo.full_name}'.")
-    click.echo(f"Found {len(roadmap_data.milestones)} milestones and {len(roadmap_data.features)} features.")
+    click.secho(f"Processing roadmap '{roadmap_data.name}' for repository '{gh_client.repo.full_name}'.", fg="white")
+    click.secho(f"Found {len(roadmap_data.milestones)} milestones and {len(roadmap_data.features)} features.", fg="magenta")
     logging.info(f"Found {len(roadmap_data.milestones)} milestones and {len(roadmap_data.features)} features.")
 
     # Process milestones
@@ -202,9 +202,9 @@ def _populate_repo_from_roadmap(
         if dry_run:
             click.secho(f"[dry-run] Milestone '{m.name}' not found. Would create", fg="blue")
         else:
-            click.echo(f"Milestone '{m.name}' not found. Creating...")
+            click.secho(f"Milestone '{m.name}' not found. Creating...", fg="yellow")
             gh_client.create_milestone(name=m.name, due_on=m.due_date)
-            click.echo(f"Milestone created: {m.name}")
+            click.secho(f"Milestone created: {m.name}", fg="green")
 
     # Process features and tasks
     for feat in roadmap_data.features:
@@ -216,7 +216,7 @@ def _populate_repo_from_roadmap(
                 click.secho(f"[dry-run] {msg}", fg="blue")
             elif openai_api_key: # Only enrich if key is available
                 logging.info(f"AI-enriching feature: {feat.title}...")
-                click.echo(f"AI-enriching feature: {feat.title}...")
+                click.secho(f"AI-enriching feature: {feat.title}...", fg="cyan")
                 body = enrich_issue_description(feat.title, body, openai_api_key, context_text)
         
         if dry_run:
@@ -224,7 +224,7 @@ def _populate_repo_from_roadmap(
             feat_issue_number = 'N/A (dry-run)'
             feat_issue_obj = None
         else:
-            click.echo(f"Creating feature issue: {feat.title.strip()}")
+            click.secho(f"Creating feature issue: {feat.title.strip()}", fg="yellow")
             feat_issue = gh_client.create_issue(
                 title=feat.title.strip(),
                 body=body,
@@ -232,7 +232,7 @@ def _populate_repo_from_roadmap(
                 labels=feat.labels,
                 milestone=feat.milestone
             )
-            click.echo(f"Feature issue created: #{feat_issue.number} {feat.title.strip()}")
+            click.secho(f"Feature issue created: #{feat_issue.number} {feat.title.strip()}", fg="green")
             feat_issue_number = feat_issue.number
             feat_issue_obj = feat_issue
 
@@ -245,7 +245,7 @@ def _populate_repo_from_roadmap(
                     click.secho(f"[dry-run] {msg}", fg="blue")
                 elif openai_api_key: # Only enrich if key is available
                     logging.info(f"AI-enriching sub-task: {task.title}...")
-                    click.echo(f"AI-enriching sub-task: {task.title}...")
+                    click.secho(f"AI-enriching sub-task: {task.title}...", fg="cyan")
                     t_body = enrich_issue_description(task.title, t_body, openai_api_key, context_text)
             
             if dry_run:
@@ -254,7 +254,7 @@ def _populate_repo_from_roadmap(
                     fg="blue"
                 )
             else:
-                click.echo(f"Creating task issue: {task.title.strip()}")
+                click.secho(f"Creating task issue: {task.title.strip()}", fg="yellow")
                 content = t_body
                 if feat_issue_obj:
                     content = f"{t_body}\n\nParent issue: #{feat_issue_obj.number}".strip()
@@ -265,7 +265,7 @@ def _populate_repo_from_roadmap(
                     labels=task.labels,
                     milestone=feat.milestone
                 )
-                click.echo(f"Task issue created: #{task_issue.number} {task.title.strip()}")
+                click.secho(f"Task issue created: #{task_issue.number} {task.title.strip()}", fg="green")
 
 
 
@@ -288,7 +288,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
     click.secho("Starting 'sync' command...", fg='cyan', bold=True)
     actual_token = token if token else get_github_token()
     if not actual_token:
-        click.echo("GitHub token is required to proceed. Exiting.", err=True)
+        click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
         sys.exit(1)
     
     click.secho("Successfully obtained GitHub token.", fg='green')
@@ -296,7 +296,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
         click.secho("No --repo provided, attempting to find repository from git config...", fg='yellow')
         repo = get_repo_from_git_config()
         if not repo:
-            click.echo("Could not determine repository from git config. Please use --repo. Exiting.", err=True)
+            click.secho("Could not determine repository from git config. Please use --repo. Exiting.", fg="red", err=True)
             sys.exit(1)
         click.secho(f"Using repository from current git config: {repo}", fg='magenta')
     else:
@@ -307,7 +307,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
     try:
         raw_roadmap_data = parse_roadmap(roadmap_file)
     except Exception as e:
-        click.echo(f"Error: Failed to parse roadmap file '{roadmap_file}': {e}", err=True)
+        click.secho(f"Error: Failed to parse roadmap file '{roadmap_file}': {e}", fg="red", err=True)
         sys.exit(1)
     validated_roadmap = validate_roadmap(raw_roadmap_data)
     # Prepare AI enrichment key if requested
@@ -319,14 +319,14 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
 
     try:
         gh_client = GitHubClient(actual_token, repo)
-        click.echo(f"Successfully connected to repository '{repo}'.")
+        click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
     except GithubException as e:
         if e.status == 404:
-            click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", err=True)
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
         elif e.status == 401:
-            click.echo("Error: GitHub token is invalid or has insufficient permissions.", err=True)
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
         else:
-            click.echo(f"An unexpected GitHub error occurred: {e}", err=True)
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
         sys.exit(1)
 
     if update_local:
@@ -363,13 +363,13 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
                         click.secho(f"    (Warning: Parent issue #{parent_issue_num} not found on GitHub)", fg="magenta")
 
                     if parent_feature:
-                        click.echo(f"  + Adding task '{issue.title}' to feature '{parent_feature.title}'")
+                        click.secho(f"  + Adding task '{issue.title}' to feature '{parent_feature.title}'", fg="green")
                         parent_feature.tasks.append(Task(title=issue.title, description=issue.body, labels=labels, assignees=assignees))
                     else:
-                        click.echo(f"  + Adding task '{issue.title}' as a new feature (parent not in roadmap)")
+                        click.secho(f"  + Adding task '{issue.title}' as a new feature (parent not in roadmap)", fg="yellow")
                         validated_roadmap.features.append(Feature(title=issue.title, description=issue.body, labels=labels, assignees=assignees, milestone=milestone))
                 else:
-                    click.echo(f"  + Adding feature '{issue.title}'")
+                    click.secho(f"  + Adding feature '{issue.title}'", fg="green")
                     validated_roadmap.features.append(Feature(title=issue.title, description=issue.body, labels=labels, assignees=assignees, milestone=milestone))
 
         if not dry_run:
@@ -509,7 +509,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
             click.secho(f"Creating feature issue: {feat.title.strip()}", fg="cyan")
             body = feat.description or ''
             if ai_enrich and openai_api_key_for_ai:
-                click.echo(f"  AI-enriching feature: {feat.title}...")
+                click.secho(f"  AI-enriching feature: {feat.title}...", fg="cyan")
                 body = enrich_issue_description(feat.title, body, openai_api_key_for_ai, context_text)
             
             feat_issue_obj = gh_client.create_issue(
@@ -536,7 +536,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
                 click.secho(f"Creating task issue: {task.title.strip()} (under #{parent_issue_obj.number})", fg="cyan")
                 body = task.description or ''
                 if ai_enrich and openai_api_key_for_ai:
-                    click.echo(f"  AI-enriching task: {task.title}...")
+                    click.secho(f"  AI-enriching task: {task.title}...", fg="cyan")
                     body = enrich_issue_description(task.title, body, openai_api_key_for_ai, context_text)
                 
                 content = f"{body}\n\nParent issue: #{parent_issue_obj.number}".strip()
@@ -546,7 +546,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
                 )
                 click.secho(f"  -> Task issue created: #{task_issue.number}", fg="green")
 
-    click.echo("Sync command finished.")
+    click.secho("Sync command finished.", fg="green", bold=True)
     
 
 @cli.command(name='diff', help=click.style('Diff local roadmap vs GitHub issues', fg='cyan'))
