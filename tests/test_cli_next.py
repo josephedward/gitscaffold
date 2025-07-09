@@ -126,8 +126,11 @@ def test_next_fails_if_no_repo_provided_or_found(mock_get_repo, runner):
     mock_get_repo.assert_called_once()
 
 @patch('scaffold.cli.get_github_token', return_value=None)
-def test_next_fails_if_no_token(mock_get_token, runner):
+def test_next_fails_if_no_token(mock_get_token, runner, monkeypatch):
     """Test `next` command fails if no token is provided."""
+    # We must unset GITHUB_TOKEN env var, because the --token option uses it as a default.
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    
     # Here we don't provide a token, so the command calls get_github_token.
     # We mock it to return None to simulate no token being available.
     result = runner.invoke(cli, ['next', '--repo', 'owner/repo'])
