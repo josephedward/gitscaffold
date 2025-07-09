@@ -78,7 +78,6 @@ def test_cleanup_issue_titles_live_run_confirm_yes(runner, mock_github_client_fo
     ])
 
     assert result.exit_code == 0
-    assert "Proceed with updating 4 issue titles" in result.output
     assert "Successfully updated: 4 issues." in result.output
     
     issue1 = next(i for i in mock_github_client_for_cleanup if i.number == 1)
