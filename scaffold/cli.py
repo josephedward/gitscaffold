@@ -200,9 +200,7 @@ def _populate_repo_from_roadmap(
     # Process milestones
     for m in roadmap_data.milestones:
         if dry_run:
-            msg = f"Would create or fetch milestone: {m.name} (due: {m.due_date})"
-            logging.info(f"[dry-run] {msg}")
-            click.echo(f"[dry-run] {msg}")
+            click.echo(f"[dry-run] Milestone '{m.name}' not found. Would create")
         else:
             gh_client.create_milestone(name=m.name, due_on=m.due_date)
             click.echo(f"Milestone created or exists: {m.name}")
@@ -221,9 +219,7 @@ def _populate_repo_from_roadmap(
                 body = enrich_issue_description(feat.title, body, openai_api_key, context_text)
         
         if dry_run:
-            msg = f"Would create or fetch feature issue: {feat.title.strip()}"
-            logging.info(f"[dry-run] {msg}")
-            click.echo(f"[dry-run] {msg}")
+            click.echo(f"[dry-run] Feature '{feat.title.strip()}' not found. Would prompt to create.")
             feat_issue_number = 'N/A (dry-run)'
             feat_issue_obj = None # In dry-run, we don't have a real issue object
         else:
@@ -253,10 +249,9 @@ def _populate_repo_from_roadmap(
                     t_body = enrich_issue_description(task.title, t_body, openai_api_key, context_text)
             
             if dry_run:
-                parent_info = f"(parent: #{feat_issue_number})"
-                msg = f"Would create sub-task: {task.title.strip()} {parent_info}"
-                logging.info(f"[dry-run] {msg}")
-                click.echo(f"[dry-run] {msg}")
+                click.echo(
+                    f"[dry-run] Task '{task.title.strip()}' (for feature '{feat.title.strip()}') not found. Would prompt to create."
+                )
             else:
                 content = t_body
                 if feat_issue_obj: # Check if feat_issue_obj is not None
@@ -277,7 +272,7 @@ def _populate_repo_from_roadmap(
 
 
 @cli.command(name="sync", help=click.style('Sync roadmap with a GitHub repository', fg='cyan'))
-@click.argument('roadmap_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')
+@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--dry-run', is_flag=True, help='Simulate and show what would be created, without making changes.')
@@ -306,19 +301,19 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich):
         click.echo(f"Using repository provided via --repo flag: {repo}")
 
     path = Path(roadmap_file)
-    suffix = path.suffix.lower()
-    if suffix not in ('.md', '.markdown'):
-        click.echo("Error: `sync` only supports Markdown files (.md/.markdown).", err=True)
+    # Load and validate roadmap data (supports Markdown, YAML, or JSON)
+    try:
+        raw_roadmap_data = parse_roadmap(roadmap_file)
+    except Exception as e:
+        click.echo(f"Error: Failed to parse roadmap file '{roadmap_file}': {e}", err=True)
         sys.exit(1)
-
+    validated_roadmap = validate_roadmap(raw_roadmap_data)
+    # Prepare AI enrichment key if requested
     openai_api_key_for_ai = None
     if ai_enrich:
         openai_api_key_for_ai = get_openai_api_key()
         if not openai_api_key_for_ai:
-            return 1
-
-    raw_roadmap_data = parse_markdown(roadmap_file)
-    validated_roadmap = validate_roadmap(raw_roadmap_data)
+            sys.exit(1)
     
     try:
         gh_client = GitHubClient(actual_token, repo)
@@ -595,7 +590,7 @@ def sanitize_command(repo, token, dry_run, yes):
             click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
         else:
             click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
-        return
+        sys.exit(1)
     click.secho("Fetching all issues...", fg="cyan")
     # PaginatedList has no len(), so convert to list first
     all_issues = list(gh_client.get_all_issues())
@@ -649,7 +644,8 @@ def sanitize_command(repo, token, dry_run, yes):
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', help='GitHub API token (prompts if not set).')
 @click.option('--dry-run', is_flag=True, help='List duplicate issues that would be closed, without actually closing them.')
-def deduplicate_command(repo, token, dry_run):
+@click.option('--yes', '-y', is_flag=True, default=False, help='Skip confirmation prompt and immediately apply updates.')
+def deduplicate_command(repo, token, dry_run, yes):
     """Finds and closes duplicate open issues (based on title)."""
     click.secho("\n=== Deduplicate Issues ===", fg="bright_blue", bold=True)
     click.secho("Step 1: Authenticating...", fg="cyan")
@@ -703,10 +699,11 @@ def deduplicate_command(repo, token, dry_run):
         return
 
     click.secho("Step 4: Executing closures...", fg="cyan")
-    prompt_msg = f"Proceed with closing {len(issues_to_close)} duplicate issues?"
-    if not click.confirm(prompt_msg, default=False):
-        click.secho("Aborting.", fg="red")
-        return
+    if not yes:
+        prompt_msg = f"Proceed with closing {len(issues_to_close)} duplicate issues?"
+        if not click.confirm(prompt_msg, default=False):
+            click.secho("Aborting.", fg="red")
+            return
 
     closed_count = 0
     failed_count = 0
