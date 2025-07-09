@@ -26,6 +26,48 @@ from collections import defaultdict
 from rich.console import Console
 from rich.table import Table
 
+
+def run_repl(ctx):
+    """Runs the interactive REPL shell."""
+    click.secho("Entering interactive mode. Type 'exit' or 'quit' to leave.", fg='yellow')
+    while True:
+        try:
+            command_line = input('gitscaffold> ')
+            if command_line.lower() in ['exit', 'quit']:
+                break
+            
+            # Use shlex to handle quoted arguments
+            args = shlex.split(command_line)
+            if not args:
+                continue
+
+            cmd_name = args[0]
+            if cmd_name not in cli.commands:
+                click.secho(f"Error: Unknown command '{cmd_name}'", fg='red')
+                continue
+
+            cmd_obj = cli.commands[cmd_name]
+            
+            try:
+                # `standalone_mode=False` prevents sys.exit on error.
+                cmd_obj.main(args=args[1:], prog_name=cmd_name, standalone_mode=False)
+            except click.exceptions.ClickException as e:
+                e.show()
+            except Exception as e:
+                # Catch other exceptions to keep REPL alive
+                click.secho(f"An unexpected error occurred: {e}", fg="red")
+                logging.error(f"REPL error: {e}", exc_info=True)
+
+        except (EOFError, KeyboardInterrupt):
+            # Ctrl+D or Ctrl+C
+            break
+        except Exception as e:
+            # Catch errors in the REPL loop itself
+            click.secho(f"REPL error: {e}", fg='red')
+
+    click.secho("Exiting interactive mode.", fg='yellow')
+
+
 @click.group(invoke_without_command=True)
 @click.version_option(version=__version__, prog_name="gitscaffold")
 @click.option('--interactive', is_flag=True, help='Enter interactive REPL mode.')
