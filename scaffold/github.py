@@ -75,6 +75,15 @@ class GitHubClient:
             params['milestone'] = m.number
         return self.repo.create_issue(**params)
 
+    def get_all_issues(self):
+        """Fetch all issue objects from the repository, handling pagination."""
+        try:
+            # get_issues handles pagination automatically.
+            return self.repo.get_issues(state='all')
+        except GithubException as e:
+            print(f"Error fetching issues: {e}. Returning empty list.")
+            return []
+
     def get_all_issue_titles(self) -> set[str]:
         """Fetch all issue titles in the repository."""
         titles = set()

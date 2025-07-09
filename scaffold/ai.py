@@ -66,8 +66,10 @@ def extract_issues_from_markdown(md_file, api_key: str, model_name=None, tempera
     for itm in issues:
         if not isinstance(itm, dict) or 'title' not in itm: # Ensure item is a dict and has a title
             continue
+        # Sanitize title to remove markdown heading characters
+        title = itm['title'].lstrip('# ').strip()
         result.append({
-            'title': itm['title'],
+            'title': title,
             'description': itm.get('description', ''),
             'labels': itm.get('labels', []), # Allow AI to suggest labels
             'assignees': itm.get('assignees', []), # Allow AI to suggest assignees

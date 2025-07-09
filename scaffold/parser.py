@@ -19,7 +19,7 @@ def parse_markdown(md_file):
                 if current_feat:
                     features.append(current_feat)
                 current_feat = {
-                    'title': m1.group(1).strip(),
+                    'title': m1.group(1).lstrip('# ').strip(),
                     'description': '',
                     'labels': [],
                     'assignees': [],
@@ -31,7 +31,7 @@ def parse_markdown(md_file):
             m2 = re.match(r'^## (.+)$', line)
             if m2 and current_feat is not None:
                 task = {
-                    'title': m2.group(1).strip(),
+                    'title': m2.group(1).lstrip('# ').strip(),
                     'description': '',
                     'labels': [],
                     'assignees': []

@@ -80,7 +80,7 @@ def main(repo, markdown_file, token, openai_key, model, temperature, max_tokens,
         if m:
             if current_title:
                 issues.append((current_title, ''.join(current_body).strip()))
-            current_title = m.group(1).strip()
+            current_title = m.group(1).lstrip('# ').strip()
             current_body = []
         else:
             if current_title:
