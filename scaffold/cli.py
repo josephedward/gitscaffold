@@ -544,7 +544,7 @@ def diff(roadmap_file, repo, token, ai_extract, heading_level):
 
 @cli.command(name="next", help="Show next action items from the earliest active milestone.")
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
-@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+@click.option('--token', help='GitHub API token (prompts if not set).')
 def next_command(repo, token):
     """Shows open issues from the earliest active milestone."""
     actual_token = token if token else get_github_token()
@@ -716,14 +716,14 @@ def cleanup_issue_titles_command(repo, token, dry_run):
         return
 
     prompt_text = click.style(f"\nProceed with updating {len(issues_to_update)} issue titles in '{repo}'?", fg="yellow", bold=True)
-    if not click.confirm(prompt_text, default=False):
+    if not click.confirm(prompt_text):
         click.echo("Aborting.")
         return
 
     updated_count = 0
     failed_count = 0
     for issue, new_title in issues_to_update:
-        click.echo(f"Updating issue #{issue.number} ('{new_title}')...")
+        click.echo(f"Updating issue #{issue.number}...")
         try:
             issue.edit(title=new_title)
             click.secho(f"  Successfully updated issue #{issue.number}.", fg="green")
@@ -736,6 +736,43 @@ def cleanup_issue_titles_command(repo, token, dry_run):
     click.secho(f"Successfully updated: {updated_count} issues.", fg="green")
     if failed_count > 0:
         click.secho(f"Failed to update: {failed_count} issues.", fg="red", err=True)
+
+@cli.command(name='diff', help='Diff a local Markdown roadmap against GitHub issues.')
+@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+def diff_roadmap_command(roadmap_file, repo, token):
+    """Compare the roadmap in a Markdown file with existing GitHub issues."""
+    actual_token = token if token else get_github_token()
+    if not actual_token:
+        return
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
+            return
+        click.echo(f"Using repository from git config: {repo}")
+    gh_client = GitHubClient(actual_token, repo)
+    click.echo(f"Diffing local roadmap '{roadmap_file}' against GitHub repo '{repo}'...")
+    raw = parse_roadmap(roadmap_file)
+    validated = validate_roadmap(raw)
+    # Collect titles from features and tasks
+    roadmap_titles = []
+    for feat in validated.features:
+        roadmap_titles.append(feat.title)
+        for task in feat.tasks:
+            roadmap_titles.append(task.title)
+    roadmap_set = set(roadmap_titles)
+    existing = gh_client.get_all_issue_titles()
+    missing = [t for t in roadmap_titles if t not in existing]
+    extra = [t for t in sorted(existing) if t not in roadmap_set]
+    click.echo(f"\n{len(missing)} roadmap items missing on GitHub:")
+    for t in missing:
+        click.echo(f"  - {t}")
+    click.echo(f"\n{len(extra)} GitHub issues not in roadmap:")
+    for t in extra:
+        click.echo(f"  - {t}")
+    click.echo("\nDiff complete.")
 
 
 @cli.command(name='import-md', help='Import issues from a Markdown file, using AI to structure them.')
