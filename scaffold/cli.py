@@ -492,13 +492,9 @@ def next_command(repo, token):
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--dry-run', is_flag=True, help='List issues that would be deleted, without actually deleting them.')
-@click.confirmation_option(prompt='Are you sure you want to permanently delete all closed issues? This is irreversible.')
-def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected by confirmation_option
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation prompt and immediately delete issues.')
+def delete_closed_issues_command(repo, token, dry_run, yes):
     """Permanently delete all closed issues in a repository. Requires confirmation."""
-    if not yes and not dry_run: # Check if confirmation was given, unless it's a dry run
-        click.echo("Confirmation not received. Aborting.")
-        return
-
     actual_token = token if token else get_github_token()
     if not actual_token:
         click.echo("GitHub token is required.", err=True)
@@ -528,14 +524,11 @@ def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected
         click.echo("\n[dry-run] No issues were deleted.")
         return
 
-    # Double-check confirmation, as click.confirmation_option might not be enough for such a destructive action
-    # The `yes` parameter from `confirmation_option` already handles the initial prompt.
-    # If we reach here and it's not a dry_run, 'yes' must have been true.
-    # An additional, more specific prompt can be added if desired:
-    # specific_confirmation = click.prompt(f"To confirm deletion of {len(closed_issues)} issues from '{repo}', please type the repository name ('{repo}')")
-    # if specific_confirmation != repo:
-    #     click.echo("Repository name not matched. Aborting deletion.")
-    #     return
+    if not yes:
+        prompt_text = click.style(f"Are you sure you want to permanently delete {len(closed_issues)} closed issues from '{repo}'? This is irreversible.", fg="yellow", bold=True)
+        if not click.confirm(prompt_text):
+            click.secho("Aborting.", fg="red")
+            return
     
     click.echo("\nProceeding with deletion...")
     deleted_count = 0
