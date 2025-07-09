@@ -591,8 +591,7 @@ def next_command(repo, token):
     """Shows open issues from the earliest active milestone."""
     actual_token = token if token else get_github_token()
     if not actual_token:
-        click.echo("GitHub token is required.", err=True)
-        sys.exit(1)
+        raise click.ClickException("GitHub token is required.")
 
     if not repo:
         click.echo("No --repo provided, attempting to find repository from git config...")
