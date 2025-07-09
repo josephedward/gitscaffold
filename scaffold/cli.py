@@ -430,16 +430,23 @@ def _sync_issues_from_roadmap(
 @click.option('--ai-enrich', is_flag=True, help='Use AI to enrich descriptions of new issues being created.')
 def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     """Compare roadmap with an existing GitHub repository and prompt to create missing issues."""
+    click.echo("Starting 'sync' command...")
     actual_token = token if token else get_github_token()
     if not actual_token:
-        return
+        click.echo("GitHub token is required to proceed. Exiting.", err=True)
+        sys.exit(1)
+    
+    click.echo("Successfully obtained GitHub token.")
     # Determine repository: use --repo or infer from local git
     if not repo:
+        click.echo("No --repo provided, attempting to find repository from git config...")
         repo = get_repo_from_git_config()
         if not repo:
-            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
-            return
-        click.echo(f"Using repository from git config: {repo}")
+            click.echo("Could not determine repository from git config. Please use --repo. Exiting.", err=True)
+            sys.exit(1)
+        click.echo(f"Using repository from current git config: {repo}")
+    else:
+        click.echo(f"Using repository provided via --repo flag: {repo}")
 
     path = Path(roadmap_file)
     suffix = path.suffix.lower()
@@ -461,7 +468,17 @@ def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
 
     validated_roadmap = validate_roadmap(raw_roadmap_data)
     
-    gh_client = GitHubClient(actual_token, repo)
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        click.echo(f"Successfully connected to repository '{repo}'.")
+    except GithubException as e:
+        if e.status == 404:
+            click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", err=True)
+        elif e.status == 401:
+            click.echo("Error: GitHub token is invalid or has insufficient permissions.", err=True)
+        else:
+            click.echo(f"An unexpected GitHub error occurred: {e}", err=True)
+        sys.exit(1)
 
     click.echo(f"Fetching existing issue titles from repository '{repo}'...")
     existing_issue_titles = gh_client.get_all_issue_titles()
