@@ -43,26 +43,26 @@ def main(repo, markdown_file, token, openai_key, model, temperature, max_tokens,
     sessions into actionable GitHub issues.
     """
     if verbose:
-        click.echo(f"Authenticating to GitHub repository '{repo}'", err=True)
+        click.secho(f"Authenticating to GitHub repository '{repo}'", fg="cyan", err=True)
     # GitHub authentication
     token = token or os.getenv('GITHUB_TOKEN')
     if not token:
-        click.echo('Error: GitHub token required. Set GITHUB_TOKEN or pass --token.', err=True)
+        click.secho('Error: GitHub token required. Set GITHUB_TOKEN or pass --token.', fg="red", err=True)
         sys.exit(1)
     try:
         gh = Github(token)
         repo_obj = gh.get_repo(repo)
     except GithubException as e:
-        click.echo(f"Error: cannot access repo {repo}: {e}", err=True)
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
         sys.exit(1)
     # OpenAI authentication
     openai_key = openai_key or os.getenv('OPENAI_API_KEY')
     if not openai_key:
-        click.echo('Error: OpenAI API key required. Set OPENAI_API_KEY or pass --openai-key.', err=True)
+        click.secho('Error: OpenAI API key required. Set OPENAI_API_KEY or pass --openai-key.', fg="red", err=True)
         sys.exit(1)
     openai.api_key = openai_key
     if verbose:
-        click.echo(f"Reading markdown file: {markdown_file}", err=True)
+        click.secho(f"Reading markdown file: {markdown_file}", fg="cyan", err=True)
 
     def call_llm(title: str, raw: str) -> str:
         system = {"role": "system", "content": "You are an expert software engineer and technical writer specializing in GitHub issues."}
@@ -101,31 +101,31 @@ def main(repo, markdown_file, token, openai_key, model, temperature, max_tokens,
         issues.append((current_title, ''.join(current_body).strip()))
 
     if not issues:
-        click.echo('No headings found; nothing to import.', err=True)
+        click.secho('No headings found; nothing to import.', fg="yellow", err=True)
         sys.exit(1)
     if verbose:
-        click.echo(f"Found {len(issues)} headings at level {heading}", err=True)
+        click.secho(f"Found {len(issues)} headings at level {heading}", fg="cyan", err=True)
 
     # Create and enrich issues
     for idx, (title, raw_body) in enumerate(issues, start=1):
         if verbose:
-            click.echo(f"[{idx}/{len(issues)}] Processing issue: {title}", err=True)
+            click.secho(f"[{idx}/{len(issues)}] Processing issue: {title}", fg="cyan", err=True)
         # Enrich issue body via OpenAI
         if verbose:
-            click.echo("  Calling OpenAI to generate enriched description...", err=True)
+            click.secho("  Calling OpenAI to generate enriched description...", fg="cyan", err=True)
         try:
             enriched = call_llm(title, raw_body)
         except Exception as e:
-            click.echo(f"Error calling OpenAI for '{title}': {e}", err=True)
+            click.secho(f"Error calling OpenAI for '{title}': {e}", fg="red", err=True)
             enriched = raw_body
         if dry_run:
-            click.echo(f"[dry-run] Issue: {title}\n{enriched}\n")
+            click.secho(f"[dry-run] Issue: {title}\n{enriched}\n", fg="blue")
             continue
         try:
             issue = repo_obj.create_issue(title=title, body=enriched)
-            click.echo(f"Created issue #{issue.number}: {title}")
+            click.secho(f"Created issue #{issue.number}: {title}", fg="green")
         except GithubException as e:
-            click.echo(f"Error creating '{title}': {e}", err=True)
+            click.secho(f"Error creating '{title}': {e}", fg="red", err=True)
 
 if __name__ == '__main__':
     main()
