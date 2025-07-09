@@ -785,9 +785,10 @@ def sanitize_command(repo, token, dry_run):
         else:
             click.echo(f"An unexpected GitHub error occurred: {e}")
         sys.exit(1)
-    click.echo(f"Fetching all issues from '{repo}'...")
+    click.secho("Fetching all issues...", fg="cyan")
 
-    all_issues = gh_client.get_all_issues() 
+    all_issues = gh_client.get_all_issues()
+    click.secho(f"Total issues fetched: {len(all_issues)}", fg="magenta")
 
     issues_to_update = []
     for issue in all_issues:
@@ -797,26 +798,27 @@ def sanitize_command(repo, token, dry_run):
             issues_to_update.append((issue, cleaned_title))
 
     if not issues_to_update:
-        click.secho("No issues with titles that need cleaning up.", fg="green")
+        click.secho("No issues with titles that need cleaning up.", fg="green", bold=True)
         return
 
-    click.secho(f"Found {len(issues_to_update)} issues to clean up:", fg="yellow")
+    click.secho(f"Found {len(issues_to_update)} issues to clean up:", fg="yellow", bold=True)
     for issue, new_title in issues_to_update:
-        click.echo(f"  - #{issue.number}: '{issue.title}' -> '{new_title}'")
+        click.secho(f"  - #{issue.number}: '{issue.title}' -> '{new_title}'", fg="white")
     
     if dry_run:
-        click.secho("\n[dry-run] No issues were updated.", fg="cyan")
+        click.secho("\n[dry-run] No issues were updated.", fg="blue")
         return
 
-    prompt_text = click.style(f"\nProceed with updating {len(issues_to_update)} issue titles in '{repo}'?", fg="yellow", bold=True)
+    click.secho(f"\nApplying cleanup updates...", fg="cyan")
+    prompt_text = click.style(f"Proceed with updating {len(issues_to_update)} issue titles in '{repo}'?", fg="yellow", bold=True)
     if not click.confirm(prompt_text):
-        click.echo("Aborting.")
+        click.secho("Aborting.", fg="red")
         return
 
     updated_count = 0
     failed_count = 0
     for issue, new_title in issues_to_update:
-        click.echo(f"Updating issue #{issue.number}...")
+        click.secho(f"Updating issue #{issue.number}...", fg="blue")
         try:
             issue.edit(title=new_title)
             click.secho(f"  Successfully updated issue #{issue.number}.", fg="green")
@@ -825,10 +827,10 @@ def sanitize_command(repo, token, dry_run):
             click.secho(f"  Failed to update issue #{issue.number}: {e}", fg="red", err=True)
             failed_count += 1
     
-    click.echo("\nCleanup process finished.")
-    click.secho(f"Successfully updated: {updated_count} issues.", fg="green")
+    click.secho("\nCleanup process finished.", fg="bright_green", bold=True)
+    click.secho(f"Successfully updated: {updated_count} issues", fg="bright_blue")
     if failed_count > 0:
-        click.secho(f"Failed to update: {failed_count} issues.", fg="red", err=True)
+        click.secho(f"Failed to update: {failed_count} issues", fg="red", err=True)
 
 
 @cli.command(name='deduplicate', help='Find and close duplicate issues in a repository.')
@@ -837,24 +839,26 @@ def sanitize_command(repo, token, dry_run):
 @click.option('--dry-run', is_flag=True, help='List duplicate issues that would be closed, without actually closing them.')
 def deduplicate_command(repo, token, dry_run):
     """Finds and closes duplicate open issues (based on title)."""
-    click.echo("Starting 'deduplicate' command...")
+    click.secho("\n=== Deduplicate Issues ===", fg="bright_blue", bold=True)
+    click.secho("Step 1: Authenticating...", fg="cyan")
     actual_token = token if token else get_github_token()
     if not actual_token:
-        click.echo("GitHub token is required to proceed. Exiting.", err=True)
+        click.secho("Error: GitHub token is required to proceed.", fg="red", err=True)
         sys.exit(1)
 
+    click.secho("Step 2: Resolving repository...", fg="cyan")
     if not repo:
         repo = get_repo_from_git_config()
         if not repo:
-            click.echo("Could not determine repository from git config. Please use --repo. Exiting.", err=True)
+            click.secho("Error: Could not determine repository from git config. Please use --repo.", fg="red", err=True)
             sys.exit(1)
-        click.echo(f"Using repository from current git config: {repo}")
+        click.secho(f"Using repository from git config: {repo}", fg="magenta")
     else:
-        click.echo(f"Using repository provided via --repo flag: {repo}")
+        click.secho(f"Using repository flag: {repo}", fg="magenta")
 
     try:
         gh_client = GitHubClient(actual_token, repo)
-        click.echo(f"Successfully connected to repository '{repo}'.")
+    click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
     except GithubException as e:
         if e.status == 404:
             click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", err=True)
@@ -864,37 +868,37 @@ def deduplicate_command(repo, token, dry_run):
             click.echo(f"An unexpected GitHub error occurred: {e}", err=True)
         sys.exit(1)
 
-    click.echo(f"Finding duplicate open issues in '{repo}'...")
+    click.secho("Step 3: Scanning for duplicates...", fg="cyan")
     duplicate_sets = gh_client.find_duplicate_issues()
 
     if not duplicate_sets:
-        click.secho("No duplicate open issues found.", fg="green")
+        click.secho("No duplicate open issues found.", fg="green", bold=True)
         return
 
     issues_to_close = []
-    click.secho(f"Found {len(duplicate_sets)} sets of duplicate issues:", fg="yellow")
+    click.secho(f"Found {len(duplicate_sets)} duplicate groups:", fg="yellow", bold=True)
     for title, issues in duplicate_sets.items():
         original = issues['original']
         duplicates = issues['duplicates']
-        click.echo(f"\n- Title: '{title}'")
-        click.echo(f"  - Original: #{original.number} (created {original.created_at})")
+        click.secho(f"\nGroup: '{title}'", fg="white", bold=True)
+        click.secho(f" Original : #{original.number} (created {original.created_at})", fg="green")
         for dup in duplicates:
             click.echo(f"  - Duplicate to close: #{dup.number} (created {dup.created_at})")
             issues_to_close.append(dup)
 
     if dry_run:
-        click.secho(f"\n[dry-run] Would close {len(issues_to_close)} issues. No changes were made.", fg="cyan")
+        click.secho(f"\n[dry-run] Would close {len(issues_to_close)} issues. No changes made.", fg="blue")
         return
 
-    prompt_text = click.style(f"\nProceed with closing {len(issues_to_close)} duplicate issues in '{repo}'?", fg="yellow", bold=True)
-    if not click.confirm(prompt_text, default=False):
-        click.echo("Aborting.")
+    click.secho("Step 4: Executing closures...", fg="cyan")
+    if not click.confirm(f"Close {len(issues_to_close)} duplicates?", default=False):
+        click.secho("Aborting.", fg="red")
         return
 
     closed_count = 0
     failed_count = 0
     for issue in issues_to_close:
-        click.echo(f"Closing issue #{issue.number} ('{issue.title}')...")
+        click.secho(f"Closing issue #{issue.number}...", fg="yellow")
         try:
             issue.edit(state='closed')
             click.secho(f"  Successfully closed issue #{issue.number}.", fg="green")
@@ -903,10 +907,10 @@ def deduplicate_command(repo, token, dry_run):
             click.secho(f"  Failed to close issue #{issue.number}: {e}", fg="red", err=True)
             failed_count += 1
     
-    click.echo("\nDeduplication process finished.")
-    click.secho(f"Successfully closed: {closed_count} issues.", fg="green")
+    click.secho("\nDeduplication finished.", fg="bright_green", bold=True)
+    click.secho(f"Successfully closed: {closed_count}, failed: {failed_count}", fg="bright_blue")
     if failed_count > 0:
-        click.secho(f"Failed to close: {failed_count} issues.", fg="red", err=True)
+        click.secho(f"Failed to close: {failed_count}", fg="red", err=True)
 
 @cli.command(name='import-md', help='Import issues from a Markdown file, using AI to structure them.')
 @click.argument('repo_full_name', metavar='REPO')
