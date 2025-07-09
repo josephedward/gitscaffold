@@ -202,8 +202,9 @@ def _populate_repo_from_roadmap(
         if dry_run:
             click.echo(f"[dry-run] Milestone '{m.name}' not found. Would create")
         else:
+            click.echo(f"Milestone '{m.name}' not found. Creating...")
             gh_client.create_milestone(name=m.name, due_on=m.due_date)
-            click.echo(f"Milestone created or exists: {m.name}")
+            click.echo(f"Milestone created: {m.name}")
 
     # Process features and tasks
     for feat in roadmap_data.features:
