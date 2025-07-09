@@ -273,9 +273,7 @@ def _populate_repo_from_roadmap(
                 click.echo(msg)
 
 
-@cli.command(name="init", help=click.style('Generate a sample roadmap file', fg='cyan'))
-@click.argument('output_file', type=click.Path(dir_okay=False, writable=True), default='ROADMAP.yml', metavar='OUTPUT_FILE')
-def init(output_file):
+def init(output_file):  # command removed, functionality will be added to roadmap
     """Creates a sample ROADMAP.yml file in the current directory."""
     path = Path(output_file)
     if path.exists():
@@ -320,7 +318,6 @@ features:
         sys.exit(1)
 
 
-@cli.command(name="create", help=click.style('Create issues from a roadmap file', fg='cyan'))
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
@@ -385,7 +382,6 @@ def create(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
     )
 
 
-@cli.command(name="setup-repository", help=click.style('Create & populate a new GitHub repository', fg='cyan'))
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--repo-name', help='Name for the new repository (defaults to roadmap name).')
@@ -940,7 +936,7 @@ def sanitize_command(repo, token, dry_run):
         click.secho(f"Failed to update: {failed_count} issues", fg="red", err=True)
 
 
-@cli.command(name='deduplicate', help=click.style('Close duplicate open issues', fg='cyan'))
+@cli.command(name='deduplicate-issues', help=click.style('Close duplicate open issues', fg='cyan'))
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', help='GitHub API token (prompts if not set).')
 @click.option('--dry-run', is_flag=True, help='List duplicate issues that would be closed, without actually closing them.')
@@ -1020,10 +1016,7 @@ def deduplicate_command(repo, token, dry_run):
     if failed_count > 0:
         click.secho(f"Failed to close: {failed_count} issues.", fg="red", err=True)
 
-# Alias deduplicate-issues command to 'deduplicate' for legacy calls
-# cli.add_command(deduplicate_command, name='deduplicate')
 
-@cli.command(name='import-md', help=click.style('Import issues from Markdown (AI-powered)', fg='cyan'))
 @click.argument('repo_full_name', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
