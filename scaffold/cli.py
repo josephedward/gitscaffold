@@ -16,6 +16,15 @@ from datetime import date
 import re
 import random
 import webbrowser
+import time
+import difflib
+import openai
+from collections import defaultdict
+
+from rich.console import Console
+from rich.table import Table
+
+from .templates import radar
 
 @click.group()
 @click.version_option(version=__version__, prog_name="gitscaffold")
@@ -122,12 +131,12 @@ def _populate_repo_from_roadmap(
                 body = enrich_issue_description(feat.title, body, openai_api_key, context_text)
         
         if dry_run:
-            click.echo(f"[dry-run] Would create or fetch feature issue: {feat.title}")
+            click.echo(f"[dry-run] Would create or fetch feature issue: {feat.title.strip()}")
             feat_issue_number = 'N/A (dry-run)'
             feat_issue_obj = None # In dry-run, we don't have a real issue object
         else:
             feat_issue = gh_client.create_issue(
-                title=feat.title,
+                title=feat.title.strip(),
                 body=body,
                 assignees=feat.assignees,
                 labels=feat.labels,
@@ -148,19 +157,66 @@ def _populate_repo_from_roadmap(
             
             if dry_run:
                 parent_info = f"(parent: #{feat_issue_number})"
-                click.echo(f"[dry-run] Would create sub-task: {task.title} {parent_info}")
+                click.echo(f"[dry-run] Would create sub-task: {task.title.strip()} {parent_info}")
             else:
                 content = t_body
                 if feat_issue_obj: # Check if feat_issue_obj is not None
                     content = f"{t_body}\n\nParent issue: #{feat_issue_obj.number}".strip()
                 gh_client.create_issue(
-                    title=task.title,
+                    title=task.title.strip(),
                     body=content,
                     assignees=task.assignees,
                     labels=task.labels,
                     milestone=feat.milestone # Tasks usually inherit milestone from feature
                 )
                 click.echo(f"Sub-task created or exists: {task.title}")
+
+
+@cli.command(name="init", help="Create a sample roadmap file to get started.")
+@click.argument('output_file', type=click.Path(dir_okay=False, writable=True), default='ROADMAP.yml', metavar='OUTPUT_FILE')
+def init(output_file):
+    """Creates a sample ROADMAP.yml file in the current directory."""
+    path = Path(output_file)
+    if path.exists():
+        click.secho(f"Error: File '{path}' already exists.", fg='red', err=True)
+        sys.exit(1)
+
+    # Simple YAML template for a roadmap
+    template = """\
+name: My Awesome Project
+description: A plan to build something great.
+milestones:
+  - name: M1 - Foundation
+    due_date: 2025-10-01
+  - name: M2 - Core Features
+    due_date: 2025-11-01
+
+features:
+  - title: Setup project structure
+    description: Initialize git, create folders, and setup CI.
+    milestone: M1 - Foundation
+    labels: [area-code, priority-high]
+    tasks:
+      - title: Create folder structure
+      - title: Initialize git repository
+      - title: Add basic CI configuration
+
+  - title: Implement user authentication
+    description: Add sign-up, sign-in, and sign-out functionality.
+    milestone: M2 - Core Features
+    labels: [area-api, area-code, priority-high]
+    assignees: [username]
+    tasks:
+      - title: Design auth API endpoints
+      - title: Implement user model and database migration
+      - title: Build sign-in page
+"""
+    try:
+        path.write_text(template, encoding='utf-8')
+        click.secho(f"Successfully created sample roadmap at '{path}'", fg='green')
+    except IOError as e:
+        click.secho(f"Error writing to file '{path}': {e}", fg='red', err=True)
+        sys.exit(1)
 
 
 @cli.command(name="create", help="Populate an existing GitHub repository with issues from a roadmap file.")
@@ -226,6 +282,89 @@ def create(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
         context_text=context_text,
         roadmap_file_path=path
     )
+
+
+@cli.command(name="setup-template", help="Setup a repo from a predefined template (R.A.D.A.R).")
+@click.option('--repo', required=True, help="GitHub repo in the form owner/repo")
+@click.option('--phase', default="all", help="Which phase to setup (e.g., phase-1) or 'all'")
+@click.option('--create-project', is_flag=True, help="Create a GitHub project board (Kanban) with default columns")
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+def setup_template(repo, phase, create_project, token):
+    """
+    Automate GitHub setup from the R.A.D.A.R project plan template.
+    This creates labels, milestones, and phase-specific issues.
+    """
+    actual_token = token if token else get_github_token()
+    if not actual_token:
+        sys.exit(1)
+
+    gh = Github(actual_token)
+    try:
+        gh_repo = gh.get_repo(repo)
+    except GithubException as e:
+        if e.status == 404:
+            click.secho(f"Error: Repository '{repo}' not found or token is invalid.", fg='red', err=True)
+        else:
+            click.secho(f"Error accessing repo {repo}: {e}", fg='red', err=True)
+        sys.exit(1)
+
+    # Create labels
+    click.secho("Processing labels...", bold=True)
+    existing_labels = {lbl.name for lbl in gh_repo.get_labels()}
+    for lbl in radar.RECOMMENDED_LABELS:
+        if lbl["name"] not in existing_labels:
+            gh_repo.create_label(name=lbl["name"], color=lbl["color"], description=lbl["description"])
+            click.echo(f"Created label: {lbl['name']}")
+
+    # Create milestones
+    click.secho("\nProcessing milestones...", bold=True)
+    existing_ms = {ms.title: ms for ms in gh_repo.get_milestones(state="all")}
+    for ms in radar.MILESTONES:
+        if ms["title"] not in existing_ms:
+            gh_repo.create_milestone(title=ms["title"], description=ms["description"])
+            click.echo(f"Created milestone: {ms['title']}")
+
+    # Refresh milestone mapping
+    milestone_map = {ms.title: ms for ms in gh_repo.get_milestones(state="all")}
+
+    # Create issues for specified phase(s)
+    click.secho(f"\nProcessing issues for phase: {phase}", bold=True)
+    for phase_key, issues in radar.PHASE_ISSUES.items():
+        if phase != "all" and phase != phase_key:
+            continue
+        phase_num = int(phase_key.split("-")[1])
+        milestone_title = radar.MILESTONES[phase_num]["title"]
+        ms_obj = milestone_map.get(milestone_title)
+        if not ms_obj:
+            click.secho(f"Milestone not found for {phase_key}: {milestone_title}", fg='red', err=True)
+            continue
+        for issue in issues:
+            title = issue["title"]
+            # skip if exists
+            existing = [i for i in gh_repo.get_issues(state="all") if i.title == title]
+            if existing:
+                click.echo(f"Issue already exists: {title}")
+                continue
+            gh_repo.create_issue(
+                title=title,
+                body=issue.get("body", ""),
+                labels=issue.get("labels", []),
+                milestone=ms_obj
+            )
+            click.echo(f"Created issue: {title}")
+
+    if create_project:
+        click.secho("\nCreating project board...", bold=True)
+        try:
+            project = gh_repo.create_project(
+                "AI Deception Kanban", body="Auto-generated Kanban board"
+            )
+            for col in ["Backlog", "To Do", "In Progress", "In Review", "Done"]:
+                project.create_column(col)
+            click.secho("Created GitHub project board with columns.", fg='green')
+        except Exception as e:
+            click.secho(f"Error creating project board: {e}", fg='red', err=True)
+    click.secho("\nGitHub setup from template complete.", fg='green', bold=True)
 
 
 @cli.command(name="setup-repository", help="Create a new GitHub repository and populate it with issues from a roadmap.")
@@ -546,17 +685,18 @@ def diff(roadmap_file, repo, token, ai_extract, heading_level):
     missing = sorted(roadmap_titles - gh_titles)
     extra = sorted(gh_titles - roadmap_titles)
     if missing:
-        click.echo("\nMissing on GitHub:")
+        click.secho("\nItems in local roadmap but not on GitHub (missing):", fg="yellow", bold=True)
         for title in missing:
-            click.echo(f"  - {title}")
+            click.secho(f"  - {title}", fg="yellow")
     else:
-        click.echo("\nNo missing issues.")
+        click.secho("\n✓ No missing issues on GitHub.", fg="green")
+
     if extra:
-        click.echo("\nExtra issues on GitHub:")
+        click.secho("\nItems on GitHub but not in local roadmap (extra):", fg="cyan", bold=True)
         for title in extra:
-            click.echo(f"  - {title}")
+            click.secho(f"  - {title}", fg="cyan")
     else:
-        click.echo("\nNo extra issues.")
+        click.secho("✓ No extra issues on GitHub.", fg="green")
 
 
 @cli.command(name="next", help="Show next action items from the earliest active milestone.")
@@ -832,44 +972,6 @@ def deduplicate_issues_command(repo, token, dry_run):
     if failed_count > 0:
         click.secho(f"Failed to close: {failed_count} issues.", fg="red", err=True)
 
-@cli.command(name='diff', help='Diff a local Markdown roadmap against GitHub issues.')
-@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
-@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
-@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
-def diff_roadmap_command(roadmap_file, repo, token):
-    """Compare the roadmap in a Markdown file with existing GitHub issues."""
-    actual_token = token if token else get_github_token()
-    if not actual_token:
-        return
-    if not repo:
-        repo = get_repo_from_git_config()
-        if not repo:
-            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
-            return
-        click.echo(f"Using repository from git config: {repo}")
-    gh_client = GitHubClient(actual_token, repo)
-    click.echo(f"Diffing local roadmap '{roadmap_file}' against GitHub repo '{repo}'...")
-    raw = parse_roadmap(roadmap_file)
-    validated = validate_roadmap(raw)
-    # Collect titles from features and tasks
-    roadmap_titles = []
-    for feat in validated.features:
-        roadmap_titles.append(feat.title)
-        for task in feat.tasks:
-            roadmap_titles.append(task.title)
-    roadmap_set = set(roadmap_titles)
-    existing = gh_client.get_all_issue_titles()
-    missing = [t for t in roadmap_titles if t not in existing]
-    extra = [t for t in sorted(existing) if t not in roadmap_set]
-    click.echo(f"\n{len(missing)} roadmap items missing on GitHub:")
-    for t in missing:
-        click.echo(f"  - {t}")
-    click.echo(f"\n{len(extra)} GitHub issues not in roadmap:")
-    for t in extra:
-        click.echo(f"  - {t}")
-    click.echo("\nDiff complete.")
-
-
 @cli.command(name='import-md', help='Import issues from a Markdown file, using AI to structure them.')
 @click.argument('repo_full_name', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')
@@ -988,7 +1090,56 @@ def next_task(roadmap_file, token, repo, pick, browse):
     # Pick issue: random if --pick, else oldest
     issue = random.choice(issues) if pick else sorted(issues, key=lambda i: i.created_at)[0]
 
-    click.echo(f"Next task: #{issue.number} {issue.title}")
+    click.secho(f"Next task: #{issue.number} {issue.title}", fg="bright_blue", bold=True)
     if browse:
         click.echo(f"Opening in browser: {issue.html_url}")
         webbrowser.open(issue.html_url)
+
+
+@cli.command(name='start-demo', help='Run the Streamlit demo application.')
+def start_demo():
+    """Starts the Streamlit demo app if it exists."""
+    demo_app_path = Path('demo/app.py')
+    if not demo_app_path.exists():
+        click.secho(f"Demo application not found at '{demo_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with a demo using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+
+    cmd = [sys.executable, "-m", "streamlit", "run", str(demo_app_path)]
+    click.secho(f"Starting Streamlit demo: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `streamlit` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install streamlit")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"Demo server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+@cli.command(name='start-api', help='Run the FastAPI backend server.')
+def start_api():
+    """Starts the FastAPI application using Uvicorn."""
+    # Based on the template, the api app is at src/api/app.py
+    api_app_path = Path('src/api/app.py')
+    if not api_app_path.exists():
+        click.secho(f"API application not found at '{api_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with an API using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+        
+    # The import string for uvicorn is based on file path relative to project root
+    # src/api/app.py with variable `app` becomes `src.api.app:app`
+    app_import_string = "src.api.app:app"
+
+    cmd = [sys.executable, "-m", "uvicorn", app_import_string, "--reload"]
+    click.secho(f"Starting FastAPI server with Uvicorn: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `uvicorn` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install uvicorn[standard]")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"API server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
