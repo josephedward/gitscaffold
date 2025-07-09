@@ -433,14 +433,26 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
     else:
         click.secho(f"Repository has {len(existing_issue_titles)} issues. Comparing with roadmap to find missing items...", fg="yellow")
 
-        # 1. Collect what needs to be created
-        milestones_to_create = [m for m in validated_roadmap.milestones if not gh_client._find_milestone(m.name)]
-        features_to_create = [f for f in validated_roadmap.features if f.title not in existing_issue_titles]
-        
+        # 1. Collect what needs to be created and report on existing items
+        milestones_to_create = []
+        for m in validated_roadmap.milestones:
+            if gh_client._find_milestone(m.name):
+                click.echo(f"Milestone '{m.name}' already exists.")
+            else:
+                milestones_to_create.append(m)
+
+        features_to_create = []
         tasks_to_create = defaultdict(list)
         for feat in validated_roadmap.features:
+            if feat.title in existing_issue_titles:
+                click.echo(f"Feature '{feat.title}' already exists in GitHub issues. Checking its tasks...")
+            else:
+                features_to_create.append(feat)
+
             for task in feat.tasks:
-                if task.title not in existing_issue_titles:
+                if task.title in existing_issue_titles:
+                    click.echo(f"Task '{task.title}' (for feature '{feat.title}') already exists in GitHub issues.")
+                else:
                     tasks_to_create[feat.title].append(task)
         
         total_tasks = sum(len(ts) for ts in tasks_to_create.values())
