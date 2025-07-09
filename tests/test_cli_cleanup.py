@@ -57,10 +57,10 @@ def test_cleanup_issue_titles_dry_run(runner, mock_github_client_for_cleanup):
     assert result.exit_code == 0
     assert "Found 4 issues to clean up:" in result.output
     assert "#1: 'A clean title'" not in result.output
-    assert "-> 'A title with one hash'" in result.output
-    assert "-> 'Another title with hashes'" in result.output
-    assert "-> 'Spaced and hashed title'" in result.output
-    assert "-> 'NoSpaceHash'" in result.output
+    assert "  - #2: '# A title with one hash' -> 'A title with one hash'" in result.output
+    assert "  - #3: '## Another title with hashes' -> 'Another title with hashes'" in result.output
+    assert "  - #4: '  ### Spaced and hashed title' -> 'Spaced and hashed title'" in result.output
+    assert "  - #5: '#NoSpaceHash' -> 'NoSpaceHash'" in result.output
     assert "[dry-run] No issues were updated." in result.output
     
     # Check that no edit calls were made
@@ -78,6 +78,20 @@ def test_cleanup_issue_titles_live_run_confirm_yes(runner, mock_github_client_fo
     ])
 
     assert result.exit_code == 0
+    # Check for logs of successful updates for each modified issue
+    assert "Updating issue #2..." in result.output
+    assert "  Successfully updated issue #2." in result.output
+    assert "Updating issue #3..." in result.output
+    assert "  Successfully updated issue #3." in result.output
+    assert "Updating issue #4..." in result.output
+    assert "  Successfully updated issue #4." in result.output
+    assert "Updating issue #5..." in result.output
+    assert "  Successfully updated issue #5." in result.output
+
+    # Check that clean issue was not touched
+    assert "Updating issue #1..." not in result.output
+
+    assert "Cleanup process finished." in result.output
     assert "Successfully updated: 4 issues." in result.output
     
     issue1 = next(i for i in mock_github_client_for_cleanup if i.number == 1)
