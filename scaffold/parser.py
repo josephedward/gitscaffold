@@ -21,111 +21,193 @@ def parse_markdown(md_file):
     if not name:
         name = path.stem
         start_idx = 0
-    # Global description: lines until first H2
+    # Global description: lines until first H2 (milestones or features)
     description_lines = []
-    i = start_idx
-    while i < len(lines):
-        if re.match(r'^##\s+', lines[i]):
+    for line in lines[start_idx:]:
+        if re.match(r'^##\s+', line):
             break
-        if lines[i].strip():
-            description_lines.append(lines[i].strip())
-        i += 1
+        if line.strip():
+            description_lines.append(line.strip())
     description = '\n'.join(description_lines).strip()
-    # Parse milestones (under '## Milestones')
+    # Parse milestones
     milestones = []
-    while i < len(lines):
-        if re.match(r'^##\s*Milestones', lines[i]):
-            i += 1
-            while i < len(lines) and not re.match(r'^##\s+', lines[i]):
-                m = re.match(r'^\s*-\s*\*\*(.+?)\*\*\s*(?:—\s*(\S+))?', lines[i])
-                if m:
-                    m_name = m.group(1).strip()
-                    due = m.group(2) or None
-                    milestones.append({'name': m_name, 'due_date': due})
-                i += 1
-            break
-        i += 1
-    # Parse features and tasks
+    in_milestones = False
+    for line in lines:
+        if re.match(r'^##\s*Milestones', line):
+            in_milestones = True
+            continue
+        if in_milestones:
+            # end of milestones section
+            if re.match(r'^##\s+', line) and not re.match(r'^##\s*Milestones', line):
+                in_milestones = False
+                continue
+            m = re.match(r'^\s*-\s*\*\*(.+?)\*\*\s*(?:—\s*(\S+))?', line)
+            if m:
+                m_name = m.group(1).strip()
+                due = m.group(2) or None
+                milestones.append({'name': m_name, 'due_date': due})
+            continue
+    # Determine if there is an explicit Features section
+    has_features_section = any(re.match(r'^##\s*Features', ln) for ln in lines)
     features = []
     current_feat = None
     current_task = None
-    # Continue from features section if present, or from start of lines
-    for line in lines[i:]:
-        # Feature header H1
-        m_feat = re.match(r'^#\s+(.+)$', line)
-        if m_feat:
-            if current_task and current_feat:
-                current_feat['tasks'].append(current_task)
-                current_task = None
-            if current_feat:
-                features.append(current_feat)
-            current_feat = {
-                'title': m_feat.group(1).strip(),
-                'description': '',
-                'milestone': None,
-                'labels': [],
-                'assignees': [],
-                'tasks': []
-            }
-            continue
-        # Task header H2
-        m_task = re.match(r'^##\s+(.+)$', line)
-        if m_task and current_feat is not None:
+    # Section-based parsing if '## Features' exists
+    if has_features_section:
+        in_features = False
+        for line in lines:
+            if re.match(r'^##\s*Features', line):
+                in_features = True
+                continue
+            if not in_features:
+                continue
+            # Feature header (###)
+            m_feat = re.match(r'^###\s+(.+)$', line)
+            if m_feat:
+                if current_task and current_feat:
+                    current_feat['tasks'].append(current_task)
+                    current_task = None
+                if current_feat:
+                    features.append(current_feat)
+                current_feat = {
+                    'title': m_feat.group(1).strip(),
+                    'description': '',
+                    'milestone': None,
+                    'labels': [],
+                    'assignees': [],
+                    'tasks': []
+                }
+                continue
+            # Task header (####)
+            m_task = re.match(r'^####\s+(.+)$', line)
+            if m_task and current_feat:
+                if current_task:
+                    current_feat['tasks'].append(current_task)
+                current_task = {
+                    'title': m_task.group(1).strip(),
+                    'description': '',
+                    'labels': [],
+                    'assignees': [],
+                    'tests': []
+                }
+                continue
+            # Skip empty or outside-feature
+            if not line.strip() or current_feat is None:
+                continue
+            content = line.strip()
+            # Milestone assignment
+            if content.startswith('Milestone:'):
+                current_feat['milestone'] = content[len('Milestone:'):].strip()
+                continue
+            # Labels
+            if content.startswith('Labels:'):
+                items = [it.strip() for it in content[len('Labels:'):].split(',') if it.strip()]
+                if current_task:
+                    current_task['labels'] = items
+                else:
+                    current_feat['labels'] = items
+                continue
+            # Assignees
+            if content.startswith('Assignees:') and current_task:
+                items = [it.strip() for it in content[len('Assignees:'):].split(',') if it.strip()]
+                current_task['assignees'] = items
+                continue
+            # Tests
+            if content.startswith('Tests:'):
+                continue
+            m_test = re.match(r'^[-*]\s+(.+)$', content)
+            if m_test and current_task:
+                current_task['tests'].append(m_test.group(1).strip())
+                continue
+            # Description
             if current_task:
-                current_feat['tasks'].append(current_task)
-            current_task = {
-                'title': m_task.group(1).strip(),
-                'description': '',
-                'labels': [],
-                'assignees': [],
-                'tests': []
-            }
-            continue
-        # Skip empty or unrelated lines
-        if not line.strip() or current_feat is None:
-            continue
-        content = line.strip()
-        # Milestone assignment
-        if content.startswith('Milestone:'):
-            current_feat['milestone'] = content[len('Milestone:'):].strip()
-            continue
-        # Labels
-        if content.startswith('Labels:'):
-            items = [it.strip() for it in content[len('Labels:'):].split(',') if it.strip()]
+                if current_task['description']:
+                    current_task['description'] += '\n' + content
+                else:
+                    current_task['description'] = content
+            else:
+                if current_feat['description']:
+                    current_feat['description'] += '\n' + content
+                else:
+                    current_feat['description'] = content
+        # Append last
+        if current_task and current_feat:
+            current_feat['tasks'].append(current_task)
+        if current_feat:
+            features.append(current_feat)
+    else:
+        # Fallback H1/H2 parsing
+        for line in lines:
+            # Feature header H1
+            m_feat = re.match(r'^#\s+(.+)$', line)
+            if m_feat and not re.match(r'^##\s+', line):
+                if current_task and current_feat:
+                    current_feat['tasks'].append(current_task)
+                    current_task = None
+                if current_feat:
+                    features.append(current_feat)
+                current_feat = {
+                    'title': m_feat.group(1).strip(),
+                    'description': '',
+                    'milestone': None,
+                    'labels': [],
+                    'assignees': [],
+                    'tasks': []
+                }
+                continue
+            # Task header H2 (exclude Milestones)
+            m_task = re.match(r'^##\s+(.+)$', line)
+            if m_task and current_feat and not line.startswith('## Milestones'):
+                if current_task:
+                    current_feat['tasks'].append(current_task)
+                current_task = {
+                    'title': m_task.group(1).strip(),
+                    'description': '',
+                    'labels': [],
+                    'assignees': [],
+                    'tests': []
+                }
+                continue
+            # Skip until in a feature
+            if current_feat is None:
+                continue
+            content = line.strip()
+            if not content:
+                continue
+            if content.startswith('Milestone:'):
+                current_feat['milestone'] = content[len('Milestone:'):].strip()
+                continue
+            if content.startswith('Labels:'):
+                items = [it.strip() for it in content[len('Labels:'):].split(',') if it.strip()]
+                if current_task:
+                    current_task['labels'] = items
+                else:
+                    current_feat['labels'] = items
+                continue
+            if content.startswith('Assignees:') and current_task:
+                items = [it.strip() for it in content[len('Assignees:'):].split(',') if it.strip()]
+                current_task['assignees'] = items
+                continue
+            if content.startswith('Tests:'):
+                continue
+            m_test = re.match(r'^[-*]\s+(.+)$', content)
+            if m_test and current_task:
+                current_task['tests'].append(m_test.group(1).strip())
+                continue
             if current_task:
-                current_task['labels'] = items
+                if current_task['description']:
+                    current_task['description'] += '\n' + content
+                else:
+                    current_task['description'] = content
             else:
-                current_feat['labels'] = items
-            continue
-        # Assignees
-        if content.startswith('Assignees:') and current_task:
-            items = [it.strip() for it in content[len('Assignees:'):].split(',') if it.strip()]
-            current_task['assignees'] = items
-            continue
-        # Tests section
-        if content.startswith('Tests:'):
-            continue
-        # Test bullets
-        m_test = re.match(r'^[-*]\s+(.+)$', content)
-        if m_test and current_task:
-            current_task['tests'].append(m_test.group(1).strip())
-            continue
-        # Description lines
-        if current_task:
-            if current_task['description']:
-                current_task['description'] += '\n' + content
-            else:
-                current_task['description'] = content
-        else:
-            if current_feat['description']:
-                current_feat['description'] += '\n' + content
-            else:
-                current_feat['description'] = content
-    # Append last task and feature
-    if current_task and current_feat:
-        current_feat['tasks'].append(current_task)
-    if current_feat:
-        features.append(current_feat)
+                if current_feat['description']:
+                    current_feat['description'] += '\n' + content
+                else:
+                    current_feat['description'] = content
+        if current_task and current_feat:
+            current_feat['tasks'].append(current_task)
+        if current_feat:
+            features.append(current_feat)
     logging.info(f"Parsed {len(features)} features and {len(milestones)} milestones from {md_file}")
     return {
         'name': name,
