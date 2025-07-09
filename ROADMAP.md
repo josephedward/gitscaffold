@@ -116,6 +116,14 @@ Create a `next-task` command to show the next open task for the current roadmap 
 
 Enhance the `diff` command to include issue numbers and state in its output, and allow filtering by issue state.
 
+#### Implement `deduplicate-issues` command
+
+Create a `deduplicate-issues` command to find and close duplicate open issues. Based on `scaffold/cli.py::deduplicate_issues_command`.
+
+#### Implement `cleanup-issue-titles` command
+
+Create a `cleanup-issue-titles` command to sanitize issue titles by removing leading markdown characters. Based on `scaffold/cli.py::cleanup_issue_titles_command`.
+
 ### Testing Framework and Coverage
 
 Establish and maintain a comprehensive testing suite for the application.  
