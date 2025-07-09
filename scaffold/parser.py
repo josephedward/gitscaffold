@@ -6,22 +6,34 @@ import logging
 from pathlib import Path
 
 def parse_markdown(md_file):
-    """Parse an unstructured Markdown file into a roadmap dict."""
+    """Parse a Markdown roadmap file into a roadmap dict, using '###' for features and '####' for tasks."""
     logging.info(f"Parsing markdown file: {md_file}")
     features = []
     current_feat = None
     current_task = None
     global_desc = []
+    in_features = False
+    path = Path(md_file)
     with open(md_file, 'r', encoding='utf-8') as f:
         for raw in f:
             line = raw.rstrip('\n')
-            # Level 1 heading -> new feature
-            m1 = re.match(r'^# (.+)$', line)
-            if m1:
+            # Detect start of features section
+            if re.match(r'^##\s*Features', line):
+                in_features = True
+                continue
+            # Before features section, collect global description
+            if not in_features:
+                if line.strip():
+                    global_desc.append(line)
+                continue
+            # Inside features section
+            # Feature heading (###)
+            m_feat = re.match(r'^###\s+(.+)', line)
+            if m_feat:
                 if current_feat:
                     features.append(current_feat)
                 current_feat = {
-                    'title': m1.group(1).lstrip('# ').strip(),
+                    'title': m_feat.group(1).strip(),
                     'description': '',
                     'labels': [],
                     'assignees': [],
@@ -29,11 +41,11 @@ def parse_markdown(md_file):
                 }
                 current_task = None
                 continue
-            # Level 2 heading -> sub-task
-            m2 = re.match(r'^## (.+)$', line)
-            if m2 and current_feat is not None:
+            # Task heading (####)
+            m_task = re.match(r'^####\s+(.+)', line)
+            if m_task and current_feat is not None:
                 task = {
-                    'title': m2.group(1).lstrip('# ').strip(),
+                    'title': m_task.group(1).strip(),
                     'description': '',
                     'labels': [],
                     'assignees': []
@@ -44,19 +56,18 @@ def parse_markdown(md_file):
             # Skip empty lines
             if not line.strip():
                 continue
-            # Content lines: assign to task, else to feature, else global
+            # Assign content to current task or feature
             if current_task is not None:
-                desc = current_task.get('description', '') or ''
+                desc = current_task.get('description') or ''
                 current_task['description'] = f"{desc}\n{line}".strip() if desc else line
             elif current_feat is not None:
-                desc = current_feat.get('description', '') or ''
+                desc = current_feat.get('description') or ''
                 current_feat['description'] = f"{desc}\n{line}".strip() if desc else line
-            else:
-                global_desc.append(line)
+            # else: ignore lines outside features
     # Append last feature
     if current_feat:
         features.append(current_feat)
-    name = Path(md_file).stem
+    name = path.stem
     description = '\n'.join(global_desc).strip()
     logging.info(f"Parsed {len(features)} features from {md_file}")
     return {
