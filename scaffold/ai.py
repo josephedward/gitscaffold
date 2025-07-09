@@ -1,6 +1,7 @@
 """AI-assisted extraction and enrichment utilities."""
 import os
 import json
+import logging
 from openai import OpenAI, OpenAIError # Updated import
 
 # _get_api_key function is no longer needed as the OpenAI client handles API key loading.
@@ -8,7 +9,9 @@ from openai import OpenAI, OpenAIError # Updated import
 
 def extract_issues_from_markdown(md_file, api_key: str, model_name=None, temperature=0.5): # Added api_key argument
     """Use OpenAI to extract a list of issues from unstructured Markdown."""
+    logging.info(f"Extracting issues from markdown file: {md_file}")
     if not api_key:
+        logging.error("OpenAI API key was not provided to extract_issues_from_markdown.")
         raise ValueError("OpenAI API key was not provided to extract_issues_from_markdown.")
     client = OpenAI(api_key=api_key)
     with open(md_file, 'r', encoding='utf-8') as f:
@@ -24,6 +27,7 @@ def extract_issues_from_markdown(md_file, api_key: str, model_name=None, tempera
     )
     
     effective_model_name = model_name or os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+    logging.info(f"Using OpenAI model '{effective_model_name}' for issue extraction.")
     
     try:
         response = client.chat.completions.create(
@@ -40,6 +44,7 @@ def extract_issues_from_markdown(md_file, api_key: str, model_name=None, tempera
             raise ValueError("AI response content is None.")
         text = text.strip()
     except OpenAIError as e:
+        logging.error(f"OpenAI API call failed during issue extraction: {e}")
         raise RuntimeError(f"OpenAI API call failed: {e}") from e
 
     try:
@@ -56,6 +61,7 @@ def extract_issues_from_markdown(md_file, api_key: str, model_name=None, tempera
         
         issues = json.loads(text)
     except json.JSONDecodeError as e:
+        logging.error(f'Failed to parse JSON from AI response: {e}\nResponse: {text}')
         raise ValueError(f'Failed to parse JSON from AI response: {e}\nResponse: {text}')
     
     # Ensure each has title and description keys
@@ -79,10 +85,13 @@ def extract_issues_from_markdown(md_file, api_key: str, model_name=None, tempera
 
 def enrich_issue_description(title, existing_body, api_key: str, context='', model_name=None, temperature=0.7): # Added api_key argument
     """Use OpenAI to generate an enriched GitHub issue body."""
+    logging.info(f"Enriching issue description for: '{title}'")
     if not api_key:
+        logging.error("OpenAI API key was not provided to enrich_issue_description.")
         raise ValueError("OpenAI API key was not provided to enrich_issue_description.")
     client = OpenAI(api_key=api_key)
     effective_model_name = model_name or os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+    logging.info(f"Using OpenAI model '{effective_model_name}' for enrichment.")
     system_prompt = 'You are an expert software engineer and technical writer.'
     
     user_message_parts = [f"Title: {title}"]
@@ -116,5 +125,5 @@ def enrich_issue_description(title, existing_body, api_key: str, context='', mod
         return enriched_content.strip()
     except OpenAIError as e:
         # Fallback to existing body or a simple message in case of API error
-        print(f"Warning: OpenAI API call for enrichment failed: {e}. Returning existing body.")
+        logging.warning(f"OpenAI API call for enrichment failed: {e}. Returning existing body.")
         return existing_body or ''

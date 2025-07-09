@@ -4,6 +4,7 @@ from . import __version__
 import os
 import sys
 import subprocess
+import logging
 from pathlib import Path
 from dotenv import load_dotenv, set_key
 from github import Github, GithubException
@@ -28,7 +29,9 @@ from rich.table import Table
 @click.version_option(version=__version__, prog_name="gitscaffold")
 def cli():
     """Scaffold – Convert roadmaps to GitHub issues."""
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     load_dotenv()  # Load .env file at the start of CLI execution
+    logging.info("CLI execution started.")
     pass
 
 
@@ -41,12 +44,14 @@ def get_github_token():
     # load_dotenv() # Moved to cli()
     token = os.getenv('GITHUB_TOKEN')
     if not token:
+        logging.warning("GitHub PAT not found in environment or .env file.")
         click.echo("GitHub PAT not found in environment or .env file.")
         token = click.prompt('Please enter your GitHub Personal Access Token (PAT)', hide_input=True)
         # Ensure .env file exists for set_key
         env_path = Path('.env')
         env_path.touch(exist_ok=True)
         set_key(str(env_path), 'GITHUB_TOKEN', token)
+        logging.info("GitHub PAT saved to .env file.")
         click.echo("GitHub PAT saved to .env file. Please re-run the command.")
         # It's often better to ask the user to re-run so all parts of the app pick up the new env var.
         # Or, for immediate use, ensure os.environ is updated:
@@ -64,6 +69,7 @@ def get_openai_api_key():
         # Unlike GitHub token, we won't prompt for OpenAI key for now,
         # as it's usually less interactive and more of a setup step.
         # We also won't save it back to .env from here.
+        logging.error("OPENAI_API_KEY not found in environment or .env file.")
         click.echo(
             "Error: OPENAI_API_KEY not found. Please set it in your environment or .env file. "
             "Ensure the .env file is in the directory where you are running gitscaffold.",
@@ -75,25 +81,33 @@ def get_openai_api_key():
 
 def get_repo_from_git_config():
     """Retrieves the 'owner/repo' from the git config."""
+    logging.info("Attempting to get repository from git config.")
     try:
         url = subprocess.check_output(
             ['git', 'config', '--get', 'remote.origin.url'],
             text=True,
             stderr=subprocess.DEVNULL
         ).strip()
+        logging.info(f"Found git remote URL: {url}")
 
         # Handle SSH URLs: git@github.com:owner/repo.git
         ssh_match = re.search(r'github\.com:([^/]+/[^/]+?)(\.git)?$', url)
         if ssh_match:
-            return ssh_match.group(1)
+            repo = ssh_match.group(1)
+            logging.info(f"Parsed repository '{repo}' from SSH URL.")
+            return repo
 
         # Handle HTTPS URLs: https://github.com/owner/repo.git
         https_match = re.search(r'github\.com/([^/]+/[^/]+?)(\.git)?$', url)
         if https_match:
-            return https_match.group(1)
+            repo = https_match.group(1)
+            logging.info(f"Parsed repository '{repo}' from HTTPS URL.")
+            return repo
 
+        logging.warning(f"Could not parse repository from git remote URL: {url}")
         return None
     except (subprocess.CalledProcessError, FileNotFoundError):
+        logging.warning("Could not get repo from git config. Not a git repository or git is not installed.")
         return None
 
 
@@ -107,13 +121,17 @@ def _populate_repo_from_roadmap(
     roadmap_file_path: Path # For context if needed, though context_text is passed
 ):
     """Helper function to populate a repository with milestones and issues from roadmap data."""
+    logging.info(f"Populating repo '{gh_client.repo.full_name}' from roadmap '{roadmap_data.name}'. Dry run: {dry_run}")
     click.echo(f"Processing roadmap '{roadmap_data.name}' for repository '{gh_client.repo.full_name}'.")
     click.echo(f"Found {len(roadmap_data.milestones)} milestones and {len(roadmap_data.features)} features.")
+    logging.info(f"Found {len(roadmap_data.milestones)} milestones and {len(roadmap_data.features)} features.")
 
     # Process milestones
     for m in roadmap_data.milestones:
         if dry_run:
-            click.echo(f"[dry-run] Would create or fetch milestone: {m.name} (due: {m.due_date})")
+            msg = f"Would create or fetch milestone: {m.name} (due: {m.due_date})"
+            logging.info(f"[dry-run] {msg}")
+            click.echo(f"[dry-run] {msg}")
         else:
             gh_client.create_milestone(name=m.name, due_on=m.due_date)
             click.echo(f"Milestone created or exists: {m.name}")
@@ -123,13 +141,18 @@ def _populate_repo_from_roadmap(
         body = feat.description or ''
         if ai_enrich:
             if dry_run:
-                click.echo(f"[dry-run] Would AI-enrich feature: {feat.title}")
+                msg = f"Would AI-enrich feature: {feat.title}"
+                logging.info(f"[dry-run] {msg}")
+                click.echo(f"[dry-run] {msg}")
             elif openai_api_key: # Only enrich if key is available
+                logging.info(f"AI-enriching feature: {feat.title}...")
                 click.echo(f"AI-enriching feature: {feat.title}...")
                 body = enrich_issue_description(feat.title, body, openai_api_key, context_text)
         
         if dry_run:
-            click.echo(f"[dry-run] Would create or fetch feature issue: {feat.title.strip()}")
+            msg = f"Would create or fetch feature issue: {feat.title.strip()}"
+            logging.info(f"[dry-run] {msg}")
+            click.echo(f"[dry-run] {msg}")
             feat_issue_number = 'N/A (dry-run)'
             feat_issue_obj = None # In dry-run, we don't have a real issue object
         else:
@@ -140,7 +163,9 @@ def _populate_repo_from_roadmap(
                 labels=feat.labels,
                 milestone=feat.milestone
             )
-            click.echo(f"Issue created or exists: #{feat_issue.number} {feat.title}")
+            msg = f"Issue created or exists: #{feat_issue.number} {feat.title}"
+            logging.info(msg)
+            click.echo(msg)
             feat_issue_number = feat_issue.number
             feat_issue_obj = feat_issue
 
@@ -148,14 +173,19 @@ def _populate_repo_from_roadmap(
             t_body = task.description or ''
             if ai_enrich:
                 if dry_run:
-                    click.echo(f"[dry-run] Would AI-enrich sub-task: {task.title}")
+                    msg = f"Would AI-enrich sub-task: {task.title}"
+                    logging.info(f"[dry-run] {msg}")
+                    click.echo(f"[dry-run] {msg}")
                 elif openai_api_key: # Only enrich if key is available
+                    logging.info(f"AI-enriching sub-task: {task.title}...")
                     click.echo(f"AI-enriching sub-task: {task.title}...")
                     t_body = enrich_issue_description(task.title, t_body, openai_api_key, context_text)
             
             if dry_run:
                 parent_info = f"(parent: #{feat_issue_number})"
-                click.echo(f"[dry-run] Would create sub-task: {task.title.strip()} {parent_info}")
+                msg = f"Would create sub-task: {task.title.strip()} {parent_info}"
+                logging.info(f"[dry-run] {msg}")
+                click.echo(f"[dry-run] {msg}")
             else:
                 content = t_body
                 if feat_issue_obj: # Check if feat_issue_obj is not None
@@ -167,7 +197,9 @@ def _populate_repo_from_roadmap(
                     labels=task.labels,
                     milestone=feat.milestone # Tasks usually inherit milestone from feature
                 )
-                click.echo(f"Sub-task created or exists: {task.title}")
+                msg = f"Sub-task created or exists: {task.title}"
+                logging.info(msg)
+                click.echo(msg)
 
 
 @cli.command(name="init", help="Create a sample roadmap file to get started.")

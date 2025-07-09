@@ -2,10 +2,12 @@
 
 import yaml
 import re
+import logging
 from pathlib import Path
 
 def parse_markdown(md_file):
     """Parse an unstructured Markdown file into a roadmap dict."""
+    logging.info(f"Parsing markdown file: {md_file}")
     features = []
     current_feat = None
     current_task = None
@@ -56,6 +58,7 @@ def parse_markdown(md_file):
         features.append(current_feat)
     name = Path(md_file).stem
     description = '\n'.join(global_desc).strip()
+    logging.info(f"Parsed {len(features)} features from {md_file}")
     return {
         'name': name,
         'description': description,
@@ -65,9 +68,12 @@ def parse_markdown(md_file):
 
 def parse_roadmap(roadmap_file):
     """Parse the roadmap file (YAML/JSON or Markdown) and return a dictionary."""
+    logging.info(f"Parsing roadmap file: {roadmap_file}")
     suffix = Path(roadmap_file).suffix.lower()
     if suffix in ('.md', '.markdown'):
+        logging.info("Using markdown parser.")
         return parse_markdown(roadmap_file)
+    logging.info("Using YAML parser.")
     with open(roadmap_file, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict):
