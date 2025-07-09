@@ -1,24 +1,6 @@
-import json
 import pytest
 
 from scaffold.parser import parse_roadmap
-
-def test_parse_valid(tmp_path):
-    data = {'key': 'value', 'list': [1, 2, 3]}
-    path = tmp_path / 'roadmap.json'
-    path.write_text(json.dumps(data))
-    result = parse_roadmap(str(path))
-    assert isinstance(result, dict)
-    assert result == data
-
-def test_parse_invalid_not_mapping(tmp_path):
-    # Top-level must be a mapping
-    path = tmp_path / 'roadmap.json'
-    # Write a JSON list
-    path.write_text(json.dumps([1, 2, 3]))
-    with pytest.raises(ValueError) as exc:
-        parse_roadmap(str(path))
-    assert 'Roadmap file must contain a mapping' in str(exc.value)
   
 def test_parse_markdown(tmp_path):
     content = """

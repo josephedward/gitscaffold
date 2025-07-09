@@ -1,6 +1,5 @@
 """Parser for roadmap files."""
 
-import json
 import re
 import logging
 from pathlib import Path
@@ -136,58 +135,71 @@ def parse_markdown(md_file):
     }
 
 def parse_roadmap(roadmap_file):
-    """Parse the roadmap file (JSON or Markdown) and return a dictionary."""
+    """Parse a roadmap file as Markdown and return a dictionary."""
     logging.info(f"Parsing roadmap file: {roadmap_file}")
-    path = Path(roadmap_file)
-    suffix = path.suffix.lower()
-
-    if suffix in ('.md', '.markdown'):
-        logging.info("Using markdown heading parser for markdown file.")
-        return parse_markdown(roadmap_file)
-
-    with open(roadmap_file, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    # For other file types, assume JSON.
-    logging.info("Using JSON parser for non-markdown file.")
-    try:
-        data = json.loads(content)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in {roadmap_file}") from e
-
-    if not isinstance(data, dict):
-        raise ValueError(f"Roadmap file must contain a mapping at the top level, got {type(data).__name__}")
-    return data
+    logging.info("Using markdown parser.")
+    return parse_markdown(roadmap_file)
 
 
 def write_roadmap(roadmap_file, data):
-    """Writes roadmap data to a file."""
+    """Writes roadmap data to a Markdown file."""
     path = Path(roadmap_file)
 
     if hasattr(data, 'dict'):
+        # This handles Pydantic models
         data_dict = data.dict(exclude_none=True)
     else:
         data_dict = data
 
-    # Clean up empty lists to make output cleaner
-    for feature in data_dict.get('features', []):
-        if 'tasks' in feature and not feature['tasks']:
-            del feature['tasks']
-        if 'labels' in feature and not feature['labels']:
-            del feature['labels']
-        if 'assignees' in feature and not feature['assignees']:
-            del feature['assignees']
-        for task in feature.get('tasks', []):
-            if 'tests' in task and not task['tests']:
-                del task['tests']
-            if 'labels' in task and not task['labels']:
-                del task['labels']
-            if 'assignees' in task and not task['assignees']:
-                del task['assignees']
+    content = []
+    if data_dict.get('name'):
+        content.append(f"# {data_dict['name']}")
+        content.append('')
 
-    new_json_content = json.dumps(data_dict, indent=2)
+    if data_dict.get('description'):
+        content.append(data_dict['description'])
+        content.append('')
+
+    if data_dict.get('milestones'):
+        content.append('## Milestones')
+        for m in data_dict['milestones']:
+            due_date_str = f" — {m['due_date']}" if m.get('due_date') else ""
+            content.append(f"- **{m['name']}**{due_date_str}")
+        content.append('')
+
+    content.append('## Features')
+    content.append('')
+
+    for feature in data_dict.get('features', []):
+        content.append(f"### {feature['title']}")
+        if feature.get('description'):
+            content.append(feature['description'])
+        # Also write milestone, labels, assignees for feature
+        if feature.get('milestone'):
+            content.append(f"Milestone: {feature['milestone']}")
+        if feature.get('labels'):
+            content.append(f"Labels: {', '.join(feature['labels'])}")
+        if feature.get('assignees'):
+            content.append(f"Assignees: {', '.join(feature['assignees'])}")
+        content.append('')
+
+        for task in feature.get('tasks', []):
+            content.append(f"#### {task['title']}")
+            if task.get('description'):
+                content.append(task['description'])
+            # Also write labels, assignees, tests for task
+            if task.get('labels'):
+                content.append(f"Labels: {', '.join(task['labels'])}")
+            if task.get('assignees'):
+                content.append(f"Assignees: {', '.join(task['assignees'])}")
+            if task.get('tests'):
+                content.append('')
+                content.append("Tests:")
+                for t in task['tests']:
+                    content.append(f" - {t}")
+            content.append('')
 
     with open(path, 'w', encoding='utf-8') as f:
-        f.write(new_json_content)
-    
+        f.write('\n'.join(content))
+
     logging.info(f"Updated roadmap file: {roadmap_file}")
