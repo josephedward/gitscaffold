@@ -911,7 +911,7 @@ def deduplicate_command(repo, token, dry_run):
         return
 
     issues_to_close = []
-    click.secho(f"Found {len(duplicate_sets)} duplicate groups:", fg="yellow", bold=True)
+    click.secho(f"Found {len(duplicate_sets)} sets of duplicate issues:", fg="yellow", bold=True)
     for title, issues in duplicate_sets.items():
         original = issues['original']
         duplicates = issues['duplicates']
