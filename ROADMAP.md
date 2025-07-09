@@ -1,4 +1,5 @@
-<!-- Auto-generated markdown roadmap based on ROADMAP.yml -->
+<!-- Markdown roadmap based on GITCAFFOLD_ROADMAP.md; ensure all items from the roadmap spec are included below -->
+<!-- See full roadmap specification: GITCAFFOLD_ROADMAP.md -->
 # GitScaffold Project Roadmap
 
 A tool to manage GitHub projects using declarative roadmap files, with AI-powered issue enrichment and creation.
@@ -63,6 +64,43 @@ Create a new GitHub repository from a roadmap file and populate it with issues. 
 #### Implement `delete-closed` command
 
 Port and integrate the `delete-closed` command. Based on `gitscaffold.py::delete-closed`.
+
+#### Wrap GitHub CLI for issue management
+
+Allow `gitscaffold` to wrap the GitHub CLI (`gh`) for operations like listing, viewing, creating, and deleting issues. This leverages existing `gh` functionality and provides a familiar interface.
+Tasks:
+- Design an abstraction layer to invoke `gh` commands and parse their output.
+- Implement `gh issue list` and `gh issue view` integrations for issue listing and inspection.
+- Support issue creation and deletion via `gh issue create` and `gh issue delete`, with fallbacks to the PyGitHub client.
+- Write tests mocking `gh` invocations and validating parsed results.
+
+#### Implement `delete` command
+
+Provide a general-purpose `delete` command to remove (or close) GitHub issues, wrapping `gh` or using the API directly.
+Tasks:
+- Investigate support for issue deletion vs. closure in the GitHub CLI and API.
+- Build `gitscaffold delete` with confirmation prompts and a `--yes` override.
+- Support both single-issue and bulk-deletion modes.
+- Add safety tests to prevent accidental deletion of active issues.
+
+#### Implement `init` command for repository bootstrap
+
+Create an `init` command that provisions a new GitHub repository and bootstraps it with issues from a local roadmap or README.
+Tasks:
+- Use `gh repo create` to initialize the repository with standard settings.
+- Parse `ROADMAP.md` or `README.md` for initial issue definitions.
+- Sequence repo creation followed by issue creation, with a `--dry-run` option.
+- Write integration tests mocking both `gh` and the GitHub API for repo and issue creation.
+
+### CLI Enhancements and Extensions
+
+Plan and design advanced CLI capabilities that build on GitHub integration and AI features. These are roadmap items only; implementation will follow in future milestones.
+
+- **Wrap `gh` CLI** — Enable `gitscaffold` to leverage the GitHub CLI (`gh`) under the hood for operations such as listing issues, managing PRs, and querying repository state.
+- **Natural-Language Issue Search** — Create a `find` command that allows users to locate GitHub issues by entering natural-language queries, powered by AI semantic search.
+- **Single-Issue Creation & Enrichment** — Add an `issue` subcommand to create a single issue on GitHub from a title and description, with optional AI-based enrichment for the description.
+- **Issue Deletion** — Provide a `delete` command to remove or close issues by number or by query, potentially wrapping `gh issue delete` or the GitHub API.
+- **Repo Initialization & Bootstrapping** — Enhance the `init` command to create a new GitHub repository for the user and bootstrap it with issues from a given roadmap or README file.
 
 ### AI-Powered Features
 
