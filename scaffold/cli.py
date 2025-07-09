@@ -222,8 +222,9 @@ def _populate_repo_from_roadmap(
         if dry_run:
             click.echo(f"[dry-run] Feature '{feat.title.strip()}' not found. Would prompt to create.")
             feat_issue_number = 'N/A (dry-run)'
-            feat_issue_obj = None # In dry-run, we don't have a real issue object
+            feat_issue_obj = None
         else:
+            click.echo(f"Creating feature issue: {feat.title.strip()}")
             feat_issue = gh_client.create_issue(
                 title=feat.title.strip(),
                 body=body,
@@ -231,9 +232,7 @@ def _populate_repo_from_roadmap(
                 labels=feat.labels,
                 milestone=feat.milestone
             )
-            msg = f"Issue created or exists: #{feat_issue.number} {feat.title}"
-            logging.info(msg)
-            click.echo(msg)
+            click.echo(f"Feature issue created: #{feat_issue.number} {feat.title.strip()}")
             feat_issue_number = feat_issue.number
             feat_issue_obj = feat_issue
 
@@ -254,19 +253,18 @@ def _populate_repo_from_roadmap(
                     f"[dry-run] Task '{task.title.strip()}' (for feature '{feat.title.strip()}') not found. Would prompt to create."
                 )
             else:
+                click.echo(f"Creating task issue: {task.title.strip()}")
                 content = t_body
-                if feat_issue_obj: # Check if feat_issue_obj is not None
+                if feat_issue_obj:
                     content = f"{t_body}\n\nParent issue: #{feat_issue_obj.number}".strip()
-                gh_client.create_issue(
+                task_issue = gh_client.create_issue(
                     title=task.title.strip(),
                     body=content,
                     assignees=task.assignees,
                     labels=task.labels,
-                    milestone=feat.milestone # Tasks usually inherit milestone from feature
+                    milestone=feat.milestone
                 )
-                msg = f"Sub-task created or exists: {task.title}"
-                logging.info(msg)
-                click.echo(msg)
+                click.echo(f"Task issue created: #{task_issue.number} {task.title.strip()}")
 
 
 
@@ -336,9 +334,10 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes):
         click.secho("Repository is empty. Populating with issues from roadmap.", fg="green")
         
         if not dry_run and not yes:
-            if not click.confirm(
-                click.style(f"Proceed with populating '{repo}' with issues from '{roadmap_file}'?", fg="yellow", bold=True)
-            ):
+            prompt = click.style(
+                f"Proceed with populating '{repo}' with issues from '{roadmap_file}'?", fg="yellow", bold=True
+            )
+            if not click.confirm(prompt, default=False):
                 click.secho("Aborting.", fg="red")
                 return
 
@@ -353,28 +352,57 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes):
             roadmap_file_path=path
         )
     else:
-        click.secho(f"Repository has {len(existing_issue_titles)} issues. Performing a diff against the roadmap.", fg="yellow")
-        
-        roadmap_titles = {feat.title for feat in validated_roadmap.features}
+        click.secho(f"Repository has {len(existing_issue_titles)} issues. Creating missing items...", fg="yellow")
+        # Confirm bulk creation of missing items
+        if not dry_run and not yes:
+            prompt = click.style(
+                f"Proceed with creating missing items in '{repo}' from '{roadmap_file}'?", fg="yellow", bold=True
+            )
+            if not click.confirm(prompt, default=False):
+                click.secho("Aborting.", fg="red")
+                return
+        # Process milestones
+        for m in validated_roadmap.milestones:
+            existing_m = gh_client._find_milestone(m.name)
+            if existing_m:
+                click.echo(f"Milestone '{m.name}' already exists.")
+            else:
+                click.echo(f"Milestone '{m.name}' not found. Creating...")
+                gh_client.create_milestone(name=m.name, due_on=m.due_date)
+                click.echo(f"Milestone created: {m.name}")
+        # Process features and tasks
         for feat in validated_roadmap.features:
+            if feat.title in existing_issue_titles:
+                click.echo(f"Feature '{feat.title}' already exists in GitHub issues. Checking its tasks...")
+                feat_issue_obj = gh_client._find_issue(feat.title)
+                feat_issue_number = feat_issue_obj.number if feat_issue_obj else None
+            else:
+                click.echo(f"Creating feature issue: {feat.title}")
+                feat_issue_obj = gh_client.create_issue(
+                    title=feat.title.strip(),
+                    body=feat.description or '',
+                    assignees=feat.assignees,
+                    labels=feat.labels,
+                    milestone=feat.milestone
+                )
+                click.echo(f"Feature issue created: #{feat_issue_obj.number} {feat.title.strip()}")
+                feat_issue_number = feat_issue_obj.number
             for task in feat.tasks:
-                roadmap_titles.add(task.title)
-
-        missing = sorted(roadmap_titles - existing_issue_titles)
-        extra = sorted(existing_issue_titles - roadmap_titles)
-
-        if not missing and not extra:
-            click.secho("\n✓ Roadmap and GitHub issues are in sync.", fg="green")
-        else:
-            if missing:
-                click.secho("\nItems in local roadmap but not on GitHub (missing):", fg="yellow", bold=True)
-                for title in missing:
-                    click.secho(f"  - {title}", fg="yellow")
-            
-            if extra:
-                click.secho("\nItems on GitHub but not in local roadmap (extra):", fg="cyan", bold=True)
-                for title in extra:
-                    click.secho(f"  - {title}", fg="cyan")
+                if task.title in existing_issue_titles:
+                    click.echo(f"Task '{task.title}' (for feature '{feat.title}') already exists in GitHub issues.")
+                else:
+                    click.echo(f"Creating task issue: {task.title}")
+                    content = task.description or ''
+                    if feat_issue_obj:
+                        content = f"{content}\n\nParent issue: #{feat_issue_obj.number}"
+                    task_issue = gh_client.create_issue(
+                        title=task.title.strip(),
+                        body=content,
+                        assignees=task.assignees,
+                        labels=task.labels,
+                        milestone=feat.milestone
+                    )
+                    click.echo(f"Task issue created: #{task_issue.number} {task.title.strip()}")
 
     click.echo("Sync command finished.")
     
