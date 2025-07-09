@@ -273,50 +273,6 @@ def _populate_repo_from_roadmap(
                 click.echo(msg)
 
 
-def init(output_file):  # command removed, functionality will be added to roadmap
-    """Creates a sample ROADMAP.yml file in the current directory."""
-    path = Path(output_file)
-    if path.exists():
-        click.secho(f"Error: File '{path}' already exists.", fg='red', err=True)
-        sys.exit(1)
-
-    # Simple YAML template for a roadmap
-    template = """\
-name: My Awesome Project
-description: A plan to build something great.
-milestones:
-  - name: M1 - Foundation
-    due_date: 2025-10-01
-  - name: M2 - Core Features
-    due_date: 2025-11-01
-
-features:
-  - title: Setup project structure
-    description: Initialize git, create folders, and setup CI.
-    milestone: M1 - Foundation
-    labels: [area-code, priority-high]
-    tasks:
-      - title: Create folder structure
-      - title: Initialize git repository
-      - title: Add basic CI configuration
-
-  - title: Implement user authentication
-    description: Add sign-up, sign-in, and sign-out functionality.
-    milestone: M2 - Core Features
-    labels: [area-api, area-code, priority-high]
-    assignees: [username]
-    tasks:
-      - title: Design auth API endpoints
-      - title: Implement user model and database migration
-      - title: Build sign-in page
-"""
-    try:
-        path.write_text(template, encoding='utf-8')
-        click.secho(f"Successfully created sample roadmap at '{path}'", fg='green')
-    except IOError as e:
-        click.secho(f"Error writing to file '{path}': {e}", fg='red', err=True)
-        sys.exit(1)
-
 
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
