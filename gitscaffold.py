@@ -77,65 +77,6 @@ def enrich(repo, issue_number, batch, path, csv_file, interactive, apply_changes
         cmd.append('--apply')
     subprocess.run(cmd, check=True)
 
-@cli.command()
-@click.argument('output_file')
-def init(output_file):
-    """Initialize a new Markdown roadmap file with example structure."""
-    ext = os.path.splitext(output_file)[1].lower()
-    if ext not in ('.md', '.markdown'):
-        click.echo("Error: init only supports Markdown (.md/.markdown)", err=True)
-        sys.exit(1)
-    # Markdown template
-    example = '''# My Project Roadmap
-
-A brief description of your project roadmap.
-
-# User Authentication
-Implement sign-up, login, and password reset flows.
-
-## Task: Design Sign-up Form
-Create wireframes for the registration page.
-
-## Task: Implement Backend API
-Build authentication endpoints using JWT.
-
-# Reporting Dashboard
-Provide analytics and reporting capabilities.
-
-## Task: Define Report Schema
-Enumerate fields and filters for reports.
-
-## Task: Build UI Components
-Develop charts and tables for the dashboard.
-'''
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(example)
-    click.echo(f'Initialized roadmap file: {output_file}')
-    
-@cli.command(name='import-md')
-@click.argument('repo')
-@click.argument('markdown_file', type=click.Path(exists=True))
-@click.option('--token', help='GitHub token override')
-@click.option('--openai-key', 'openai_key', help='OpenAI API key override')
-@click.option('--dry-run', is_flag=True, help='List issues without creating them')
-@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
-@click.option('--heading-level', type=int, help='Markdown heading level to consider for issue creation (e.g., 1 for #, 2 for ##). Passed as --heading to the underlying script.')
-# The --apply flag is removed for import-md as it always applies enrichment if not dry-run.
-def import_md(repo, markdown_file, token, openai_key, dry_run, verbose, heading_level):
-    """Import and enrich issues from an unstructured markdown file via AI."""
-    script = os.path.join(os.path.dirname(__file__), 'scripts', 'import_md.py')
-    cmd = [sys.executable, script, repo, markdown_file]
-    if dry_run:
-        cmd.append('--dry-run')
-    if verbose:
-        cmd.append('--verbose')
-    if token:
-        cmd.extend(['--token', token])
-    if openai_key:
-        cmd.extend(['--openai-key', openai_key])
-    if heading_level is not None:
-        cmd.extend(['--heading', str(heading_level)])
-    subprocess.run(cmd, check=True)
 
 if __name__ == '__main__':
     cli()
