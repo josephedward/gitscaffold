@@ -23,11 +23,11 @@ Setup basic CLI structure and command handling for gitscaffold.
 
 Establish the main entry point and command structure for the CLI using the Click library. This will be based on `scaffold/cli.py` and `gitscaffold.py`.
 
-#### Implement `init` command for project bootstrapping
+#### Implement `init` command
 
 Develop an `init` command that can initialize a project in multiple ways:
 - Generate a template `ROADMAP.md` file for users to fill out.
-- From an existing `ROADMAP.md` or `README.md`, create a new GitHub repository and bootstrap it with issues. This will streamline project setup from a document-first approach.
+- From an existing `ROADMAP.md` or `README.md`, create a new GitHub repository and bootstrap it with issues.
 
 **Tests:**
 - Test `init` with no arguments creates `ROADMAP.md` in the current directory.
@@ -70,9 +70,14 @@ Create a robust client for GitHub API interactions, encapsulating PyGitHub calls
 
 Build the `create` command to process a roadmap file and create corresponding milestones and issues on GitHub. Based on `scaffold/cli.py::create`.
 
-#### Implement `setup-repository` command
+#### Implement `setup` command
 
-Create a new GitHub repository from a roadmap file and populate it with issues. Based on `scaffold/cli.py::setup_repository`.
+Port and integrate the `setup` command functionality for initializing a repository with predefined labels and milestones. Based on `gitscaffold.py::setup` and `scripts/github_setup.py`.
+
+**Tests:**
+- Mock GitHub API: Test `gitscaffold setup` creates all predefined labels from `scripts/github_setup.py::RECOMMENDED_LABELS`.
+- Mock GitHub API: Test `gitscaffold setup` creates all predefined milestones from `scripts/github_setup.py::MILESTONES`.
+- Test idempotency: running `setup` multiple times should not create duplicate labels/milestones.
 
 #### Implement `delete-closed` command
 
@@ -88,14 +93,6 @@ Tasks:
 - Support both single-issue and bulk-deletion modes.
 - Add safety tests to prevent accidental deletion of active issues.
 
-#### Implement `init` command for repository bootstrap
-
-Create an `init` command that provisions a new GitHub repository and bootstraps it with issues from a local roadmap or README.
-Tasks:
-- Use `gh repo create` to initialize the repository with standard settings.
-- Parse `ROADMAP.md` or `README.md` for initial issue definitions.
-- Sequence repo creation followed by issue creation, with a `--dry-run` option.
-- Write integration tests mocking both `gh` and the GitHub API for repo and issue creation.
 
 ### AI-Powered Features
 
