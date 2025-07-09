@@ -882,7 +882,7 @@ def sanitize_command(repo, token, dry_run):
         click.secho(f"Failed to update: {failed_count} issues", fg="red", err=True)
 
 
-@cli.command(name='deduplicate', help='Find and close duplicate issues in a repository.')
+@cli.command(name='deduplicate-issues', help=click.style('Close duplicate open issues', fg='cyan'))
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', help='GitHub API token (prompts if not set).')
 @click.option('--dry-run', is_flag=True, help='List duplicate issues that would be closed, without actually closing them.')
@@ -961,6 +961,9 @@ def deduplicate_command(repo, token, dry_run):
     click.secho(f"Successfully closed: {closed_count} issues.", fg="green")
     if failed_count > 0:
         click.secho(f"Failed to close: {failed_count} issues.", fg="red", err=True)
+
+# Alias deduplicate-issues command to 'deduplicate' for legacy calls
+cli.add_command(deduplicate_command, name='deduplicate')
 
 @cli.command(name='import-md', help=click.style('Import issues from Markdown (AI-powered)', fg='cyan'))
 @click.argument('repo_full_name', metavar='REPO')
