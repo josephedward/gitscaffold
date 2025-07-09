@@ -145,8 +145,12 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
   - Tests: tag triggers, release notes
 - Standardize versioning strategy
   - Tests: version consistency, CI checks
-- Test and maintain GitHub Action
-  - Tests: example workflows, Dockerfile maintenance
+ - Test and maintain GitHub Action
+   - Tests: example workflows, Dockerfile maintenance
+
+- Rename generic GitHub Action workflow file
+  - Move `.github/workflows/action.yml` to `.github/workflows/setup.yml` and update its `name` field for clarity.
+  - Tests: Verify manual dispatch (`workflow_dispatch`) works; confirm updated workflow name in Actions UI.
 
 ### Advanced Roadmap Features (Post v1.0)
 - **Description:** Sophisticated roadmap management features.
