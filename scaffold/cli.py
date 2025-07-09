@@ -12,6 +12,9 @@ from .parser import parse_roadmap
 from .validator import validate_roadmap
 from .github import GitHubClient
 from .ai import extract_issues_from_markdown, enrich_issue_description
+from datetime import date
+import random
+import webbrowser
 
 @click.group()
 @click.version_option(version=__version__, prog_name="gitscaffold")
@@ -606,3 +609,51 @@ def import_md_command(repo_full_name, markdown_file, token, openai_key, dry_run,
         return process.returncode
     except Exception as e:
         click.echo(f"Failed to execute {script_path.name}: {e}", err=True)
+    
+@cli.command(name='next', help='Show your next open task for the current roadmap phase.')
+@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--pick', is_flag=True, help='Pick a random open task (default: oldest).')
+@click.option('--browse', is_flag=True, help='Open the selected issue in your default web browser.')
+def next_task(roadmap_file, token, repo, pick, browse):
+    """
+    Show the current phase (milestone) based on today’s date and pick an open task from that phase.
+    """
+    actual_token = token if token else get_github_token()
+    if not actual_token:
+        return
+
+    raw = parse_roadmap(roadmap_file)
+    validated = validate_roadmap(raw)
+
+    gh = GitHubClient(actual_token, repo)
+
+    # Determine current milestone (phase) by due_date
+    today = date.today()
+    upcoming = [m for m in validated.milestones if m.due_date and m.due_date >= today]
+    if upcoming:
+        current = min(upcoming, key=lambda m: m.due_date)
+    else:
+        past = [m for m in validated.milestones if m.due_date]
+        if past:
+            current = max(past, key=lambda m: m.due_date)
+        else:
+            click.echo("No milestones with due dates found in roadmap.")
+            return
+
+    click.echo(f"Current phase: {current.name} (due: {current.due_date})")
+
+    # Fetch open issues for this milestone
+    issues = gh.get_open_issues_by_milestone(current.name)
+    if not issues:
+        click.echo("No open issues found for this phase.")
+        return
+
+    # Pick issue: random if --pick, else oldest
+    issue = random.choice(issues) if pick else sorted(issues, key=lambda i: i.created_at)[0]
+
+    click.echo(f"Next task: #{issue.number} {issue.title}")
+    if browse:
+        click.echo(f"Opening in browser: {issue.html_url}")
+        webbrowser.open(issue.html_url)
