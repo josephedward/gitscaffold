@@ -125,11 +125,13 @@ def test_next_fails_if_no_repo_provided_or_found(mock_get_repo, runner):
     assert "Could not determine repository from git config. Please use --repo." in result.output
     mock_get_repo.assert_called_once()
 
-def test_next_fails_if_no_token(runner):
+@patch('scaffold.cli.get_github_token', return_value=None)
+def test_next_fails_if_no_token(mock_get_token, runner):
     """Test `next` command fails if no token is provided."""
-    # We pass --token '' to simulate an empty token, which should cause a failure.
-    # This avoids trying to mock the interactive prompt of get_github_token.
-    result = runner.invoke(cli, ['next', '--repo', 'owner/repo', '--token', ''])
+    # Here we don't provide a token, so the command calls get_github_token.
+    # We mock it to return None to simulate no token being available.
+    result = runner.invoke(cli, ['next', '--repo', 'owner/repo'])
 
     assert result.exit_code == 1
     assert "GitHub token is required." in result.output
+    mock_get_token.assert_called_once()

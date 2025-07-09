@@ -597,14 +597,22 @@ def delete_closed_issues_command(repo, token, dry_run, yes): # 'yes' is injected
 
 
 @cli.command(name='cleanup-issue-titles', help='Remove leading markdown characters from issue titles.')
-@click.option('--repo', help='Target GitHub repository in `owner/repo` format.', required=True)
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--dry-run', is_flag=True, help='List issues that would be changed, without actually changing them.')
 def cleanup_issue_titles_command(repo, token, dry_run):
     """Scan all issues and remove leading markdown characters like '#' from their titles."""
     actual_token = token if token else get_github_token()
     if not actual_token:
-        return
+        click.echo("GitHub token is required.", err=True)
+        sys.exit(1)
+
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
+            sys.exit(1)
+        click.echo(f"Using repository from current git config: {repo}")
 
     gh_client = GitHubClient(actual_token, repo)
     click.echo(f"Fetching all issues from '{repo}'...")
