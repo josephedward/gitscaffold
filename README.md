@@ -83,11 +83,11 @@ gitscaffold import-md owner/repo markdown_roadmap.md \
 Use `sync` to create and update GitHub issues from a roadmap file. It compares the roadmap with the repository and creates any missing milestones or issues.
 
 It supports two kinds of roadmaps:
-1.  **Structured Roadmap**: A file containing YAML or JSON structure. With the latest changes, it can parse this format from any file type, including `.md` files.
+1.  **Structured Roadmap**: A file containing JSON structure. With the latest changes, it can parse this format from any file type, including `.md` files.
 2.  **Unstructured Markdown**: A free-form markdown document (e.g., `notes.md`). Use the `--ai-extract` flag to parse this with an LLM.
 
 ```sh
-# Sync with a structured roadmap file (can be .md, .yml, etc.)
+# Sync with a structured roadmap file (can be .md, .md, etc.)
 gitscaffold sync ROADMAP.md --repo owner/repo
 
 # To enrich descriptions of new issues with AI during sync
@@ -188,7 +188,7 @@ bash scripts/audit.sh
 ```
 
 ## GitHub Action Usage
-```yaml
+```
 name: Sync Roadmap to Issues
 on: workflow_dispatch
 jobs:
