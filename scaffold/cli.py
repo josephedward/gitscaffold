@@ -200,7 +200,7 @@ def _populate_repo_from_roadmap(
     # Process milestones
     for m in roadmap_data.milestones:
         if dry_run:
-            click.echo(f"[dry-run] Milestone '{m.name}' not found. Would create")
+            click.secho(f"[dry-run] Milestone '{m.name}' not found. Would create", fg="blue")
         else:
             click.echo(f"Milestone '{m.name}' not found. Creating...")
             gh_client.create_milestone(name=m.name, due_on=m.due_date)
@@ -213,14 +213,14 @@ def _populate_repo_from_roadmap(
             if dry_run:
                 msg = f"Would AI-enrich feature: {feat.title}"
                 logging.info(f"[dry-run] {msg}")
-                click.echo(f"[dry-run] {msg}")
+                click.secho(f"[dry-run] {msg}", fg="blue")
             elif openai_api_key: # Only enrich if key is available
                 logging.info(f"AI-enriching feature: {feat.title}...")
                 click.echo(f"AI-enriching feature: {feat.title}...")
                 body = enrich_issue_description(feat.title, body, openai_api_key, context_text)
         
         if dry_run:
-            click.echo(f"[dry-run] Feature '{feat.title.strip()}' not found. Would prompt to create.")
+            click.secho(f"[dry-run] Feature '{feat.title.strip()}' not found. Would prompt to create.", fg="blue")
             feat_issue_number = 'N/A (dry-run)'
             feat_issue_obj = None
         else:
@@ -242,15 +242,16 @@ def _populate_repo_from_roadmap(
                 if dry_run:
                     msg = f"Would AI-enrich sub-task: {task.title}"
                     logging.info(f"[dry-run] {msg}")
-                    click.echo(f"[dry-run] {msg}")
+                    click.secho(f"[dry-run] {msg}", fg="blue")
                 elif openai_api_key: # Only enrich if key is available
                     logging.info(f"AI-enriching sub-task: {task.title}...")
                     click.echo(f"AI-enriching sub-task: {task.title}...")
                     t_body = enrich_issue_description(task.title, t_body, openai_api_key, context_text)
             
             if dry_run:
-                click.echo(
-                    f"[dry-run] Task '{task.title.strip()}' (for feature '{feat.title.strip()}') not found. Would prompt to create."
+                click.secho(
+                    f"[dry-run] Task '{task.title.strip()}' (for feature '{feat.title.strip()}') not found. Would prompt to create.",
+                    fg="blue"
                 )
             else:
                 click.echo(f"Creating task issue: {task.title.strip()}")

@@ -17,8 +17,8 @@
    ```
 
 ### Automating Releases with GitHub Actions
-Add `.github/workflows/release.yml`:
-```yaml
+Add `.github/workflows/release.md`:
+```
 name: Publish
 on:
   push:
