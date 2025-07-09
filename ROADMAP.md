@@ -64,6 +64,14 @@ Port and integrate the `setup` command functionality for initializing a reposito
 
 Port and integrate the `delete-closed` command. Based on `gitscaffold.py::delete-closed`.
 
+#### Implement `diff` command
+
+Add a `diff` command to compare a local roadmap file with existing GitHub issues and show missing and extra entries.
+
+#### Implement `cleanup-issue-titles` command
+
+Add a CLI command to strip leading Markdown header markers (e.g., `#`) from existing issue titles and update them via the GitHub API.
+
 ### AI-Powered Features
 
 Integrate AI/LLM capabilities for extracting issues from Markdown and enriching issue descriptions.  
