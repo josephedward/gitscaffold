@@ -127,3 +127,40 @@ def test_cleanup_no_issues_to_clean(runner, monkeypatch):
     
     assert result.exit_code == 0
     assert "No issues with titles that need cleaning up." in result.output
+
+
+def test_cleanup_fails_on_bad_repo(runner, monkeypatch):
+    """Test that cleanup command fails gracefully with a bad repository name."""
+
+    # This mock will raise a 404 exception when GitHubClient is instantiated
+    def mock_init_raises_404(self, token, repo_full_name):
+        raise GithubException(status=404, data={"message": "Not Found"})
+
+    monkeypatch.setattr("scaffold.cli.GitHubClient.__init__", mock_init_raises_404)
+
+    result = runner.invoke(cli, [
+        'cleanup-issue-titles',
+        '--repo', 'owner/bad-repo',
+        '--token', 'fake-token'
+    ])
+
+    assert result.exit_code == 1
+    assert "Error: Repository 'owner/bad-repo' not found." in result.output
+
+
+def test_cleanup_fails_on_bad_token(runner, monkeypatch):
+    """Test that cleanup command fails gracefully with a bad token."""
+
+    def mock_init_raises_401(self, token, repo_full_name):
+        raise GithubException(status=401, data={"message": "Bad credentials"})
+
+    monkeypatch.setattr("scaffold.cli.GitHubClient.__init__", mock_init_raises_401)
+
+    result = runner.invoke(cli, [
+        'cleanup-issue-titles',
+        '--repo', 'owner/repo',
+        '--token', 'fake-token'
+    ])
+
+    assert result.exit_code == 1
+    assert "Error: GitHub token is invalid or has insufficient permissions." in result.output

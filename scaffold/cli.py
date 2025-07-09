@@ -671,13 +671,26 @@ def cleanup_issue_titles_command(repo, token, dry_run):
     click.echo("Successfully obtained GitHub token.")
 
     if not repo:
+        click.echo("No --repo provided, attempting to find repository from git config...")
         repo = get_repo_from_git_config()
         if not repo:
-            click.echo("Could not determine repository from git config. Please use --repo.", err=True)
+            click.echo("Could not determine repository from git config. Please use --repo. Exiting.", err=True)
             sys.exit(1)
         click.echo(f"Using repository from current git config: {repo}")
+    else:
+        click.echo(f"Using repository provided via --repo flag: {repo}")
 
-    gh_client = GitHubClient(actual_token, repo)
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        click.echo(f"Successfully connected to repository '{repo}'.")
+    except GithubException as e:
+        if e.status == 404:
+            click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", err=True)
+        elif e.status == 401:
+            click.echo("Error: GitHub token is invalid or has insufficient permissions.", err=True)
+        else:
+            click.echo(f"An unexpected GitHub error occurred: {e}", err=True)
+        sys.exit(1)
     click.echo(f"Fetching all issues from '{repo}'...")
 
     all_issues = gh_client.get_all_issues() 
