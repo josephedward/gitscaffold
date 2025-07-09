@@ -111,7 +111,7 @@ def parse_markdown(md_file):
                     feature['tasks'].append(task)
                 data['features'].append(feature)
 
-    logging.info(f"Parsed {len(data['features'])} features and {len(milestones)} milestones from {md_file}")
+    logging.info(f"Parsed {len(data['features'])} features and {len(data['milestones'])} milestones from {md_file}")
     return data
 
 def parse_roadmap(roadmap_file):
