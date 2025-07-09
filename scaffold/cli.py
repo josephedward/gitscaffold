@@ -277,7 +277,8 @@ def _populate_repo_from_roadmap(
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--dry-run', is_flag=True, help='Simulate and show what would be created, without making changes.')
 @click.option('--ai-enrich', is_flag=True, help='Use AI to enrich descriptions of new issues being created.')
-def sync(roadmap_file, token, repo, dry_run, ai_enrich):
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation and apply changes when populating an empty repo.')
+def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes):
     """Sync a Markdown roadmap with a GitHub repository.
 
     If the repository is empty, it populates it with issues from the roadmap.
@@ -332,6 +333,14 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich):
 
     if not existing_issue_titles:
         click.secho("Repository is empty. Populating with issues from roadmap.", fg="green")
+        
+        if not dry_run and not yes:
+            if not click.confirm(
+                click.style(f"Proceed with populating '{repo}' with issues from '{roadmap_file}'?", fg="yellow", bold=True)
+            ):
+                click.secho("Aborting.", fg="red")
+                return
+
         context_text = path.read_text(encoding='utf-8') if ai_enrich else ''
         _populate_repo_from_roadmap(
             gh_client=gh_client,
