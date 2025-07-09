@@ -103,3 +103,60 @@ def parse_roadmap(roadmap_file):
     if not isinstance(data, dict):
         raise ValueError(f"Roadmap file must contain a mapping at the top level, got {type(data).__name__}")
     return data
+
+
+def write_roadmap(roadmap_file, data):
+    """Writes roadmap data to a file, preserving other content in Markdown files."""
+    path = Path(roadmap_file)
+    suffix = path.suffix.lower()
+
+    if hasattr(data, 'dict'):
+        data_dict = data.dict(exclude_none=True)
+    else:
+        data_dict = data
+
+    # Clean up empty lists to make YAML cleaner
+    for feature in data_dict.get('features', []):
+        if 'tasks' in feature and not feature['tasks']:
+            del feature['tasks']
+        if 'labels' in feature and not feature['labels']:
+            del feature['labels']
+        if 'assignees' in feature and not feature['assignees']:
+            del feature['assignees']
+        for task in feature.get('tasks', []):
+            if 'tests' in task and not task['tests']:
+                del task['tests']
+            if 'labels' in task and not task['labels']:
+                del task['labels']
+            if 'assignees' in task and not task['assignees']:
+                del task['assignees']
+
+    new_yaml_content = yaml.dump(data_dict, sort_keys=False, indent=2, width=120, default_flow_style=False)
+
+    if suffix in ('.md', '.markdown'):
+        with open(path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        yaml_start_index = -1
+        for i, line in enumerate(lines):
+            # The YAML data block is assumed to start with 'name:'
+            if line.startswith('name:'):
+                yaml_start_index = i
+                break
+        
+        if yaml_start_index != -1:
+            pre_yaml_content = "".join(lines[:yaml_start_index])
+            content_to_write = pre_yaml_content + new_yaml_content
+        else:
+            # Fallback if 'name:' not found: append to the file.
+            separator = "\n\n---\n\n"
+            content_to_write = "".join(lines).rstrip() + separator + new_yaml_content
+
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(content_to_write)
+    else:
+        # For non-markdown files (.yml, .json), just overwrite the whole file.
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(new_yaml_content)
+    
+    logging.info(f"Updated roadmap file: {roadmap_file}")

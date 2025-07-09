@@ -10,8 +10,8 @@ from pathlib import Path
 from dotenv import load_dotenv, set_key
 from github import Github, GithubException
 
-from .parser import parse_markdown, parse_roadmap
-from .validator import validate_roadmap
+from .parser import parse_markdown, parse_roadmap, write_roadmap
+from .validator import validate_roadmap, Feature, Task
 from .github import GitHubClient
 from .ai import enrich_issue_description, extract_issues_from_markdown
 from datetime import date
@@ -277,7 +277,8 @@ def _populate_repo_from_roadmap(
 @click.option('--dry-run', is_flag=True, help='Simulate and show what would be created, without making changes.')
 @click.option('--ai-enrich', is_flag=True, help='Use AI to enrich descriptions of new issues being created.')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation and apply changes when populating an empty repo.')
-def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes):
+@click.option('--update-local', is_flag=True, help='Update the local roadmap file with issues from GitHub.')
+def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
     """Sync a Markdown roadmap with a GitHub repository.
 
     If the repository is empty, it populates it with issues from the roadmap.
@@ -314,7 +315,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes):
         openai_api_key_for_ai = get_openai_api_key()
         if not openai_api_key_for_ai:
             sys.exit(1)
-    
+
     try:
         gh_client = GitHubClient(actual_token, repo)
         click.echo(f"Successfully connected to repository '{repo}'.")
@@ -326,6 +327,65 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes):
         else:
             click.echo(f"An unexpected GitHub error occurred: {e}", err=True)
         sys.exit(1)
+
+    if update_local:
+        click.secho("Updating local roadmap from GitHub...", fg="cyan")
+        all_gh_issues = list(gh_client.get_all_issues())
+        gh_issue_titles = {issue.title for issue in all_gh_issues}
+
+        roadmap_titles = {f.title for f in validated_roadmap.features}
+        for f in validated_roadmap.features:
+            roadmap_titles.update({t.title for t in f.tasks})
+
+        extra_titles = gh_issue_titles - roadmap_titles
+
+        if not extra_titles:
+            click.secho("Local roadmap is already up-to-date with GitHub.", fg="green")
+            return
+
+        click.secho(f"Found {len(extra_titles)} issues on GitHub to add to local roadmap:", fg="yellow")
+        for issue in all_gh_issues:
+            if issue.title in extra_titles:
+                parent_issue_match = re.search(r'Parent issue: #(\d+)', issue.body or '')
+                labels = [label.name for label in issue.labels]
+                assignees = [assignee.login for assignee in issue.assignees]
+                milestone = issue.milestone.title if issue.milestone else None
+
+                if parent_issue_match:
+                    parent_issue_num = int(parent_issue_match.group(1))
+                    parent_feature = None
+                    try:
+                        parent_issue = gh_client.repo.get_issue(parent_issue_num)
+                        parent_title = parent_issue.title
+                        parent_feature = next((f for f in validated_roadmap.features if f.title == parent_title), None)
+                    except GithubException:
+                        click.secho(f"    (Warning: Parent issue #{parent_issue_num} not found on GitHub)", fg="magenta")
+
+                    if parent_feature:
+                        click.echo(f"  + Adding task '{issue.title}' to feature '{parent_feature.title}'")
+                        parent_feature.tasks.append(Task(title=issue.title, description=issue.body, labels=labels, assignees=assignees))
+                    else:
+                        click.echo(f"  + Adding task '{issue.title}' as a new feature (parent not in roadmap)")
+                        validated_roadmap.features.append(Feature(title=issue.title, description=issue.body, labels=labels, assignees=assignees, milestone=milestone))
+                else:
+                    click.echo(f"  + Adding feature '{issue.title}'")
+                    validated_roadmap.features.append(Feature(title=issue.title, description=issue.body, labels=labels, assignees=assignees, milestone=milestone))
+
+        if not dry_run:
+            prompt_msg = f"Update '{roadmap_file}' with {len(extra_titles)} new items from GitHub?"
+            if not yes and not click.confirm(prompt_msg, default=True):
+                click.secho("Aborting update.", fg="red")
+                return
+
+            try:
+                write_roadmap(roadmap_file, validated_roadmap)
+                click.secho(f"Successfully updated '{roadmap_file}'.", fg="green")
+            except Exception as e:
+                click.secho(f"Error writing to roadmap file: {e}", fg="red", err=True)
+                sys.exit(1)
+        else:
+            click.secho(f"[dry-run] Would have updated '{roadmap_file}' with {len(extra_titles)} new items.", fg="blue")
+        return
 
     click.echo("Fetching existing issue titles...")
     existing_issue_titles = gh_client.get_all_issue_titles()
@@ -408,11 +468,11 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes):
     
 
 @cli.command(name='diff', help=click.style('Diff local roadmap vs GitHub issues', fg='cyan'))
-@click.argument('roadmap_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')
+@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 def diff(roadmap_file, repo, token):
-    """Compare a local Markdown roadmap file with GitHub issues and list differences."""
+    """Compare a local roadmap file with GitHub issues and list differences."""
     click.secho("\n=== Diff Roadmap vs GitHub Issues ===", fg="bright_blue", bold=True)
     actual_token = token if token else get_github_token()
     if not actual_token:
@@ -431,13 +491,12 @@ def diff(roadmap_file, repo, token):
     else:
         click.echo(f"Using repository provided via --repo flag: {repo}")
 
-    path = Path(roadmap_file)
-    suffix = path.suffix.lower()
-    if suffix not in ('.md', '.markdown'):
-        raise click.UsageError('`diff` only supports Markdown files (.md, .markdown)')
-
-    raw = parse_markdown(roadmap_file)
-    validated = validate_roadmap(raw)
+    try:
+        raw = parse_roadmap(roadmap_file)
+        validated = validate_roadmap(raw)
+    except Exception as e:
+        click.echo(f"Error: Failed to parse roadmap file '{roadmap_file}': {e}", err=True)
+        sys.exit(1)
     
     roadmap_titles = {feat.title for feat in validated.features}
     for feat in validated.features:
