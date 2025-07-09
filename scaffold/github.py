@@ -50,7 +50,7 @@ class GitHubClient:
         try:
             # search through all issues (open and closed)
             for issue in self.repo.get_issues(state='all'):
-                if issue.title == title:
+                if issue.title.strip() == title:
                     logging.info(f"Found existing issue: '{title}'")
                     return issue
         except GithubException as e:
@@ -103,7 +103,7 @@ class GitHubClient:
         titles = set()
         try:
             for issue in self.repo.get_issues(state='all'):
-                titles.add(issue.title)
+                titles.add(issue.title.strip())
         except GithubException as e:
             # Consider more robust error handling or logging if needed
             logging.warning(f"Error fetching issue titles: {e}. Proceeding with an empty list of existing titles.")
@@ -141,9 +141,10 @@ class GitHubClient:
         open_issues = self.repo.get_issues(state='open')
         issues_by_title = {}
         for issue in open_issues:
-            if issue.title not in issues_by_title:
-                issues_by_title[issue.title] = []
-            issues_by_title[issue.title].append(issue)
+            title = issue.title.strip()
+            if title not in issues_by_title:
+                issues_by_title[title] = []
+            issues_by_title[title].append(issue)
 
         duplicates_found = {}
         for title, issues in issues_by_title.items():
