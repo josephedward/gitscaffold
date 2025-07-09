@@ -596,10 +596,10 @@ def sync(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
                help='Markdown heading level to split issues by.')
 def diff(roadmap_file, repo, token, ai_extract, heading_level):
     """Compare a local roadmap file with GitHub issues and list missing and extra items."""
-    click.echo("Starting 'diff' command...")
+    click.secho("\n=== Diff Roadmap vs GitHub Issues ===", fg="bright_blue", bold=True)
     actual_token = token if token else get_github_token()
     if not actual_token:
-        click.echo("GitHub token is required to proceed. Exiting.", err=True)
+        click.secho("Error: GitHub token is required to proceed.", fg="red", err=True)
         sys.exit(1)
     
     click.echo("Successfully obtained GitHub token.")
@@ -615,6 +615,9 @@ def diff(roadmap_file, repo, token, ai_extract, heading_level):
         click.echo(f"Using repository provided via --repo flag: {repo}")
 
     path = Path(roadmap_file)
+    suffix = path.suffix.lower()
+    if suffix not in ('.md', '.markdown'):
+        raise click.UsageError('`diff` only supports Markdown files (.md, .markdown)')
     suffix = path.suffix.lower()
     if ai_extract:
         if suffix not in ('.md', '.markdown'):
@@ -637,7 +640,7 @@ def diff(roadmap_file, repo, token, ai_extract, heading_level):
 
     try:
         gh_client = GitHubClient(actual_token, repo)
-        click.echo(f"Successfully connected to repository '{repo}'.")
+    click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
     except GithubException as e:
         if e.status == 404:
             click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", err=True)
@@ -647,20 +650,20 @@ def diff(roadmap_file, repo, token, ai_extract, heading_level):
             click.echo(f"An unexpected GitHub error occurred: {e}", err=True)
         sys.exit(1)
 
-    click.echo(f"Fetching existing issue titles from '{repo}'...")
+    click.secho(f"Fetching existing GitHub issue titles...", fg="cyan")
     gh_titles = gh_client.get_all_issue_titles()
-    click.echo(f"Local roadmap items: {len(roadmap_titles)}, GitHub issues: {len(gh_titles)}")
+    click.secho(f"Fetched {len(gh_titles)} issues; roadmap has {len(roadmap_titles)} items.", fg="magenta")
     missing = sorted(roadmap_titles - gh_titles)
     extra = sorted(gh_titles - roadmap_titles)
     if missing:
-        click.secho("\nItems in local roadmap but not on GitHub (missing):", fg="yellow", bold=True)
+        click.secho("\nMissing on GitHub:", fg="yellow", bold=True)
         for title in missing:
             click.secho(f"  - {title}", fg="yellow")
     else:
         click.secho("\n✓ No missing issues on GitHub.", fg="green")
 
     if extra:
-        click.secho("\nItems on GitHub but not in local roadmap (extra):", fg="cyan", bold=True)
+        click.secho("\nExtra issues on GitHub:", fg="cyan", bold=True)
         for title in extra:
             click.secho(f"  - {title}", fg="cyan")
     else:
