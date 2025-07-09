@@ -60,10 +60,6 @@ features:
         description: Build the `create` command to process a roadmap file and create corresponding milestones and issues on GitHub. Based on `scaffold/cli.py::create`.
         labels: [implementation, cli]
         assignees: []
-      - title: Implement `setup` command (from gitscaffold.py)
-        description: Port and integrate the `setup` command functionality for initializing a repository with predefined labels and milestones. Based on `gitscaffold.py::setup` and `scripts/github_setup.py`.
-        labels: [implementation, cli, github]
-        assignees: []
       - title: Implement `delete-closed` command (from gitscaffold.py)
         description: Port and integrate the `delete-closed` command. Based on `gitscaffold.py::delete-closed`. This is now implemented as `scaffold delete-closed`.
         labels: [implementation, cli, github]
@@ -269,7 +265,7 @@ features:
     assignees: []
     tasks:
       - title: Refactor `scripts/` functionalities into core CLI
-        description: Systematically integrate the logic from standalone scripts (`scripts/github_setup.py`, `scripts/enrich.py`, `scripts/import_md.py`) into the main `scaffold/cli.py` as subcommands or options.
+        description: Systematically integrate the logic from standalone scripts (`scripts/enrich.py`, `scripts/import_md.py`) into the main `scaffold/cli.py` as subcommands or options.
         labels: [refactor, cli, architecture]
         assignees: []
       - title: Consolidate `gitscaffold.py` and `scaffold/cli.py` entry points

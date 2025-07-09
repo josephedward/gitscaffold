@@ -24,8 +24,6 @@ from collections import defaultdict
 from rich.console import Console
 from rich.table import Table
 
-from .templates import radar
-
 @click.group()
 @click.version_option(version=__version__, prog_name="gitscaffold")
 def cli():
@@ -282,89 +280,6 @@ def create(roadmap_file, token, repo, dry_run, ai_extract, ai_enrich):
         context_text=context_text,
         roadmap_file_path=path
     )
-
-
-@cli.command(name="setup-template", help="Setup a repo from a predefined template (R.A.D.A.R).")
-@click.option('--repo', required=True, help="GitHub repo in the form owner/repo")
-@click.option('--phase', default="all", help="Which phase to setup (e.g., phase-1) or 'all'")
-@click.option('--create-project', is_flag=True, help="Create a GitHub project board (Kanban) with default columns")
-@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
-def setup_template(repo, phase, create_project, token):
-    """
-    Automate GitHub setup from the R.A.D.A.R project plan template.
-    This creates labels, milestones, and phase-specific issues.
-    """
-    actual_token = token if token else get_github_token()
-    if not actual_token:
-        sys.exit(1)
-
-    gh = Github(actual_token)
-    try:
-        gh_repo = gh.get_repo(repo)
-    except GithubException as e:
-        if e.status == 404:
-            click.secho(f"Error: Repository '{repo}' not found or token is invalid.", fg='red', err=True)
-        else:
-            click.secho(f"Error accessing repo {repo}: {e}", fg='red', err=True)
-        sys.exit(1)
-
-    # Create labels
-    click.secho("Processing labels...", bold=True)
-    existing_labels = {lbl.name for lbl in gh_repo.get_labels()}
-    for lbl in radar.RECOMMENDED_LABELS:
-        if lbl["name"] not in existing_labels:
-            gh_repo.create_label(name=lbl["name"], color=lbl["color"], description=lbl["description"])
-            click.echo(f"Created label: {lbl['name']}")
-
-    # Create milestones
-    click.secho("\nProcessing milestones...", bold=True)
-    existing_ms = {ms.title: ms for ms in gh_repo.get_milestones(state="all")}
-    for ms in radar.MILESTONES:
-        if ms["title"] not in existing_ms:
-            gh_repo.create_milestone(title=ms["title"], description=ms["description"])
-            click.echo(f"Created milestone: {ms['title']}")
-
-    # Refresh milestone mapping
-    milestone_map = {ms.title: ms for ms in gh_repo.get_milestones(state="all")}
-
-    # Create issues for specified phase(s)
-    click.secho(f"\nProcessing issues for phase: {phase}", bold=True)
-    for phase_key, issues in radar.PHASE_ISSUES.items():
-        if phase != "all" and phase != phase_key:
-            continue
-        phase_num = int(phase_key.split("-")[1])
-        milestone_title = radar.MILESTONES[phase_num]["title"]
-        ms_obj = milestone_map.get(milestone_title)
-        if not ms_obj:
-            click.secho(f"Milestone not found for {phase_key}: {milestone_title}", fg='red', err=True)
-            continue
-        for issue in issues:
-            title = issue["title"]
-            # skip if exists
-            existing = [i for i in gh_repo.get_issues(state="all") if i.title == title]
-            if existing:
-                click.echo(f"Issue already exists: {title}")
-                continue
-            gh_repo.create_issue(
-                title=title,
-                body=issue.get("body", ""),
-                labels=issue.get("labels", []),
-                milestone=ms_obj
-            )
-            click.echo(f"Created issue: {title}")
-
-    if create_project:
-        click.secho("\nCreating project board...", bold=True)
-        try:
-            project = gh_repo.create_project(
-                "AI Deception Kanban", body="Auto-generated Kanban board"
-            )
-            for col in ["Backlog", "To Do", "In Progress", "In Review", "Done"]:
-                project.create_column(col)
-            click.secho("Created GitHub project board with columns.", fg='green')
-        except Exception as e:
-            click.secho(f"Error creating project board: {e}", fg='red', err=True)
-    click.secho("\nGitHub setup from template complete.", fg='green', bold=True)
 
 
 @cli.command(name="setup-repository", help="Create a new GitHub repository and populate it with issues from a roadmap.")
