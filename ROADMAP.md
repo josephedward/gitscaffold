@@ -56,9 +56,9 @@ Create a robust client for GitHub API interactions, encapsulating PyGitHub calls
 
 Build the `create` command to process a roadmap file and create corresponding milestones and issues on GitHub. Based on `scaffold/cli.py::create`.
 
-#### Implement `setup` command
+#### Implement `setup-repository` command
 
-Port and integrate the `setup` command functionality for initializing a repository with predefined labels and milestones. Based on `gitscaffold.py::setup` and `scripts/github_setup.py`.
+Create a new GitHub repository from a roadmap file and populate it with issues. Based on `scaffold/cli.py::setup_repository`.
 
 #### Implement `delete-closed` command
 
@@ -98,9 +98,27 @@ Add an `--ai-extract` option to the `create` command to use LLM-based issue extr
 
 Add an `--ai-enrich` option to the `create` command to use LLM-based description enrichment. Link to `scaffold/cli.py::create`.
 
+#### Implement `import-md` command
+
+Port and integrate the `import-md` command for importing issues from an unstructured Markdown file, using AI to generate titles and descriptions. Based on `scaffold/cli.py::import_md_command`.
+
 #### Implement `enrich` command
 
 Port and integrate the `enrich` command for AI-powered enrichment of issues. Based on `gitscaffold.py::enrich` and `scripts/enrich.py`.
+
+### Workflow and Productivity Features
+
+Add commands to help users identify and focus on their next tasks.  
+**Milestone:** v0.4 Advanced Features & Usability  
+**Labels:** usability, cli
+
+#### Implement `next` command
+
+Create a `next` command to show next action items from the earliest active milestone. Based on `scaffold/cli.py::next_command`.
+
+#### Implement `next-task` command
+
+Create a `next-task` command to show the next open task for the current roadmap phase. Based on `scaffold/cli.py::next_task`.
 
 ### Testing Framework and Coverage
 
