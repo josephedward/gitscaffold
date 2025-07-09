@@ -10,10 +10,10 @@ from pathlib import Path
 from dotenv import load_dotenv, set_key
 from github import Github, GithubException
 
-from .parser import parse_markdown
+from .parser import parse_markdown, parse_roadmap
 from .validator import validate_roadmap
 from .github import GitHubClient
-from .ai import enrich_issue_description
+from .ai import enrich_issue_description, extract_issues_from_markdown
 from datetime import date
 import re
 import random
