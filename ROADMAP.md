@@ -64,10 +64,6 @@ Create a new GitHub repository from a roadmap file and populate it with issues. 
 
 Port and integrate the `delete-closed` command. Based on `gitscaffold.py::delete-closed`.
 
-#### Implement `cleanup-issue-titles` command
-
-Add a CLI command to strip leading Markdown header markers (e.g., `#`) from existing issue titles and update them via the GitHub API.
-
 ### AI-Powered Features
 
 Integrate AI/LLM capabilities for extracting issues from Markdown and enriching issue descriptions.  
