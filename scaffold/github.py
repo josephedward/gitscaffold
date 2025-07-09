@@ -120,6 +120,28 @@ class GitHubClient:
         
         return earliest_milestone, list(issues)
 
+    def find_duplicate_issues(self) -> dict:
+        """Finds open issues with duplicate titles."""
+        open_issues = self.repo.get_issues(state='open')
+        issues_by_title = {}
+        for issue in open_issues:
+            if issue.title not in issues_by_title:
+                issues_by_title[issue.title] = []
+            issues_by_title[issue.title].append(issue)
+
+        duplicates_found = {}
+        for title, issues in issues_by_title.items():
+            if len(issues) > 1:
+                # Sort by issue number to find the original (oldest)
+                issues.sort(key=lambda i: i.number)
+                original = issues[0]
+                duplicates = issues[1:]
+                duplicates_found[title] = {
+                    'original': original,
+                    'duplicates': duplicates
+                }
+        return duplicates_found
+
     def get_closed_issues_for_deletion(self) -> list[dict]:
         """
         Fetch all closed issues with their numbers and node IDs for deletion.
