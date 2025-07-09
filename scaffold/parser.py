@@ -5,158 +5,114 @@ import logging
 from pathlib import Path
 
 def parse_markdown(md_file):
-    """Parse a Markdown roadmap file into a dict containing name, description, milestones, and features."""
+    """Parse a Markdown roadmap file into a structured dictionary."""
     logging.info(f"Parsing markdown file: {md_file}")
     path = Path(md_file)
-    text = path.read_text(encoding='utf-8')
-    lines = text.splitlines()
-    # Project name: first H1
-    name = None
-    for idx, line in enumerate(lines):
-        if line.startswith('# '):
-            name = line[2:].strip()
-            desc_start = idx + 1
-            break
-    if not name:
-        name = path.stem
-        desc_start = 0
-    # Global description: lines until first H2
-    description_lines = []
-    for line in lines[desc_start:]:
-        if line.startswith('## '):
-            break
-        if line.strip():
-            description_lines.append(line.strip())
-    description = '\n'.join(description_lines).strip()
-    # Parse milestones
-    milestones = []
-    in_milestones = False
-    for line in lines:
-        if line.startswith('## Milestones'):
-            in_milestones = True
-            continue
-        if in_milestones:
-            if line.startswith('## ') and not line.startswith('## Milestones'):
-                in_milestones = False
-                continue
-            m = re.match(r'^\s*-\s*\*\*(.+?)\*\*\s*(?:—\s*(\S+))?', line)
-            if m:
-                m_name = m.group(1).strip()
-                m_due = m.group(2).strip() if m.group(2) else None
-                milestones.append({'name': m_name, 'due_date': m_due})
-    # Parse features and tasks
-    features = []
-    has_features_section = any(line.startswith('## Features') for line in lines)
-    if has_features_section:
-        in_features = False
-        current_feat = None
-        current_task = None
-        for line in lines:
-            if line.startswith('## Features'):
-                in_features = True
-                continue
-            if not in_features:
-                continue
-            
-            if line.startswith('```'):
-                break # Stop parsing at a code fence.
+    with open(md_file, 'r', encoding='utf-8') as f:
+        content = f.read()
 
-            if line.startswith('### '):
-                if current_task and current_feat:
-                    current_feat['tasks'].append(current_task)
-                if current_feat:
-                    features.append(current_feat)
-                current_feat = {'title': line[4:].strip(), 'description': '', 'milestone': None, 'labels': [], 'assignees': [], 'tasks': []}
-                current_task = None
-                continue
-            if line.startswith('#### ') and current_feat:
-                if current_task:
-                    current_feat['tasks'].append(current_task)
-                current_task = {'title': line[5:].strip(), 'description': '', 'labels': [], 'assignees': [], 'tests': []}
-                continue
-            if not line.strip() or not current_feat:
-                continue
-            content = line.strip()
-            if content.startswith('Milestone:'):
-                current_feat['milestone'] = content.split(':', 1)[1].strip()
-                continue
-            if content.startswith('Labels:'):
-                items = [i.strip() for i in content.split(':', 1)[1].split(',')]
-                (current_task or current_feat)['labels'] = items
-                continue
-            if content.startswith('Assignees:') and current_task:
-                items = [i.strip() for i in content.split(':', 1)[1].split(',')]
-                current_task['assignees'] = items
-                continue
-            if content == 'Tests:':
-                continue
-            m_test = re.match(r'^[-*]\s+(.+)$', content)
-            if m_test and current_task:
-                current_task['tests'].append(m_test.group(1).strip())
-                continue
-            # description
-            target = current_task if current_task else current_feat
-            if target['description']:
-                target['description'] += '\n' + content
-            else:
-                target['description'] = content
-        if current_task and current_feat:
-            current_feat['tasks'].append(current_task)
-        if current_feat:
-            features.append(current_feat)
+    data = {'name': '', 'description': '', 'milestones': [], 'features': []}
+
+    lines = content.strip().split('\n')
+    if lines and lines[0].startswith('# '):
+        data['name'] = lines.pop(0)[2:].strip()
+        content = '\n'.join(lines)
     else:
-        current_feat = None
-        current_task = None
-        for line in lines:
-            if line.startswith('# '):
-                if current_task and current_feat:
-                    current_feat['tasks'].append(current_task)
-                if current_feat:
-                    features.append(current_feat)
-                current_feat = {'title': line[2:].strip(), 'description': '', 'milestone': None, 'labels': [], 'assignees': [], 'tasks': []}
-                current_task = None
-                continue
-            if line.startswith('## ') and current_feat:
-                if current_task:
-                    current_feat['tasks'].append(current_task)
-                current_task = {'title': line[3:].strip(), 'description': '', 'labels': [], 'assignees': [], 'tests': []}
-                continue
-            if not line.strip() or not current_feat:
-                continue
-            content = line.strip()
-            if content.startswith('Milestone:'):
-                current_feat['milestone'] = content.split(':', 1)[1].strip()
-                continue
-            if content.startswith('Labels:'):
-                items = [i.strip() for i in content.split(':', 1)[1].split(',')]
-                (current_task or current_feat)['labels'] = items
-                continue
-            if content.startswith('Assignees:') and current_task:
-                items = [i.strip() for i in content.split(':', 1)[1].split(',')]
-                current_task['assignees'] = items
-                continue
-            if content == 'Tests:':
-                continue
-            m_test = re.match(r'^[-*]\s+(.+)$', content)
-            if m_test and current_task:
-                current_task['tests'].append(m_test.group(1).strip())
-                continue
-            target = current_task if current_task else current_feat
-            if target['description']:
-                target['description'] += '\n' + content
-            else:
-                target['description'] = content
-        if current_task and current_feat:
-            current_feat['tasks'].append(current_task)
-        if current_feat:
-            features.append(current_feat)
-    logging.info(f"Parsed {len(features)} features and {len(milestones)} milestones from {md_file}")
-    return {
-        'name': name,
-        'description': description,
-        'milestones': milestones,
-        'features': features
-    }
+        content = '\n'.join(lines)
+    
+    if not data['name']:
+        data['name'] = path.stem
+
+    # Split content by H2 headings (##). The regex captures the delimiter.
+    sections = re.split(r'(^##\s+.*$)', content, flags=re.MULTILINE)
+    
+    data['description'] = sections[0].strip()
+
+    # Process sections in pairs (header, content)
+    for i in range(1, len(sections), 2):
+        header = sections[i].strip()
+        sec_content = sections[i+1]
+        
+        if re.match(r'^##\s*Milestones', header):
+            for line in sec_content.strip().split('\n'):
+                if line.strip().startswith('- '):
+                    m_line = line.strip()[2:].strip()
+                    m_name, m_due = (m_line.split('—', 1) + [None])[:2]
+                    m_name = m_name.strip().strip('**')
+                    m_due = m_due.strip() if m_due else None
+                    data['milestones'].append({'name': m_name, 'due_date': m_due})
+        
+        elif re.match(r'^##\s*Features', header):
+            # Split this section into features by H3
+            feature_parts = re.split(r'^###\s+', sec_content.strip(), flags=re.M)
+            if feature_parts and not feature_parts[0].strip():
+                 feature_parts.pop(0) # First element is empty if content starts with delimiter
+
+            for feature_part in feature_parts:
+                feature_lines = feature_part.strip().split('\n')
+                feature_title = feature_lines.pop(0).strip()
+                if not feature_title:
+                    continue
+                feature = {
+                    'title': feature_title, 'description': '', 'tasks': [], 'labels': [], 'assignees': [], 'milestone': None
+                }
+                
+                rest_of_feature = '\n'.join(feature_lines)
+                # Split feature content into tasks by H4
+                task_parts = re.split(r'^####\s+', rest_of_feature.strip(), flags=re.M)
+
+                # Part before first task is feature metadata
+                feature_meta_part = task_parts.pop(0)
+                desc_lines = []
+                for line in feature_meta_part.strip().split('\n'):
+                    line_lower = line.lower()
+                    if line_lower.startswith('milestone:'):
+                        feature['milestone'] = line.split(':', 1)[1].strip()
+                    elif line_lower.startswith('labels:'):
+                        feature['labels'] = [l.strip() for l in line.split(':', 1)[1].split(',') if l.strip()]
+                    elif line_lower.startswith('assignees:'):
+                        feature['assignees'] = [a.strip() for a in line.split(':', 1)[1].split(',') if a.strip()]
+                    else:
+                        desc_lines.append(line)
+                feature['description'] = '\n'.join(desc_lines).strip()
+                
+                # Remaining parts are tasks
+                for task_part in task_parts:
+                    if not task_part.strip():
+                        continue
+                    task_lines = task_part.strip().split('\n')
+                    task_title = task_lines.pop(0).strip()
+                    if not task_title:
+                        continue
+                    task = {'title': task_title, 'description': '', 'tests': [], 'labels': [], 'assignees': []}
+                    
+                    desc_lines = []
+                    in_tests = False
+                    for line in task_lines:
+                        line_lower = line.lower()
+                        if line_lower.strip() == 'tests:':
+                            in_tests = True
+                            continue
+                        
+                        if in_tests:
+                            if line.strip().startswith('- '):
+                                task['tests'].append(line.strip()[2:].strip())
+                            else: # A non-list item ends the tests block
+                                in_tests = False
+                                if line.strip(): # if it's not empty, it's description
+                                    desc_lines.append(line)
+                        elif line_lower.startswith('labels:'):
+                            task['labels'] = [l.strip() for l in line.split(':', 1)[1].split(',') if l.strip()]
+                        elif line_lower.startswith('assignees:'):
+                            task['assignees'] = [a.strip() for a in line.split(':', 1)[1].split(',') if a.strip()]
+                        else:
+                            desc_lines.append(line)
+                    task['description'] = '\n'.join(desc_lines).strip()
+                    feature['tasks'].append(task)
+                data['features'].append(feature)
+
+    logging.info(f"Parsed {len(data['features'])} features and {len(milestones)} milestones from {md_file}")
+    return data
 
 def parse_roadmap(roadmap_file):
     """Parse a roadmap file (JSON or Markdown) and return a dictionary."""
