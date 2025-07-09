@@ -2,7 +2,7 @@
 # Gitscaffold – Generate GitHub Issues from Markdown Roadmaps
   
 <!-- CI Badge -->
-[![CI](https://github.com/OWNER/REPO/actions/workflows/test-and-update-coverage.yml/badge.svg)](https://github.com/OWNER/REPO/actions)
+[![CI](https://github.com/josephedward/gitscaffold/actions/workflows/test-and-update-coverage.yml/badge.svg)](https://github.com/josephedward/gitscaffold/actions)
 
 Gitscaffold is a command-line tool and GitHub Action that converts Markdown-based roadmaps into GitHub issues and milestones using AI-driven extraction and enrichment.
 
