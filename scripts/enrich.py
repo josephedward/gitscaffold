@@ -108,6 +108,59 @@ def call_llm(title, existing_body, ctx):
 import argparse
 from github import Github, GithubException
 
+
+def enrich_one_issue(repo, issue_number, roadmap, apply_changes=False):
+    """Enrich a single issue."""
+    issue = repo.get_issue(number=issue_number)
+    ctx, matched = get_context(issue.title.strip(), roadmap)
+    if not ctx:
+        print(f"No roadmap context for issue #{issue_number}", file=sys.stderr)
+        sys.exit(1)
+    enriched = call_llm(issue.title, issue.body, ctx)
+    print(enriched)
+    if apply_changes:
+        issue.edit(body=enriched)
+        print(f"Issue #{issue_number} updated.")
+
+
+def enrich_batch(repo, roadmap, csv_path=None, interactive=False, apply_changes=False):
+    """Batch enrich issues."""
+    issues = list(repo.get_issues(state='open'))
+    records = []
+    for issue in issues:
+        ctx, matched = get_context(issue.title.strip(), roadmap)
+        if not ctx:
+            continue
+        enriched = call_llm(issue.title, issue.body, ctx)
+        records.append((issue.number, issue.title, ctx['context'], matched, enriched))
+    if csv_path:
+        import csv
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['issue', 'title', 'context', 'matched', 'enriched_body'])
+            writer.writerows(records)
+        print(f"Wrote {len(records)} records to {csv_path}")
+        return
+    if interactive:
+        for num, title, ctx_name, matched, body in records:
+            print(f"\n--- Issue #{num}: {title} ({ctx_name}) matched '{matched}' ---")
+            print(body)
+            ans = input("Apply this update? [y/N/q]: ").strip().lower()
+            if ans == 'y':
+                repo.get_issue(num).edit(body=body)
+                print(f"Updated issue #{num}")
+            if ans == 'q':
+                break
+        return
+    if apply_changes:
+        for num, _, _, _, body in records:
+            repo.get_issue(num).edit(body=body)
+            print(f"Updated issue #{num}")
+        return
+    for num, title, ctx_name, matched, _ in records:
+        print(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
+
+
 def main():
     parser = argparse.ArgumentParser(description="GitHub LLM Enrichment CLI")
     sub = parser.add_subparsers(dest='command', required=True)
@@ -135,51 +188,9 @@ def main():
         sys.exit(1)
     roadmap = parse_roadmap(args.path)
     if args.command == 'issue':
-        issue = repo.get_issue(number=args.issue)
-        ctx, matched = get_context(issue.title.strip(), roadmap)
-        if not ctx:
-            print(f"No roadmap context for issue #{args.issue}", file=sys.stderr)
-            sys.exit(1)
-        enriched = call_llm(issue.title, issue.body, ctx)
-        print(enriched)
-        if args.apply:
-            issue.edit(body=enriched)
-            print(f"Issue #{args.issue} updated.")
+        enrich_one_issue(repo, args.issue, roadmap, apply_changes=args.apply)
     else:
-        issues = list(repo.get_issues(state='open'))
-        records = []
-        for issue in issues:
-            ctx, matched = get_context(issue.title.strip(), roadmap)
-            if not ctx:
-                continue
-            enriched = call_llm(issue.title, issue.body, ctx)
-            records.append((issue.number, issue.title, ctx['context'], matched, enriched))
-        if args.csv:
-            import csv
-            with open(args.csv, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(['issue','title','context','matched','enriched_body'])
-                writer.writerows(records)
-            print(f"Wrote {len(records)} records to {args.csv}")
-            return
-        if args.interactive:
-            for num, title, ctx_name, matched, body in records:
-                print(f"\n--- Issue #{num}: {title} ({ctx_name}) matched '{matched}' ---")
-                print(body)
-                ans = input("Apply this update? [y/N/q]: ").strip().lower()
-                if ans == 'y':
-                    repo.get_issue(num).edit(body=body)
-                    print(f"Updated issue #{num}")
-                if ans == 'q':
-                    break
-            return
-        if args.apply:
-            for num, _, _, _, body in records:
-                repo.get_issue(num).edit(body=body)
-                print(f"Updated issue #{num}")
-            return
-        for num, title, ctx_name, matched, _ in records:
-            print(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
+        enrich_batch(repo, roadmap, csv_path=args.csv, interactive=args.interactive, apply_changes=args.apply)
 
 if __name__ == '__main__':
     main()
