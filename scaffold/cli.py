@@ -704,37 +704,38 @@ def cleanup_issue_titles_command(repo, token, dry_run):
             issues_to_update.append((issue, cleaned_title))
 
     if not issues_to_update:
-        click.echo("No issues with titles that need cleaning up.")
+        click.secho("No issues with titles that need cleaning up.", fg="green")
         return
 
-    click.echo(f"Found {len(issues_to_update)} issues to clean up:")
+    click.secho(f"Found {len(issues_to_update)} issues to clean up:", fg="yellow")
     for issue, new_title in issues_to_update:
         click.echo(f"  - #{issue.number}: '{issue.title}' -> '{new_title}'")
     
     if dry_run:
-        click.echo("\n[dry-run] No issues were updated.")
+        click.secho("\n[dry-run] No issues were updated.", fg="cyan")
         return
 
-    if not click.confirm(f"\nProceed with updating {len(issues_to_update)} issue titles in '{repo}'?"):
+    prompt_text = click.style(f"\nProceed with updating {len(issues_to_update)} issue titles in '{repo}'?", fg="yellow", bold=True)
+    if not click.confirm(prompt_text, default=False):
         click.echo("Aborting.")
         return
 
     updated_count = 0
     failed_count = 0
     for issue, new_title in issues_to_update:
-        click.echo(f"Updating issue #{issue.number}...")
+        click.echo(f"Updating issue #{issue.number} ('{new_title}')...")
         try:
             issue.edit(title=new_title)
-            click.echo(f"  Successfully updated issue #{issue.number}.")
+            click.secho(f"  Successfully updated issue #{issue.number}.", fg="green")
             updated_count += 1
         except GithubException as e:
-            click.echo(f"  Failed to update issue #{issue.number}: {e}", err=True)
+            click.secho(f"  Failed to update issue #{issue.number}: {e}", fg="red", err=True)
             failed_count += 1
     
     click.echo("\nCleanup process finished.")
-    click.echo(f"Successfully updated: {updated_count} issues.")
+    click.secho(f"Successfully updated: {updated_count} issues.", fg="green")
     if failed_count > 0:
-        click.echo(f"Failed to update: {failed_count} issues.", err=True)
+        click.secho(f"Failed to update: {failed_count} issues.", fg="red", err=True)
 
 
 @cli.command(name='import-md', help='Import issues from a Markdown file, using AI to structure them.')
