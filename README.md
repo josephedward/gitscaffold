@@ -95,61 +95,16 @@ Here's how to use `gitscaffold` to populate a new repository with issues from a 
 ## CLI Usage
 
 
-### Import and enrich from unstructured Markdown
-When you have a free-form Markdown document, use `import-md` to extract and enrich issues.
-
-**Example Markdown roadmap** (`markdown_roadmap.md`):
-```markdown
-# Authentication Service
-Implement login, logout, and registration flows.
-
-## Database Schema
-- Define `users` table: id, email, password_hash
-- Define `sessions` table: id, user_id, expires_at
-
-# Payment Integration
-Enable subscription payments with Stripe.
-
-## Stripe Webhook
-- Listen to payment events and update user plans
-```
+Use `sync` to create and update GitHub issues from a structured roadmap file. It compares the roadmap with the repository and creates any missing milestones or issues.
 
 ```sh
-# Preview extracted and enriched issues (dry-run)
-export OPENAI_API_KEY=<your-openai-key>
-gitscaffold import-md owner/repo markdown_roadmap.md \
-  --heading-level 1 --dry-run --token $GITHUB_TOKEN
-
-# Show detailed progress logs during extraction and enrichment
-gitscaffold import-md owner/repo markdown_roadmap.md \
-  --heading-level 1 --dry-run --verbose --token $GITHUB_TOKEN --openai-key $OPENAI_API_KEY
-
-# Create enriched issues on GitHub
-gitscaffold import-md owner/repo markdown_roadmap.md \
-  --heading-level 1 --token $GITHUB_TOKEN
-```
-
-### Sync Roadmap with Repository
-Use `sync` to create and update GitHub issues from a roadmap file. It compares the roadmap with the repository and creates any missing milestones or issues.
-
-It supports two kinds of roadmaps:
-1.  **Structured Roadmap**: A file containing JSON structure. With the latest changes, it can parse this format from any file type, including `.md` files.
-2.  **Unstructured Markdown**: A free-form markdown document (e.g., `notes.md`). Use the `--ai-extract` flag to parse this with an LLM.
-
-```sh
-# Sync with a structured roadmap file (can be .md, .md, etc.)
+# Sync with a structured roadmap file (e.g., ROADMAP.md containing JSON)
 gitscaffold sync ROADMAP.md --repo owner/repo
 
 # To enrich descriptions of new issues with AI during sync
 gitscaffold sync ROADMAP.md --repo owner/repo --ai-enrich
 
-# Sync with an unstructured Markdown file, using AI to extract issues
-# Make sure OPENAI_API_KEY is set in your environment or .env file
-gitscaffold sync design_notes.md \
-  --repo owner/repo \
-  --ai-extract
-
-# Simulate any sync operation without making changes
+# Simulate the sync operation without making changes
 gitscaffold sync ROADMAP.md --repo owner/repo --dry-run
 ```
 
@@ -215,10 +170,6 @@ You can clone this repository and use the top-level `gitscaffold.py` script:
 
 ## Import from unstructured Markdown (via AI)
 ./gitscaffold.py import-md owner/repo markdown_roadmap.md --heading-level 2 --token $GITHUB_TOKEN
-
-# Show detailed progress logs during import
-./gitscaffold.py import-md owner/repo markdown_roadmap.md \
-  --heading-level 2 --dry-run --verbose --token $GITHUB_TOKEN --openai-key $OPENAI_API_KEY
 ```
 
 ### Audit Repository (cleanup, deduplicate, diff)
