@@ -267,7 +267,70 @@ def _populate_repo_from_roadmap(
                 click.secho(f"Task issue created: #{task_issue.number} {task.title.strip()}", fg="green")
 
 
+ROADMAP_TEMPLATE = """\
+# My Project Roadmap
 
+A brief description of your project.
+
+## Milestones
+
+| Milestone     | Due Date   |
+|---------------|------------|
+| v0.1 Planning | 2025-01-01 |
+| v0.2 MVP      | 2025-02-01 |
+
+## Features
+
+### Core Feature
+- **Description:** Implement the main functionality of the application.
+- **Milestone:** v0.2 MVP
+- **Labels:** core, feature
+
+**Tasks:**
+- Design the application architecture
+- Implement the core feature
+"""
+
+
+@cli.command(name="setup", help=click.style('Initialize a new project with default files', fg='cyan'))
+def setup():
+    """Creates a sample ROADMAP.md and a .env file to get started."""
+    click.secho("Setting up new project...", fg="cyan", bold=True)
+
+    # Create ROADMAP.md
+    roadmap_path = Path('ROADMAP.md')
+    if not roadmap_path.exists():
+        roadmap_path.write_text(ROADMAP_TEMPLATE)
+        click.secho(f"✓ Created sample '{roadmap_path}'", fg="green")
+    else:
+        click.secho(f"✓ '{roadmap_path}' already exists, skipping.", fg="yellow")
+
+    # Create or update .env file
+    env_path = Path('.env')
+    if not env_path.exists():
+        env_path.write_text("GITHUB_TOKEN=\nOPENAI_API_KEY=\n")
+        click.secho("✓ Created '.env' file for your secrets.", fg="green")
+        click.secho("  -> Please add your GITHUB_TOKEN and OPENAI_API_KEY to this file.", fg="white")
+    else:
+        click.secho("✓ '.env' file already exists.", fg="yellow")
+        content = env_path.read_text()
+        made_changes = False
+        if 'GITHUB_TOKEN' not in content:
+            with env_path.open('a') as f:
+                f.write("\nGITHUB_TOKEN=")
+            made_changes = True
+            click.secho("  -> Added GITHUB_TOKEN to '.env'. Please fill it in.", fg="white")
+
+        if 'OPENAI_API_KEY' not in content:
+            with env_path.open('a') as f:
+                f.write("\nOPENAI_API_KEY=")
+            made_changes = True
+            click.secho("  -> Added OPENAI_API_KEY to '.env'. Please fill it in.", fg="white")
+
+        if not made_changes:
+            click.secho("  -> Secrets seem to be configured. No changes made.", fg="green")
+
+    click.secho("\nSetup complete! You can now run `git-scaffold sync ROADMAP.md` or `python3 -m scaffold.cli sync ROADMAP.md`", fg="bright_green", bold=True)
 
 
 @cli.command(name="sync", help=click.style('Sync roadmap with a GitHub repository', fg='cyan'))
