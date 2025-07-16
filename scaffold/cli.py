@@ -137,16 +137,15 @@ def get_openai_api_key():
     """
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
-        # Unlike GitHub token, we won't prompt for OpenAI key for now,
-        # as it's usually less interactive and more of a setup step.
-        # We also won't save it back to .env from here.
-        logging.error("OPENAI_API_KEY not found in environment or .env file.")
-        click.echo(
-            "Error: OPENAI_API_KEY not found. Please set it in your environment or .env file. "
-            "Ensure the .env file is in the directory where you are running gitscaffold.",
-            err=True
-        )
-        return None
+        logging.warning("OPENAI_API_KEY not found in environment or .env file.")
+        click.echo("OpenAI API key not found in environment or .env file.")
+        api_key = click.prompt('Please enter your OpenAI API key', hide_input=True)
+        env_path = Path('.env')
+        env_path.touch(exist_ok=True)
+        set_key(str(env_path), 'OPENAI_API_KEY', api_key)
+        logging.info("OpenAI API key saved to .env file.")
+        click.echo("OpenAI API key saved to .env file. Please re-run the command.")
+        os.environ['OPENAI_API_KEY'] = api_key
     return api_key
 
 
