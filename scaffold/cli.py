@@ -106,6 +106,18 @@ def cli(ctx, interactive):
         click.echo(ctx.get_help())
 
 
+def prompt_for_github_token():
+    """
+    Prompts the user for a GitHub token.
+
+    The token is not saved and is only used for the current session.
+    """
+    token = click.prompt('Please enter your GitHub Personal Access Token (PAT)', hide_input=True)
+    # For immediate use, ensure os.environ is updated for this session:
+    os.environ['GITHUB_TOKEN'] = token
+    return token
+
+
 def get_github_token():
     """
     Retrieves the GitHub token from .env file or prompts the user if not found.
@@ -348,7 +360,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
     If the repository has issues, it performs a diff between the roadmap and the issues.
     """
     click.secho("Starting 'sync' command...", fg='cyan', bold=True)
-    actual_token = token if token else get_github_token()
+    actual_token = prompt_for_github_token()
     if not actual_token:
         click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
         sys.exit(1)
