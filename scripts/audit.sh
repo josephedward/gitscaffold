@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Gitscaffold Audit: cleanup, deduplicate, and diff in one go
+# Gitscaffold Audit: sanitize, deduplicate, and diff in one go
 set -euo pipefail
 
 echo "=== Gitscaffold Audit ==="
-echo "Steps: 1) Cleanup titles, 2) Deduplication, 3) Diff vs GitHub"
+echo "Steps: 1) Sanitize titles, 2) Deduplication, 3) Diff vs GitHub"
 echo
 
 # Get inputs
@@ -18,8 +18,8 @@ read -rp "Roadmap Markdown file (.md): " ROADMAP_FILE; echo
 [[ ! -f "$ROADMAP_FILE" ]] && { echo "Error: File not found: $ROADMAP_FILE" >&2; exit 1; }
 
 echo
-echo "--- Step 1: Cleanup issue titles ---"
-gitscaffold cleanup-issue-titles --repo "$REPO" --token "$TOKEN"
+echo "--- Step 1: Sanitize issue titles ---"
+gitscaffold sanitize --repo "$REPO" --token "$TOKEN"
 echo
 echo "--- Step 2: Deduplicate issues ---"
 gitscaffold deduplicate --repo "$REPO" --token "$TOKEN"

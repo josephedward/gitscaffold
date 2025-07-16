@@ -64,8 +64,8 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
   - Encapsulate PyGitHub calls (`scaffold/github.py::GitHubClient`)
   - Tests:
     - Mock API: client init, create_milestone, create_issue, find logic, error handling
-- Implement `create` command
-  - Process roadmap file and create milestones/issues (`scaffold/cli.py::create`)
+- Implement `sync` command
+  - Process roadmap file and create milestones/issues (`scaffold/cli.py::sync`)
   - Tests:
     - Dry run and actual run
     - Verify creation of milestones/issues
@@ -92,7 +92,7 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
   - Tests: mock LLM API, structure, config
 - Implement issue description enrichment (`scaffold/ai.py::enrich_issue_description`)
   - Tests: mock LLM API, context variations
-- Integrate AI extraction/enrichment into `create` command (`scaffold/cli.py::create`)
+- Integrate AI extraction/enrichment into `sync` command (`scaffold/cli.py::sync`)
   - Tests: mock LLM & GitHub, verify processing
 - Implement `enrich` command (`gitscaffold.py::enrich`, `scripts/enrich.py`)
   - Tests: mock LLM/GitHub, batch, interactive, apply changes
