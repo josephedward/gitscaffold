@@ -22,6 +22,7 @@ import time
 import difflib
 import openai
 from collections import defaultdict
+import csv
 
 from rich.console import Console
 from rich.table import Table
@@ -1067,6 +1068,295 @@ def deduplicate_command(repo, token, dry_run, yes):
     if failed_count > 0:
         click.secho(f"Failed to close: {failed_count} issues.", fg="red", err=True)
 
+
+# --- Enrichment Commands (from scripts/enrich.py) ---
+
+def _enrich_parse_roadmap(path="ROADMAP.md"):
+    """
+    Parse ROADMAP.md and return a mapping of item title -> context dict.
+    Captures goal, tasks, deliverables under sections/phases.
+    """
+    data = {}
+    current = None
+    section = None
+    phase_re = re.compile(r'^\s*##\s*Phase\s*(\d+):\s*(.+)$')
+    h3_re = re.compile(r'^\s*###\s*(.+)$')
+    goal_re = re.compile(r'^\s*\*\*Goal\*\*')
+    tasks_re = re.compile(r'^\s*\*\*Tasks\*\*')
+    deliv_re = re.compile(r'^\s*\*\*(?:Milestones\s*&\s*)?Deliverables\*\*')
+    try:
+        with open(path, encoding='utf-8') as f:
+            for line in f:
+                t = line.rstrip()
+                m = phase_re.match(t)
+                if m:
+                    ctx = f"Phase {m.group(1)}: {m.group(2).strip()}"
+                    data[ctx] = {'goal': [], 'tasks': [], 'deliverables': []}
+                    current, section = ctx, None
+                    continue
+                m3 = h3_re.match(t)
+                if m3:
+                    ctx = m3.group(1).strip()
+                    data[ctx] = {'goal': [], 'tasks': [], 'deliverables': []}
+                    current, section = ctx, 'tasks'
+                    continue
+                if current is None:
+                    continue
+                if goal_re.match(t): section = 'goal'; continue
+                if tasks_re.match(t): section = 'tasks'; continue
+                if deliv_re.match(t): section = 'deliverables'; continue
+                if section in ('goal', 'deliverables') and t.strip().startswith('- '):
+                    data[current][section].append(t.strip()[2:].strip()); continue
+                if section == 'tasks':
+                    mnum = re.match(r'\s*\d+\.\s+(.*)$', t)
+                    if mnum:
+                        data[current]['tasks'].append(mnum.group(1).strip()); continue
+                    if t.strip().startswith('- '):
+                        data[current]['tasks'].append(t.strip()[2:].strip()); continue
+    except FileNotFoundError:
+        click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
+        sys.exit(1)
+    # Flatten mapping for lookups
+    mapping = {}
+    for ctx, obj in data.items():
+        for key in ('goal', 'tasks', 'deliverables'):
+            for itm in obj[key]:
+                mapping[itm] = {'context': ctx, **obj}
+    return mapping
+
+def _enrich_get_context(title, roadmap):
+    if title in roadmap:
+        return roadmap[title], title
+    candidates = difflib.get_close_matches(title, roadmap.keys(), n=1, cutoff=0.5)
+    if candidates:
+        m = candidates[0]
+        return roadmap[m], m
+    return None, None
+
+def _enrich_call_llm(title, existing_body, ctx):
+    api_key = get_openai_api_key() # Re-use existing helper
+    if not api_key:
+        sys.exit(1) # get_openai_api_key handles messaging
+    openai.api_key = api_key
+    system = {"role": "system", "content": "You are an expert software engineer and technical writer."}
+    parts = [f"Title: {title}", f"Context: {ctx['context']}"]
+    if ctx.get('goal'):
+        parts.append("Goal:\n" + "\n".join(f"- {g}" for g in ctx['goal']))
+    if ctx.get('tasks'):
+        parts.append("Tasks:\n" + "\n".join(f"- {t}" for t in ctx['tasks']))
+    if ctx.get('deliverables'):
+        parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
+    parts.append(f"Existing description:\n{existing_body or ''}")
+    parts.append("Generate a detailed GitHub issue description with background, scope, acceptance criteria, implementation outline, code snippets, and a checklist.")
+    response = openai.chat.completions.create(
+        model=os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo'),
+        messages=[system, {"role": "user", "content": "\n\n".join(parts)}],
+        temperature=float(os.getenv('OPENAI_TEMPERATURE', '0.7')),
+        max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '800'))
+    )
+    return response.choices[0].message.content.strip()
+
+@cli.group(name='enrich', help=click.style('Enrich GitHub issues using roadmap context via LLM', fg='cyan'))
+def enrich():
+    """General-purpose CLI for GitHub issue enrichment via LLM using roadmap context."""
+    pass
+
+@enrich.command('issue', help='Enrich a single issue')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--issue', 'issue_number', type=int, required=True, help='Issue number')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply the update')
+def enrich_issue_command(repo, issue_number, roadmap_path, apply_changes):
+    """Enrich a single issue."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issue = repo_obj.get_issue(number=issue_number)
+    ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+    if not ctx:
+        click.secho(f"No roadmap context for issue #{issue_number}", fg="red", err=True)
+        sys.exit(1)
+    enriched = _enrich_call_llm(issue.title, issue.body, ctx)
+    click.echo(enriched)
+    if apply_changes:
+        issue.edit(body=enriched)
+        click.secho(f"Issue #{issue_number} updated.", fg="green")
+
+
+@enrich.command('batch', help='Batch enrich issues')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--csv', 'csv_path', help='Output CSV file')
+@click.option('--interactive', is_flag=True, help='Interactive approval')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply all updates')
+def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_changes):
+    """Batch enrich issues."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issues = list(repo_obj.get_issues(state='open'))
+    records = []
+    for issue in issues:
+        ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+        if not ctx:
+            continue
+        enriched = _enrich_call_llm(issue.title, issue.body, ctx)
+        records.append((issue.number, issue.title, ctx['context'], matched, enriched))
+    
+    if csv_path:
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['issue', 'title', 'context', 'matched', 'enriched_body'])
+            writer.writerows(records)
+        click.secho(f"Wrote {len(records)} records to {csv_path}", fg="green")
+        return
+    
+    if interactive:
+        for num, title, ctx_name, matched, body in records:
+            click.secho(f"\n--- Issue #{num}: {title} ({ctx_name}) matched '{matched}' ---", bold=True)
+            click.echo(body)
+            ans = click.prompt("Apply this update? [y/N/q]", default='n', show_default=False).strip().lower()
+            if ans == 'y':
+                repo_obj.get_issue(num).edit(body=body)
+                click.secho(f"Updated issue #{num}", fg="green")
+            if ans == 'q':
+                break
+        return
+
+    if apply_changes:
+        for num, _, _, _, body in records:
+            repo_obj.get_issue(num).edit(body=body)
+            click.secho(f"Updated issue #{num}", fg="green")
+        return
+        
+    for num, title, ctx_name, matched, _ in records:
+        click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
+
+
+@cli.command(name='import-md', help=click.style('Import issues from an unstructured Markdown file via AI', fg='cyan'))
+@click.argument('repo', metavar='REPO')
+@click.argument('markdown_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')
+@click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
+@click.option('--openai-key', help='OpenAI API key (overrides OPENAI_API_KEY env var)')
+@click.option('--model', default=os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo'), show_default=True,
+              help='OpenAI model to use')
+@click.option('--temperature', type=float, default=float(os.getenv('OPENAI_TEMPERATURE', '0.7')), show_default=True,
+              help='OpenAI temperature')
+@click.option('--max-tokens', 'max_tokens', type=int, default=int(os.getenv('OPENAI_MAX_TOKENS', '800')), show_default=True,
+              help='OpenAI max tokens')
+@click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
+@click.option('--heading', type=int, default=1, show_default=True,
+              help='Markdown heading level to split issues (1 for "#", 2 for "##")')
+def import_md(repo, markdown_file, token, openai_key, model, temperature, max_tokens, dry_run, verbose, heading):
+    """Import issues from an unstructured markdown file using AI.
+
+    This script parses a Markdown file, treating sections under headings of a specified
+    level as potential GitHub issues. It uses an AI model to generate a title and a
+    well-structured description for each issue. These are then created in the target
+    GitHub repository.
+
+    This is useful for quickly converting documents like meeting notes or brainstorming
+    sessions into actionable GitHub issues.
+    """
+    if verbose:
+        click.secho(f"Authenticating to GitHub repository '{repo}'", fg="cyan", err=True)
+    # GitHub authentication
+    token = token or get_github_token()
+    if not token:
+        click.secho('Error: GitHub token required. Set GITHUB_TOKEN or pass --token.', fg="red", err=True)
+        sys.exit(1)
+    try:
+        gh = Github(token)
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    # OpenAI authentication
+    openai_key = openai_key or get_openai_api_key()
+    if not openai_key:
+        click.secho('Error: OpenAI API key required. Set OPENAI_API_KEY or pass --openai-key.', fg="red", err=True)
+        sys.exit(1)
+    openai.api_key = openai_key
+    if verbose:
+        click.secho(f"Reading markdown file: {markdown_file}", fg="cyan", err=True)
+
+    def call_llm(title: str, raw: str) -> str:
+        system = {"role": "system", "content": "You are an expert software engineer and technical writer specializing in GitHub issues."}
+        user_content = (
+            f"Title: {title}\n\n"
+            f"Raw content:\n{raw or ''}\n\n"
+            "Generate a well-structured GitHub issue description in markdown, including background, summary, acceptance criteria (as a checklist), and implementation notes."
+        )
+        messages = [system, {"role": "user", "content": user_content}]
+        resp = openai.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        return resp.choices[0].message.content.strip()
+
+    # Read and parse markdown into (title, body) pairs
+    with open(markdown_file, encoding='utf-8') as f:
+        lines = f.readlines()
+    pattern = re.compile(r'^\s*{}(?!\#)\s*(.*)'.format('#' * heading))
+    issues = []
+    current_title = None
+    current_body = []
+    for line in lines:
+        m = pattern.match(line)
+        if m:
+            if current_title:
+                issues.append((current_title, ''.join(current_body).strip()))
+            current_title = m.group(1).strip()
+            current_body = []
+        else:
+            if current_title:
+                current_body.append(line)
+    if current_title:
+        issues.append((current_title, ''.join(current_body).strip()))
+
+    if not issues:
+        click.secho('No headings found; nothing to import.', fg="yellow", err=True)
+        sys.exit(1)
+    if verbose:
+        click.secho(f"Found {len(issues)} headings at level {heading}", fg="cyan", err=True)
+
+    # Create and enrich issues
+    for idx, (title, raw_body) in enumerate(issues, start=1):
+        if verbose:
+            click.secho(f"[{idx}/{len(issues)}] Processing issue: {title}", fg="cyan", err=True)
+        # Enrich issue body via OpenAI
+        if verbose:
+            click.secho("  Calling OpenAI to generate enriched description...", fg="cyan", err=True)
+        try:
+            enriched = call_llm(title, raw_body)
+        except Exception as e:
+            click.secho(f"Error calling OpenAI for '{title}': {e}", fg="red", err=True)
+            enriched = raw_body
+        if dry_run:
+            click.secho(f"[dry-run] Issue: {title}\n{enriched}\n", fg="blue")
+            continue
+        try:
+            issue = repo_obj.create_issue(title=title, body=enriched)
+            click.secho(f"Created issue #{issue.number}: {title}", fg="green")
+        except GithubException as e:
+            click.secho(f"Error creating '{title}': {e}", fg="red", err=True)
 
 
 @cli.command(name='start-demo', help=click.style('Run the Streamlit demo', fg='cyan'))
