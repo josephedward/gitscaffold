@@ -133,13 +133,18 @@ gitscaffold sanitize --repo owner/repo --token $GITHUB_TOKEN
 
 ### Show Next Action Items
 
-Use `next` to view all open issues from the earliest active milestone in your repository. If no active milestones (or issues) are found on GitHub, `next` will fall back to your local roadmap tasks (from `ROADMAP.md` by default).
+Use `next` to view open issues from the earliest active milestone in your repository.
+If there are no active milestones but open issues exist on GitHub, `next` will pick one at random.
+Only if there are no open issues will it fall back to your local roadmap tasks (from `ROADMAP.md` by default).
 
 ```sh
-# List all open issues for the next milestone:
+# List open issues for the next milestone:
 gitscaffold next --repo owner/repo --token $GITHUB_TOKEN
 
-# Or, fallback to local roadmap tasks if no milestones exist:
+# If no milestones, pick a random open issue:
+gitscaffold next --repo owner/repo --token $GITHUB_TOKEN
+
+# If no open issues at all, fall back to local roadmap tasks:
 gitscaffold next --repo owner/repo --token $GITHUB_TOKEN --roadmap-file ROADMAP.md
 ```
 
