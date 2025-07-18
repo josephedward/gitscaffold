@@ -627,7 +627,9 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
-def diff(roadmap_file, repo, token):
+@click.option('--ai', is_flag=True, help='Use AI to extract issues from an unstructured roadmap file.')
+@click.option('--openai-key', help='OpenAI API key (for --ai mode).')
+def diff(roadmap_file, repo, token, ai, openai_key):
     """Compare a local roadmap file with GitHub issues and list differences."""
     click.secho("\n=== Diff Roadmap vs GitHub Issues ===", fg="bright_blue", bold=True)
     actual_token = token if token else get_github_token()
@@ -647,17 +649,38 @@ def diff(roadmap_file, repo, token):
     else:
         click.echo(f"Using repository provided via --repo flag: {repo}")
 
-    try:
-        raw = parse_roadmap(roadmap_file)
-        validated = validate_roadmap(raw)
-    except Exception as e:
-        click.echo(f"Error: Failed to parse roadmap file '{roadmap_file}': {e}", err=True)
-        sys.exit(1)
-    
-    roadmap_titles = {feat.title for feat in validated.features}
-    for feat in validated.features:
-        for task in feat.tasks:
-            roadmap_titles.add(task.title)
+    roadmap_titles = set()
+    if ai:
+        click.secho("Using AI to extract issues from unstructured roadmap...", fg="cyan")
+        actual_openai_key = openai_key or get_openai_api_key()
+        if not actual_openai_key:
+            click.secho("Error: OpenAI API key is required for AI mode.", fg="red", err=True)
+            sys.exit(1)
+        try:
+            issues = extract_issues_from_markdown(
+                md_file=roadmap_file,
+                api_key=actual_openai_key
+            )
+            roadmap_titles = {issue['title'] for issue in issues}
+        except Exception as e:
+            click.secho(f"Error during AI extraction: {e}", fg="red", err=True)
+            sys.exit(1)
+    else:
+        try:
+            raw = parse_roadmap(roadmap_file)
+            validated = validate_roadmap(raw)
+            if not validated.features and not validated.milestones:
+                click.secho("Warning: Roadmap appears to be empty or unstructured.", fg="yellow")
+                click.secho("Hint: If this is an unstructured markdown document, try running with the --ai flag.", fg="yellow")
+
+            roadmap_titles = {feat.title for feat in validated.features}
+            for feat in validated.features:
+                for task in feat.tasks:
+                    roadmap_titles.add(task.title)
+        except Exception as e:
+            click.echo(f"Error: Failed to parse structured roadmap file '{roadmap_file}': {e}", err=True)
+            click.secho("Hint: If this is an unstructured markdown file, try running with the --ai flag.", fg="yellow")
+            sys.exit(1)
 
     try:
         gh_client = GitHubClient(actual_token, repo)
