@@ -745,15 +745,35 @@ def next_command(repo, token, roadmap_file):
     milestone, issues = gh_client.get_next_action_items()
     
     if not milestone:
-        click.secho("No active milestones with open issues found. Falling back to local roadmap tasks...", fg='yellow')
-        # Parse local roadmap and pick a random task
+        click.secho("No active milestones with open issues found on GitHub.", fg='yellow')
+        # If there are any open issues, pick one at random
+        try:
+            open_issues = list(gh_client.repo.get_issues(state='open'))
+        except Exception as e:
+            click.secho(f"Error fetching open issues from GitHub: {e}", fg='red', err=True)
+            open_issues = []
+        if open_issues:
+            issue = random.choice(open_issues)
+            assignee_str = ""
+            if issue.assignees:
+                assignees_str = ", ".join([f"@{a.login}" for a in issue.assignees])
+                assignee_str = f" (assigned to {assignees_str})"
+            click.secho(
+                f"Next GitHub issue: #{issue.number}: {issue.title}{assignee_str}",
+                fg='green', bold=True
+            )
+            return
+        # Fallback to local roadmap if no open issues
+        click.secho(
+            "No open GitHub issues available. Falling back to local roadmap tasks...",
+            fg='yellow'
+        )
         try:
             raw = parse_roadmap(roadmap_file)
             validated = validate_roadmap(raw)
         except Exception as e:
             click.secho(f"Error parsing local roadmap '{roadmap_file}': {e}", fg='red', err=True)
             return
-        # Collect all tasks
         tasks = []
         for feat in validated.features:
             for task in feat.tasks:
@@ -761,9 +781,11 @@ def next_command(repo, token, roadmap_file):
         if not tasks:
             click.secho("No tasks found in local roadmap.", fg='yellow')
             return
-        # Choose one task at random
         feat_title, next_task = random.choice(tasks)
-        click.secho(f"Next local task: {next_task.title} (feature: {feat_title})", fg='green', bold=True)
+        click.secho(
+            f"Next local task: {next_task.title} (feature: {feat_title})",
+            fg='green', bold=True
+        )
         return
 
     due_date_str = f"(due {milestone.due_on.strftime('%Y-%m-%d')})" if milestone.due_on else "(no due date)"
