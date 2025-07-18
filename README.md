@@ -175,11 +175,11 @@ cd gitscaffold
 pip install -e .
 
 # Now any command is available via `gitscaffold`:
-gitscaffold setup owner/repo --phase phase-1 --create-project
+gitscaffold setup
 gitscaffold sync ROADMAP.md --repo owner/repo
-gitscaffold import-md owner/repo markdown_roadmap.md --heading-level 2
-gitscaffold delete-closed owner/repo
-gitscaffold enrich owner/repo --batch --path ROADMAP.md --apply
+gitscaffold import-md markdown_roadmap.md --repo owner/repo
+gitscaffold delete-closed --repo owner/repo
+gitscaffold enrich batch --repo owner/repo --path ROADMAP.md --apply
 ```
 
 ### Audit Repository (cleanup, deduplicate, diff)
