@@ -347,7 +347,7 @@ def setup():
 
 
 @cli.command(name="sync", help=click.style('Sync roadmap with a GitHub repository', fg='cyan'))
-@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
+@click.argument('roadmap_file', type=click.Path(), metavar='ROADMAP_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--dry-run', is_flag=True, help='Simulate and show what would be created, without making changes.')
@@ -358,8 +358,15 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
     """Sync a Markdown roadmap with a GitHub repository.
 
     If the repository is empty, it populates it with issues from the roadmap.
-    If the repository has issues, it performs a diff between the roadmap and the issues.
+    if the repository has issues, it performs a diff between the roadmap and the issues.
     """
+    if not Path(roadmap_file).exists():
+        click.secho(f"Error: Roadmap file not found at '{roadmap_file}'", fg="red", err=True)
+        # A little helpful message if they use the old path
+        if roadmap_file == 'docs/roadmap.md' and Path('ROADMAP.md').exists():
+            click.secho("Hint: Did you mean to use 'ROADMAP.md'?", fg="yellow")
+        sys.exit(1)
+
     click.secho("Starting 'sync' command...", fg='cyan', bold=True)
     actual_token = prompt_for_github_token()
     if not actual_token:
