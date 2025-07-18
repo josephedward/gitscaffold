@@ -133,10 +133,14 @@ gitscaffold sanitize --repo owner/repo --token $GITHUB_TOKEN
 
 ### Show Next Action Items
 
-Use `next` to view all open issues from the earliest active milestone in your repository.
+Use `next` to view all open issues from the earliest active milestone in your repository. If no active milestones (or issues) are found on GitHub, `next` will fall back to your local roadmap tasks (from `ROADMAP.md` by default).
 
 ```sh
+# List all open issues for the next milestone:
 gitscaffold next --repo owner/repo --token $GITHUB_TOKEN
+
+# Or, fallback to local roadmap tasks if no milestones exist:
+gitscaffold next --repo owner/repo --token $GITHUB_TOKEN --roadmap-file ROADMAP.md
 ```
 
 ### Show Next Task for Current Phase
@@ -156,20 +160,20 @@ gitscaffold diff ROADMAP.md --repo owner/repo --token $GITHUB_TOKEN
 ```
 
 ### From the source checkout
-You can clone this repository and use the top-level `gitscaffold.py` script:
-```sh
-## Setup GitHub labels, milestones, and project board
-./gitscaffold.py setup owner/repo --phase phase-1 --create-project
+Clone this repository, install it in editable mode, and use the `gitscaffold` CLI:
 
-## Delete all closed issues in a repository
-./gitscaffold.py delete-closed owner/repo
+```bash
+# Clone and install
+git clone https://github.com/josephedward/gitscaffold.git
+cd gitscaffold
+pip install -e .
 
-## Enrich a single issue or batch
-./gitscaffold.py enrich owner/repo --issue 123 --path ROADMAP.md --apply
-./gitscaffold.py enrich owner/repo --batch --path ROADMAP.md --csv out.csv --interactive
-
-## Import from unstructured Markdown (via AI)
-./gitscaffold.py import-md owner/repo markdown_roadmap.md --heading-level 2 --token $GITHUB_TOKEN
+# Now any command is available via `gitscaffold`:
+gitscaffold setup owner/repo --phase phase-1 --create-project
+gitscaffold sync ROADMAP.md --repo owner/repo
+gitscaffold import-md owner/repo markdown_roadmap.md --heading-level 2
+gitscaffold delete-closed owner/repo
+gitscaffold enrich owner/repo --batch --path ROADMAP.md --apply
 ```
 
 ### Audit Repository (cleanup, deduplicate, diff)

@@ -696,7 +696,9 @@ def diff(roadmap_file, repo, token):
 @cli.command(name="next", help=click.style('Show next action items', fg='cyan'))
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', help='GitHub API token (prompts if not set).')
-def next_command(repo, token):
+@click.option('--roadmap-file', '-f', 'roadmap_file', type=click.Path(exists=True), default='ROADMAP.md', show_default=True,
+              help='Local roadmap file to use if no active milestones found on GitHub.')
+def next_command(repo, token, roadmap_file):
     """Shows open issues from the earliest active milestone."""
     # Determine GitHub token: use --token or prompt via get_github_token()
     actual_token = token if token else get_github_token()
@@ -720,7 +722,25 @@ def next_command(repo, token):
     milestone, issues = gh_client.get_next_action_items()
     
     if not milestone:
-        click.echo("No active milestones with open issues found.")
+        click.secho("No active milestones with open issues found. Falling back to local roadmap tasks...", fg='yellow')
+        # Parse local roadmap and pick a random task
+        try:
+            raw = parse_roadmap(roadmap_file)
+            validated = validate_roadmap(raw)
+        except Exception as e:
+            click.secho(f"Error parsing local roadmap '{roadmap_file}': {e}", fg='red', err=True)
+            return
+        # Collect all tasks
+        tasks = []
+        for feat in validated.features:
+            for task in feat.tasks:
+                tasks.append((feat.title, task))
+        if not tasks:
+            click.secho("No tasks found in local roadmap.", fg='yellow')
+            return
+        # Choose one task at random
+        feat_title, next_task = random.choice(tasks)
+        click.secho(f"Next local task: {next_task.title} (feature: {feat_title})", fg='green', bold=True)
         return
 
     due_date_str = f"(due {milestone.due_on.strftime('%Y-%m-%d')})" if milestone.due_on else "(no due date)"
