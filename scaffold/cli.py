@@ -1191,7 +1191,7 @@ def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_change
 
 
 @cli.command(name='import-md', help=click.style('Import issues from an unstructured Markdown file via AI', fg='cyan'))
-@click.argument('markdown_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')
+@click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
 @click.option('--openai-key', help='OpenAI API key (overrides OPENAI_API_KEY env var)')
@@ -1209,6 +1209,10 @@ def import_md(markdown_file, repo, token, openai_key, model, temperature, dry_ru
     GitHub issues from the text. This is useful for quickly converting documents like
     meeting notes or brainstorming sessions into actionable GitHub issues.
     """
+    if not Path(markdown_file).exists():
+        click.secho(f"Error: The file '{markdown_file}' does not exist.", fg="red", err=True)
+        sys.exit(1)
+
     if verbose:
         click.secho("Starting 'import-md' command...", fg="cyan", bold=True)
     
