@@ -131,6 +131,19 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
 - Write developer documentation
   - Tests: onboarding by new developer
 
+### GH-CLI Backend Integration
+- **Description:** Allow using the local `gh` CLI for GitHub operations as an alternative to the REST API, to simplify authentication and avoid managing API tokens.
+- **Milestone:** v0.4 Advanced Features & Usability
+- **Labels:** enhancement, github, cli
+
+**Tasks:**
+- Add a `--use-gh-cli` flag to commands that interact with GitHub (e.g., `sync`, `import-md`).
+- Implement a `GitHubCLIClient` that wraps the `gh` command-line tool using `subprocess`.
+- Create a client factory to transparently switch between the PyGitHub API client and the new `gh` CLI client.
+- Integrate the client factory into all relevant CLI commands.
+- Document the new `gh` CLI authentication method and `--use-gh-cli` flag for end-users.
+  - Tests: Verify documentation is clear and provides examples for `gh auth login` and command usage.
+
 ### CI/CD and Release Management
 - **Description:** Automate testing, building, and publishing.
 - **Milestone:** v1.0 Stable Release
