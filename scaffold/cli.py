@@ -194,6 +194,29 @@ def get_repo_from_git_config():
         return None
 
 
+def _sanitize_repo_string(repo_string: str) -> str:
+    """Extracts 'owner/repo' from a potential GitHub URL."""
+    if not repo_string:
+        return None
+    
+    repo_string = repo_string.strip()
+
+    # Simple case: it's already owner/repo
+    if re.fullmatch(r'[^/\s]+/[^/\s]+', repo_string):
+        return repo_string
+        
+    # Try to extract from URL-like strings
+    match = re.search(r'github\.com[/:]([^/]+\/[^/]+)', repo_string)
+    if match:
+        repo = match.group(1)
+        if repo.endswith('.git'):
+            return repo[:-4]
+        return repo
+        
+    # Fallback for other cases, return as is.
+    return repo_string
+
+
 def _populate_repo_from_roadmap(
     gh_client: GitHubClient,
     roadmap_data,
@@ -384,6 +407,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
     else:
         click.secho(f"Using repository provided via --repo flag: {repo}", fg='magenta')
 
+    repo = _sanitize_repo_string(repo)
     path = Path(roadmap_file)
     # Load and validate roadmap data (supports Markdown, YAML, or JSON)
     try:
@@ -656,6 +680,7 @@ def diff(roadmap_file, repo, token, ai, openai_key):
     else:
         click.echo(f"Using repository provided via --repo flag: {repo}")
 
+    repo = _sanitize_repo_string(repo)
     roadmap_titles = set()
     if ai:
         click.secho("Using AI to extract issues from unstructured roadmap...", fg="cyan")
@@ -745,6 +770,7 @@ def next_command(repo, token, roadmap_file):
     else:
         click.echo(f"Using repository provided via --repo flag: {repo}")
 
+    repo = _sanitize_repo_string(repo)
     gh_client = GitHubClient(actual_token, repo)
     
     click.echo(f"Finding next action items in repository '{repo}'...")
@@ -832,6 +858,7 @@ def delete_closed_issues_command(repo, token, dry_run, yes):
             return
         click.echo(f"Using repository from git config: {repo}")
 
+    repo = _sanitize_repo_string(repo)
     gh_client = GitHubClient(actual_token, repo)
     click.echo(f"Fetching closed issues from '{repo}'...")
     
@@ -898,6 +925,7 @@ def sanitize_command(repo, token, dry_run, yes):
     else:
         click.echo(f"Using repository provided via --repo flag: {repo}")
 
+    repo = _sanitize_repo_string(repo)
     try:
         gh_client = GitHubClient(actual_token, repo)
         click.echo(f"Successfully connected to repository '{repo}'.")
@@ -982,6 +1010,7 @@ def deduplicate_command(repo, token, dry_run, yes):
     else:
         click.secho(f"Using repository flag: {repo}", fg="magenta")
 
+    repo = _sanitize_repo_string(repo)
     try:
         gh_client = GitHubClient(actual_token, repo)
         click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
@@ -1142,6 +1171,7 @@ def enrich_issue_command(repo, issue_number, roadmap_path, apply_changes):
     """Enrich a single issue."""
     token = get_github_token()
     if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
     gh = Github(token)
     try:
         repo_obj = gh.get_repo(repo)
@@ -1172,6 +1202,7 @@ def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_change
     """Batch enrich issues."""
     token = get_github_token()
     if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
     gh = Github(token)
     try:
         repo_obj = gh.get_repo(repo)
@@ -1259,6 +1290,7 @@ def import_md(repo, markdown_file, token, openai_key, model, temperature, dry_ru
     if verbose:
         click.secho(f"Using repository: {repo}", fg='magenta')
 
+    repo = _sanitize_repo_string(repo)
     try:
         gh_client = GitHubClient(actual_token, repo)
         if verbose:
