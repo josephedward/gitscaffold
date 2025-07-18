@@ -29,8 +29,6 @@ gitscaffold = "scaffold.cli:cli"
 where = ["."]
 namespaces = false
 include = ["scaffold", "scaffold.*", "scripts", "scripts.*"]
-# You could also add: exclude = ["misc*"] if 'misc' should never be part of the package.
-# For now, explicitly including 'scaffold' should be sufficient.
 
 [tool.setuptools.dynamic]
 version = {attr = "scaffold.__version__"}
