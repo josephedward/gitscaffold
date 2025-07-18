@@ -368,7 +368,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
         sys.exit(1)
 
     click.secho("Starting 'sync' command...", fg='cyan', bold=True)
-    actual_token = prompt_for_github_token()
+    actual_token = token or get_github_token()
     if not actual_token:
         click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
         sys.exit(1)
