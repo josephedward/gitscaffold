@@ -1330,7 +1330,7 @@ def import_md(repo, markdown_file, token, openai_key, model, temperature, dry_ru
         click.secho("\n[dry-run] No issues will be created. The following issues would be created:", fg="blue")
         for issue in issues:
             click.secho(f"\n--- [dry-run] Issue: {issue['title']} ---", fg="blue", bold=True)
-            click.echo(issue['body'])
+            click.echo(issue.get('description', ''))
         return
 
     if not yes:
@@ -1346,7 +1346,7 @@ def import_md(repo, markdown_file, token, openai_key, model, temperature, dry_ru
     failed_count = 0
     for issue in issues:
         title = issue['title']
-        body = issue['body']
+        body = issue.get('description', '')
         if verbose:
             click.secho(f"Creating issue: '{title}'", fg="yellow")
         try:
