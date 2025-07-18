@@ -45,13 +45,13 @@ class GitHubClient:
         return self.repo.create_milestone(**params)
 
     def _find_issue(self, title: str):
-        """Return an existing issue by title, or None if not found."""
-        logging.info(f"Searching for issue: '{title}'")
+        """Return an existing open issue by title, or None if not found."""
+        logging.info(f"Searching for open issue: '{title}'")
         try:
-            # search through all issues (open and closed)
-            for issue in self.repo.get_issues(state='all'):
+            # search through open issues only
+            for issue in self.repo.get_issues(state='open'):
                 if issue.title.strip() == title:
-                    logging.info(f"Found existing issue: '{title}'")
+                    logging.info(f"Found existing open issue: '{title}'")
                     return issue
         except GithubException as e:
             logging.error(f"Error searching for issue '{title}': {e}")
@@ -98,11 +98,11 @@ class GitHubClient:
             return []
 
     def get_all_issue_titles(self) -> set[str]:
-        """Fetch all issue titles in the repository."""
-        logging.info("Fetching all issue titles from repository.")
+        """Fetch all open issue titles in the repository."""
+        logging.info("Fetching all open issue titles from repository.")
         titles = set()
         try:
-            for issue in self.repo.get_issues(state='all'):
+            for issue in self.repo.get_issues(state='open'):
                 titles.add(issue.title.strip())
         except GithubException as e:
             # Consider more robust error handling or logging if needed
