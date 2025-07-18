@@ -328,7 +328,7 @@ A brief description of your project.
 """
 
 
-@cli.command(name="setup", help=click.style('Initialize a new project with default files', fg='cyan'))
+@cli.command(name="setup", help='Initialize a new project with default files')
 def setup():
     """Creates a sample ROADMAP.md and a .env file to get started."""
     click.secho("Setting up new project...", fg="cyan", bold=True)
@@ -369,7 +369,7 @@ def setup():
     click.secho("\nSetup complete! You can now run `git-scaffold sync ROADMAP.md` or `python3 -m scaffold.cli sync ROADMAP.md`", fg="bright_green", bold=True)
 
 
-@cli.command(name="sync", help=click.style('Sync roadmap with a GitHub repository', fg='cyan'))
+@cli.command(name="sync", help='Sync roadmap with a GitHub repository')
 @click.argument('roadmap_file', type=click.Path(), metavar='ROADMAP_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
@@ -654,7 +654,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
 
 
 
-@cli.command(name='diff', help=click.style('Diff local roadmap vs GitHub issues', fg='cyan'))
+@cli.command(name='diff', help='Diff local roadmap vs GitHub issues')
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
@@ -748,7 +748,7 @@ def diff(roadmap_file, repo, token, ai, openai_key):
         click.secho("✓ No extra issues on GitHub.", fg="green")
 
 
-@cli.command(name='next', help=click.style('Show next action items', fg='cyan'))
+@cli.command(name='next', help='Show next action items')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', help='GitHub API token (prompts if not set).')
 @click.option('--roadmap-file', '-f', 'roadmap_file', type=click.Path(exists=True), default='ROADMAP.md', show_default=True,
@@ -839,7 +839,7 @@ def next_command(repo, token, roadmap_file):
     click.echo("\nCommand finished.")
 
 
-@cli.command(name='delete-closed', help=click.style('Delete all closed issues', fg='cyan'))
+@cli.command(name='delete-closed', help='Delete all closed issues')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--dry-run', is_flag=True, help='List issues that would be deleted, without actually deleting them.')
@@ -900,7 +900,7 @@ def delete_closed_issues_command(repo, token, dry_run, yes):
         click.echo(f"Failed to delete: {failed_count} issues. Check logs for errors.", err=True)
 
 
-@cli.command(name='sanitize', help=click.style('Clean up issue titles', fg='cyan'))
+@cli.command(name='sanitize', help='Clean up issue titles')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--dry-run', is_flag=True, help='List issues that would be changed, without actually changing them.')
@@ -986,7 +986,7 @@ def sanitize_command(repo, token, dry_run, yes):
         click.secho(f"Failed to update: {failed_count} issues", fg="red", err=True)
 
 
-@cli.command(name='deduplicate', help=click.style('Close duplicate open issues', fg='cyan'))
+@cli.command(name='deduplicate', help='Close duplicate open issues')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', help='GitHub API token (prompts if not set).')
 @click.option('--dry-run', is_flag=True, help='List duplicate issues that would be closed, without actually closing them.')
@@ -1157,7 +1157,7 @@ def _enrich_call_llm(title, existing_body, ctx):
     )
     return response.choices[0].message.content.strip()
 
-@cli.group(name='enrich', help=click.style('Enrich GitHub issues using roadmap context via LLM', fg='cyan'))
+@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
 def enrich():
     """General-purpose CLI for GitHub issue enrichment via LLM using roadmap context."""
     pass
@@ -1250,7 +1250,7 @@ def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_change
         click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
 
 
-@cli.command(name='import-md', help=click.style('Import issues from an unstructured Markdown file via AI', fg='cyan'))
+@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
@@ -1363,7 +1363,7 @@ def import_md(repo, markdown_file, token, openai_key, model, temperature, dry_ru
         click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='start-demo', help=click.style('Run the Streamlit demo', fg='cyan'))
+@cli.command(name='start-demo', help='Run the Streamlit demo')
 def start_demo():
     """Starts the Streamlit demo app if it exists."""
     demo_app_path = Path('demo/app.py')
@@ -1385,7 +1385,7 @@ def start_demo():
         sys.exit(1)
 
 
-@cli.command(name='start-api', help=click.style('Run the FastAPI server', fg='cyan'))
+@cli.command(name='start-api', help='Run the FastAPI server')
 def start_api():
     """Starts the FastAPI application using Uvicorn."""
     # Based on the template, the api app is at src/api/app.py
