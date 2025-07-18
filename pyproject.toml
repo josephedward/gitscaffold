@@ -28,7 +28,7 @@ gitscaffold = "scaffold.cli:cli"
 [tool.setuptools.packages.find]
 where = ["."]
 namespaces = false
-include = ["scaffold", "scaffold.*", "scripts", "scripts.*"]
+include = ["scaffold", "scaffold.*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "scaffold.__version__"}
