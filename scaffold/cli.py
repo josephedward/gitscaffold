@@ -181,7 +181,7 @@ def get_repo_from_git_config():
             return repo
 
         # Handle HTTPS URLs: https://github.com/owner/repo.git
-        https_match = re.search(r'github\.com/([^/]+/[^/]+?)(\.git)?$', url)
+        https_match = re.search(r'(?:www\.)?github\.com/([^/]+/[^/]+?)(\.git)?$', url)
         if https_match:
             repo = https_match.group(1)
             logging.info(f"Parsed repository '{repo}' from HTTPS URL.")
@@ -206,7 +206,7 @@ def _sanitize_repo_string(repo_string: str) -> str:
         return repo_string
         
     # Try to extract from URL-like strings
-    match = re.search(r'github\.com[/:]([^/]+\/[^/]+)', repo_string)
+    match = re.search(r'(?:www\.)?github\.com[/:]([^/]+\/[^/]+)', repo_string)
     if match:
         repo = match.group(1)
         if repo.endswith('.git'):
