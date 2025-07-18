@@ -1,3 +1,9 @@
+# Release Notes
+
+## v0.1.11 (2025-07-18)
+- **Feature**: Add `import-md` as a top-level command for AI-driven issue creation from unstructured markdown files.
+- **Fix**: Resolve issue with duplicate `import-md` command definitions in the CLI, which caused argument parsing errors.
+
 ## Releasing
 
 ### Publishing to PyPI
