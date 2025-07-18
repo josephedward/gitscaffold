@@ -624,6 +624,103 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
     click.secho("Sync command finished.", fg="green", bold=True)
 
 
+@cli.command(name='import-md', help=click.style('Import issues from an unstructured markdown file using AI', fg='cyan'))
+@click.argument('markdown_file', type=click.Path(exists=True), metavar='MARKDOWN_FILE')
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
+@click.option('--openai-key', envvar='OPENAI_API_KEY', help='OpenAI API key.')
+@click.option('--model', default='gpt-4-turbo-preview', help='OpenAI model to use.')
+@click.option('--temperature', default=0.5, type=float, help='OpenAI temperature.')
+@click.option('--dry-run', is_flag=True, help='Simulate and show what would be created, without making changes.')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation and create issues.')
+def import_md(markdown_file, repo, token, openai_key, model, temperature, dry_run, yes):
+    """Import issues from an unstructured markdown file, enriching via OpenAI LLM."""
+    click.secho("Starting 'import-md' command...", fg='cyan', bold=True)
+    
+    actual_token = token if token else get_github_token()
+    if not actual_token:
+        click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    actual_openai_key = openai_key if openai_key else get_openai_api_key()
+    if not actual_openai_key:
+        click.secho("OpenAI API key is required. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    if not repo:
+        click.secho("No --repo provided, attempting to find repository from git config...", fg='yellow')
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.secho("Could not determine repository from git config. Please use --repo. Exiting.", fg="red", err=True)
+            sys.exit(1)
+        click.secho(f"Using repository from current git config: {repo}", fg='magenta')
+    else:
+        click.secho(f"Using repository provided via --repo flag: {repo}", fg='magenta')
+
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+    except GithubException as e:
+        if e.status == 404:
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+        elif e.status == 401:
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+        else:
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    click.secho(f"Extracting issues from '{markdown_file}' using AI...", fg='cyan')
+    
+    try:
+        issues = extract_issues_from_markdown(
+            md_file=markdown_file,
+            api_key=actual_openai_key,
+            model_name=model,
+            temperature=temperature
+        )
+    except Exception as e:
+        click.secho(f"Error extracting issues from markdown: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    if not issues:
+        click.secho("No issues extracted from the markdown file.", fg="yellow")
+        return
+
+    click.secho(f"Extracted {len(issues)} potential issues:", fg="green", bold=True)
+    for issue in issues:
+        click.secho(f"  - Title: {issue['title']}", fg="white")
+
+    if dry_run:
+        click.secho("\n[dry-run] No issues will be created.", fg="blue")
+        return
+
+    if not yes:
+        prompt = click.style(
+            f"\nProceed with creating {len(issues)} issues in '{repo}'?", fg="yellow", bold=True
+        )
+        if not click.confirm(prompt, default=True):
+            click.secho("Aborting.", fg="red")
+            return
+
+    click.secho("\nCreating issues on GitHub...", fg="cyan")
+    created_count = 0
+    failed_count = 0
+    for issue in issues:
+        title = issue['title']
+        body = issue['body']
+        click.secho(f"Creating issue: '{title}'", fg="yellow")
+        try:
+            gh_client.create_issue(title=title, body=body)
+            click.secho(f"  -> Successfully created issue.", fg="green")
+            created_count += 1
+        except Exception as e:
+            click.secho(f"  -> Failed to create issue: {e}", fg="red", err=True)
+            failed_count += 1
+    
+    click.secho("\n'import-md' command finished.", fg="green", bold=True)
+    click.secho(f"Successfully created: {created_count} issues.", fg="green")
+    if failed_count > 0:
+        click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
 
 
 @cli.command(name='diff', help=click.style('Diff local roadmap vs GitHub issues', fg='cyan'))
