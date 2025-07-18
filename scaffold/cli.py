@@ -1213,8 +1213,8 @@ def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_change
 
 
 @cli.command(name='import-md', help=click.style('Import issues from an unstructured Markdown file via AI', fg='cyan'))
+@click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
-@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
 @click.option('--openai-key', help='OpenAI API key (overrides OPENAI_API_KEY env var)')
 @click.option('--model', default=os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview'), show_default=True,
@@ -1224,7 +1224,7 @@ def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_change
 @click.option('--dry-run', is_flag=True, help='List issues without creating them')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation and create all issues')
 @click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
-def import_md(markdown_file, repo, token, openai_key, model, temperature, dry_run, yes, verbose):
+def import_md(repo, markdown_file, token, openai_key, model, temperature, dry_run, yes, verbose):
     """Import issues from an unstructured markdown file using AI.
 
     This command parses a Markdown file, using an AI model to extract potential
@@ -1249,16 +1249,8 @@ def import_md(markdown_file, repo, token, openai_key, model, temperature, dry_ru
         click.secho("OpenAI API key is required. Exiting.", fg="red", err=True)
         sys.exit(1)
     
-    if not repo:
-        click.secho("No --repo provided, attempting to find repository from git config...", fg='yellow')
-        repo = get_repo_from_git_config()
-        if not repo:
-            click.secho("Could not determine repository from git config. Please use --repo. Exiting.", fg="red", err=True)
-            sys.exit(1)
-        click.secho(f"Using repository from current git config: {repo}", fg='magenta')
-    else:
-        if verbose:
-            click.secho(f"Using repository: {repo}", fg='magenta')
+    if verbose:
+        click.secho(f"Using repository: {repo}", fg='magenta')
 
     try:
         gh_client = GitHubClient(actual_token, repo)
