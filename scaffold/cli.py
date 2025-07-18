@@ -748,7 +748,7 @@ def diff(roadmap_file, repo, token, ai, openai_key):
         click.secho("✓ No extra issues on GitHub.", fg="green")
 
 
-@cli.command(name="next", help=click.style('Show next action items', fg='cyan'))
+@cli.command(name='next', help=click.style('Show next action items', fg='cyan'))
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', help='GitHub API token (prompts if not set).')
 @click.option('--roadmap-file', '-f', 'roadmap_file', type=click.Path(exists=True), default='ROADMAP.md', show_default=True,
