@@ -13,7 +13,7 @@ def extract_issues_from_markdown(md_file, api_key: str, model_name=None, tempera
     if not api_key:
         logging.error("OpenAI API key was not provided to extract_issues_from_markdown.")
         raise ValueError("OpenAI API key was not provided to extract_issues_from_markdown.")
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, timeout=20.0, max_retries=3)
     with open(md_file, 'r', encoding='utf-8') as f:
         content = f.read()
     
@@ -89,7 +89,7 @@ def enrich_issue_description(title, existing_body, api_key: str, context='', mod
     if not api_key:
         logging.error("OpenAI API key was not provided to enrich_issue_description.")
         raise ValueError("OpenAI API key was not provided to enrich_issue_description.")
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, timeout=20.0, max_retries=3)
     effective_model_name = model_name or os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
     logging.info(f"Using OpenAI model '{effective_model_name}' for enrichment.")
     system_prompt = 'You are an expert software engineer and technical writer.'
