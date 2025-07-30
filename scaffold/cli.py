@@ -147,7 +147,7 @@ def get_github_token():
         env_path.touch(exist_ok=True)
         set_key(str(env_path), 'GITHUB_TOKEN', token)
         logging.info("GitHub PAT saved to .env file.")
-        click.echo("GitHub PAT saved to .env file.")
+        click.secho("GitHub PAT saved to .env file.", fg="green")
         # It's often better to ask the user to re-run so all parts of the app pick up the new env var.
         # Or, for immediate use, ensure os.environ is updated:
         os.environ['GITHUB_TOKEN'] = token
@@ -167,7 +167,7 @@ def get_openai_api_key():
         env_path.touch(exist_ok=True)
         set_key(str(env_path), 'OPENAI_API_KEY', api_key)
         logging.info("OpenAI API key saved to .env file.")
-        click.echo("OpenAI API key saved to .env file.")
+        click.secho("OpenAI API key saved to .env file.", fg="green")
         os.environ['OPENAI_API_KEY'] = api_key
     return api_key
 

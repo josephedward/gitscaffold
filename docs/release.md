@@ -14,10 +14,11 @@
 ## Releasing
 
 ### Publishing to PyPI
-1. Bump version in `pyproject.toml` under `[project]`.
-2. Commit and tag:
+1. Bump version in `scaffold/__init__.py`.
+2. Update release notes in `docs/release.md`.
+3. Commit and tag:
    ```sh
-   git add pyproject.toml
+   git add scaffold/__init__.py docs/release.md
    git commit -m "release: vX.Y.Z"
    git tag vX.Y.Z
    git push origin main --tags
