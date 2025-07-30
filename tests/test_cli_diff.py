@@ -1,6 +1,7 @@
 import pytest
 from click.testing import CliRunner
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from pathlib import Path
 
 from scaffold.cli import cli
 
@@ -112,3 +113,27 @@ def test_diff_shows_both_missing_and_extra(runner, sample_roadmap_file, mock_git
     assert "Items on GitHub but not in local roadmap (extra):" in result.output
     assert "  - Extra Issue 1" in result.output
     mock_github_client_for_diff.get_all_issue_titles.assert_called_once()
+
+
+def test_diff_unstructured_md_prompts_for_ai(runner, tmp_path, mock_github_client_for_diff):
+    """Test `diff` with unstructured MD prompts for AI and works."""
+    unstructured_md = "# My Project\nThis is a plan with some items.\n- An item to do.\n- Another thing."
+    roadmap_path = tmp_path / "unstructured.md"
+    roadmap_path.write_text(unstructured_md)
+    
+    mock_github_client_for_diff.get_all_issue_titles.return_value = {"An item to do."}
+    
+    with patch('scaffold.cli.extract_issues_from_markdown') as mock_extract, \
+         patch('click.confirm') as mock_confirm, \
+         patch('scaffold.cli.get_openai_api_key', return_value='fake-key'):
+        
+        mock_extract.return_value = [{'title': 'An item to do.'}, {'title': 'Another thing.'}]
+        mock_confirm.return_value = True # User says yes to AI
+
+        result = runner.invoke(cli, ['diff', str(roadmap_path), '--repo', 'owner/repo', '--token', 'fake'])
+
+    assert result.exit_code == 0
+    mock_confirm.assert_called()
+    mock_extract.assert_called_once()
+    assert "Items in local roadmap but not on GitHub (missing):" in result.output
+    assert "  - Another thing." in result.output

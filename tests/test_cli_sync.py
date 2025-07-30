@@ -307,6 +307,40 @@ def test_sync_some_items_exist(runner, sample_roadmap_file, mock_github_client, 
     assert len(created_titles_in_run) == 3
 
 
+def test_sync_ai_extraction(runner, tmp_path, mock_github_client, monkeypatch):
+    """Test sync with --ai flag for an unstructured markdown file."""
+    unstructured_md = "# AI-powered sync\n- First task to create"
+    roadmap_file = tmp_path / "ai_roadmap.md"
+    roadmap_file.write_text(unstructured_md)
+
+    monkeypatch.setattr("click.confirm", lambda prompt, default: True)
+    monkeypatch.setattr("scaffold.cli.get_openai_api_key", lambda: "fake-key")
+
+    def mock_extract(md_file, api_key, model_name=None, temperature=0.5):
+        return [{'title': 'First task to create', 'description': 'A task from AI.'}]
+    monkeypatch.setattr("scaffold.cli.extract_issues_from_markdown", mock_extract)
+
+    result = runner.invoke(cli, [
+        'sync', str(roadmap_file),
+        '--repo', 'owner/repo',
+        '--token', 'fake-token',
+        '--ai'
+    ])
+    
+    assert result.exit_code == 0
+    
+    # Check that issues were created
+    assert len(mock_github_client["mock_issues_created"]) == 2 # Feature + Task
+    
+    created_titles = {issue.title for issue in mock_github_client["mock_issues_created"]}
+    assert f"AI-Extracted Issues from {roadmap_file.name}" in created_titles
+    assert "First task to create" in created_titles
+    
+    task_issue = next(i for i in mock_github_client["mock_issues_created"] if i.title == "First task to create")
+    assert "A task from AI." in task_issue.body
+    assert "Parent issue: #" in task_issue.body
+
+
 # TODO: Add more tests:
 # - User declines creation of an item.
 # - AI enrichment is triggered.

@@ -386,10 +386,10 @@ def setup():
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--dry-run', is_flag=True, help='Simulate and show what would be created, without making changes.')
-@click.option('--ai-enrich', is_flag=True, help='Use AI to enrich descriptions of new issues being created.')
+@click.option('--ai', is_flag=True, help='Use AI to extract issues from unstructured files and to enrich descriptions.')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation and apply changes when populating an empty repo.')
 @click.option('--update-local', is_flag=True, help='Update the local roadmap file with issues from GitHub.')
-def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
+def sync(roadmap_file, token, repo, dry_run, ai, yes, update_local):
     """Sync a Markdown roadmap with a GitHub repository.
 
     If the repository is empty, it populates it with issues from the roadmap.
@@ -421,19 +421,49 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
 
     repo = _sanitize_repo_string(repo)
     path = Path(roadmap_file)
-    # Load and validate roadmap data (supports Markdown, YAML, or JSON)
-    try:
-        raw_roadmap_data = parse_roadmap(roadmap_file)
-    except Exception as e:
-        click.secho(f"Error: Failed to parse roadmap file '{roadmap_file}': {e}", fg="red", err=True)
-        sys.exit(1)
-    validated_roadmap = validate_roadmap(raw_roadmap_data)
-    # Prepare AI enrichment key if requested
+    use_ai = ai
+
+    # Auto-detect if AI should be used for MD files
+    if not use_ai and path.suffix.lower() in ['.md', '.mdx', '.markdown']:
+        try:
+            pre_raw = parse_roadmap(roadmap_file)
+            pre_validated = validate_roadmap(pre_raw)
+            if not pre_validated.features and not pre_validated.milestones:
+                click.secho("Warning: Roadmap appears to be empty or unstructured.", fg="yellow")
+                if click.confirm("Would you like to use AI to extract issues from it?", default=True):
+                    use_ai = True
+        except Exception:
+            # Parsing failed, maybe it is an unstructured file.
+            click.secho(f"Warning: Could not parse '{roadmap_file}' as a structured roadmap.", fg="yellow")
+            if click.confirm("Would you like to use AI to extract issues from it?", default=True):
+                use_ai = True
+    
     openai_api_key_for_ai = None
-    if ai_enrich:
+    if use_ai:
         openai_api_key_for_ai = get_openai_api_key()
         if not openai_api_key_for_ai:
             sys.exit(1)
+        
+        click.secho("Using AI to extract issues from unstructured roadmap...", fg="cyan")
+        try:
+            issues = extract_issues_from_markdown(md_file=roadmap_file, api_key=openai_api_key_for_ai)
+            tasks = [Task(title=issue['title'], description=issue.get('description', '')) for issue in issues]
+            feature = Feature(title=f"AI-Extracted Issues from {path.name}", tasks=tasks)
+            raw_roadmap_data = {
+                "name": f"Roadmap from {path.name}",
+                "features": [feature.model_dump(exclude_none=True)]
+            }
+        except Exception as e:
+            click.secho(f"Error during AI extraction: {e}", fg="red", err=True)
+            sys.exit(1)
+    else:
+        try:
+            raw_roadmap_data = parse_roadmap(roadmap_file)
+        except Exception as e:
+            click.secho(f"Error: Failed to parse roadmap file '{roadmap_file}': {e}", fg="red", err=True)
+            sys.exit(1)
+
+    validated_roadmap = validate_roadmap(raw_roadmap_data)
 
     try:
         gh_client = GitHubClient(actual_token, repo)
@@ -519,7 +549,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
             gh_client=gh_client,
             roadmap_data=validated_roadmap,
             dry_run=True,
-            ai_enrich=ai_enrich,
+            ai_enrich=use_ai,
             openai_api_key=openai_api_key_for_ai,
             context_text=context_text,
             roadmap_file_path=path
@@ -543,7 +573,7 @@ def sync(roadmap_file, token, repo, dry_run, ai_enrich, yes, update_local):
             gh_client=gh_client,
             roadmap_data=validated_roadmap,
             dry_run=False,
-            ai_enrich=ai_enrich,
+            ai_enrich=use_ai,
             openai_api_key=openai_api_key_for_ai,
             context_text=context_text,
             roadmap_file_path=path
@@ -694,7 +724,22 @@ def diff(roadmap_file, repo, token, ai, openai_key):
 
     repo = _sanitize_repo_string(repo)
     roadmap_titles = set()
-    if ai:
+    use_ai = ai
+
+    if not use_ai and roadmap_file.lower().endswith(('.md', '.mdx', '.markdown')):
+        try:
+            raw = parse_roadmap(roadmap_file)
+            validated = validate_roadmap(raw)
+            if not validated.features and not validated.milestones:
+                click.secho("Warning: Roadmap appears to be empty or unstructured.", fg="yellow")
+                if click.confirm("Would you like to use AI to extract issues from it?", default=True):
+                    use_ai = True
+        except Exception:
+            click.secho(f"Warning: Could not parse '{roadmap_file}' as a structured roadmap.", fg="yellow")
+            if click.confirm("Would you like to use AI to extract issues from it?", default=True):
+                use_ai = True
+
+    if use_ai:
         click.secho("Using AI to extract issues from unstructured roadmap...", fg="cyan")
         actual_openai_key = openai_key or get_openai_api_key()
         if not actual_openai_key:
@@ -713,42 +758,13 @@ def diff(roadmap_file, repo, token, ai, openai_key):
         try:
             raw = parse_roadmap(roadmap_file)
             validated = validate_roadmap(raw)
-            if not validated.features and not validated.milestones:
-                click.secho("Warning: Roadmap appears to be empty or unstructured.", fg="yellow")
-                click.secho("Hint: If this is an unstructured markdown document, try running with the --ai flag.", fg="yellow")
-
             roadmap_titles = {feat.title for feat in validated.features}
             for feat in validated.features:
                 for task in feat.tasks:
                     roadmap_titles.add(task.title)
         except Exception as e:
             click.echo(f"Error: Failed to parse structured roadmap file '{roadmap_file}': {e}", err=True)
-            click.secho("Hint: If this is an unstructured markdown file, try running with the --ai flag.", fg="yellow")
             sys.exit(1)
-
-    # Fallback: simple markdown extraction when no structured items and not using AI
-    if not ai and not roadmap_titles and roadmap_file.lower().endswith('.md'):
-        click.secho("Falling back to simple markdown parsing...", fg="yellow")
-        titles = set()
-        heading_re = re.compile(r'^\s*#{1,6}\s*(.+)')
-        list_re = re.compile(r'^\s*[-*+]\s+(.+)')
-        try:
-            with open(roadmap_file, encoding='utf-8') as f:
-                for line in f:
-                    m = heading_re.match(line)
-                    if m:
-                        titles.add(m.group(1).strip())
-                        continue
-                    m2 = list_re.match(line)
-                    if m2:
-                        titles.add(m2.group(1).strip())
-            if titles:
-                click.secho(f"Extracted {len(titles)} items via simple markdown parsing.", fg="green")
-                roadmap_titles = titles
-            else:
-                click.secho("No items found via simple markdown parsing.", fg="yellow")
-        except Exception:
-            click.secho("Error reading markdown for simple parsing.", fg="red")
 
     try:
         gh_client = GitHubClient(actual_token, repo)
