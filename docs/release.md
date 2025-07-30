@@ -1,5 +1,10 @@
 # Release Notes
 
+## v0.1.16 (2025-07-30)
+- **Feature**: The `sync --update-local` command now marks tasks as completed in the local roadmap file with `[x]` if their corresponding GitHub issue is closed.
+- **Parser**: The Markdown parser now recognizes `[x]` and `[ ]` in task titles to correctly set their completion status upon reading the file.
+- **Validator**: Added a `completed: bool` flag to the `Task` data model to support tracking completion status.
+
 ## v0.1.15 (2025-07-30)
 - **Fix**: Corrected package configuration in `pyproject.toml` to ensure the `gitscaffold` command-line script is created upon installation.
 - **Fix**: Corrected the OpenAI API client initialization in the `enrich` command, which was using a deprecated calling convention and would fail.
@@ -11,27 +16,10 @@
 - **CLI**: Help texts updated to prominently mention `OPENAI_API_KEY` requirement and AI-first behavior.
 - **Fix**: Removed duplicate missing-token/key messages and streamlined prompting flow without requiring a rerun.
 - **Docs**: Trimmed duplicate blocks in `usage.md`, polished wording across README and usage guide.
-- **Version**: Bumped package version to `0.1.14`.
 
 ## v0.1.11 (2025-07-18)
 - **Feature**: Add `import-md` as a top-level command for AI-driven issue creation from unstructured markdown files.
 - **Fix**: Resolve issue with duplicate `import-md` command definitions in the CLI, which caused argument parsing errors.
-- **Fix**: Corrected package configuration in `pyproject.toml` to ensure the `gitscaffold` command-line script is created upon installation.
-- **Fix**: Added retry logic for OpenAI API calls in `sync` and `diff` commands. If an invalid API key is detected, the user is prompted to enter a new one, which is then saved to `.env` for immediate use.
-
-## v0.1.14 (2025-07-30)
-- **Feature**: Default AI-first extraction for unstructured Markdown in `sync` and `diff` commands; use `--no-ai` to disable or `--ai` to force.
-- **CLI**: Help texts updated to prominently mention `OPENAI_API_KEY` requirement and AI-first behavior.
-- **Fix**: Removed duplicate missing-token/key messages and streamlined prompting flow without requiring a rerun.
-- **Docs**: Trimmed duplicate blocks in `usage.md`, polished wording across README and usage guide.
-- **Version**: Bumped package version to `0.1.14`.
-
-## v0.1.16 (2025-07-30)
-- **Feature**: `sync --update-local` now marks locally the tasks closed on GitHub, prefixing them with checkboxes in the roadmap.
-- **Validator**: Added `completed` flag to tasks to track closed status.
-- **CLI**: Added editor prompt fallback to derive or manually enter `--repo` when automatic detection fails.
-- **Markdown Writer**: `write_roadmap` now renders task checkboxes for completed vs. pending tasks.
-- **Misc**: Bumped version to 0.1.16.
 
 ## Releasing
 

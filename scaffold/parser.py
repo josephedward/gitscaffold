@@ -104,10 +104,14 @@ def parse_markdown(md_file):
                     if not task_part.strip():
                         continue
                     task_lines = task_part.strip().split('\n')
-                    task_title = task_lines.pop(0).strip()
-                    if not task_title:
+                    task_title_line = task_lines.pop(0).strip()
+                    if not task_title_line:
                         continue
-                    task = {'title': task_title, 'description': '', 'tests': [], 'labels': [], 'assignees': []}
+
+                    completed = '[x]' in task_title_line.lower()
+                    task_title = re.sub(r'\[[ x]\]\s*', '', task_title_line, flags=re.IGNORECASE).strip()
+                    
+                    task = {'title': task_title, 'description': '', 'tests': [], 'labels': [], 'assignees': [], 'completed': completed}
                     
                     desc_lines = []
                     in_tests = False
