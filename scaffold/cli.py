@@ -170,6 +170,18 @@ def get_openai_api_key():
         click.secho("OpenAI API key saved to .env file.", fg="green")
         os.environ['OPENAI_API_KEY'] = api_key
     return api_key
+  
+def prompt_for_openai_key():
+    """
+    Prompt for an OpenAI API key, save it to .env and environment, and return it.
+    """
+    key = click.prompt('Please enter your OpenAI API key', hide_input=True)
+    env_path = Path('.env')
+    env_path.touch(exist_ok=True)
+    set_key(str(env_path), 'OPENAI_API_KEY', key)
+    click.secho("OpenAI API key saved to .env file.", fg="green")
+    os.environ['OPENAI_API_KEY'] = key
+    return key
 
 
 def get_repo_from_git_config():
@@ -443,11 +455,21 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
         if not openai_api_key_for_ai:
             sys.exit(1)
         click.secho("Using AI to extract issues from unstructured roadmap...", fg="cyan")
-        try:
-            issues = extract_issues_from_markdown(md_file=roadmap_file, api_key=openai_api_key_for_ai)
-        except Exception as e:
-            click.secho(f"Error during AI extraction: {e}", fg="red", err=True)
-            sys.exit(1)
+        # Attempt extraction, retry once if API key invalid
+        attempts = 0
+        while True:
+            try:
+                issues = extract_issues_from_markdown(md_file=roadmap_file, api_key=openai_api_key_for_ai)
+                break
+            except Exception as e:
+                err_msg = str(e)
+                if attempts == 0 and ("invalid_api_key" in err_msg or "401" in err_msg):
+                    click.secho("OpenAI API key appears invalid. Please enter a valid key.", fg="yellow")
+                    openai_api_key_for_ai = prompt_for_openai_key()
+                    attempts += 1
+                    continue
+                click.secho(f"Error during AI extraction: {e}", fg="red", err=True)
+                sys.exit(1)
         # Convert extracted issues into a single AI-extracted feature with tasks
         tasks = [Task(title=issue['title'], description=issue.get('description', '')) for issue in issues]
         feature = Feature(title=f"AI-Extracted Issues from {path.name}", tasks=tasks)
@@ -464,17 +486,36 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
 
     validated_roadmap = validate_roadmap(raw_roadmap_data)
 
-    try:
-        gh_client = GitHubClient(actual_token, repo)
-        click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
-    except GithubException as e:
-        if e.status == 404:
-            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
-        elif e.status == 401:
-            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
-        else:
-            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
-        sys.exit(1)
+    # Attempt to connect to GitHub repo, with fallback to detect or prompt for repo if invalid
+    attempts = 0
+    while True:
+        try:
+            gh_client = GitHubClient(actual_token, repo)
+            click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+            break
+        except GithubException as e:
+            if e.status == 404:
+                click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+            elif e.status == 401:
+                click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+            else:
+                click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+            if attempts == 0:
+                # Try deriving from git config
+                if click.confirm("Would you like to detect the repository from your local Git config?", default=True):
+                    derived = get_repo_from_git_config()
+                    if derived:
+                        repo = derived
+                        click.secho(f"Using repository from git config: {repo}", fg="magenta")
+                        attempts += 1
+                        continue
+                    else:
+                        click.secho("Could not detect repository from git config.", fg="yellow")
+                # Prompt manual entry
+                repo = click.prompt("Please enter your GitHub repository (owner/repo)")
+                attempts += 1
+                continue
+            sys.exit(1)
 
     if update_local:
         click.secho("Updating local roadmap from GitHub...", fg="cyan")
@@ -659,12 +700,18 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
                 click.secho(f"  AI-enriching feature: {feat.title}...", fg="cyan")
                 body = enrich_issue_description(feat.title, body, openai_api_key_for_ai, context_text)
             
+        try:
             feat_issue_obj = gh_client.create_issue(
                 title=feat.title.strip(), body=body, assignees=feat.assignees,
                 labels=feat.labels, milestone=feat.milestone
             )
-            feature_object_map[feat.title] = feat_issue_obj
-            click.secho(f"  -> Feature issue created: #{feat_issue_obj.number}", fg="green")
+        except GithubException as e:
+            if e.status == 403:
+                click.secho("Error: Cannot create issue. Your GitHub token lacks permission to create issues. Please grant 'repo' or 'issues' scope.", fg="red", err=True)
+                sys.exit(1)
+            raise
+        feature_object_map[feat.title] = feat_issue_obj
+        click.secho(f"  -> Feature issue created: #{feat_issue_obj.number}", fg="green")
 
         # Create all tasks, whether for new or existing features
         for feat_title, tasks in tasks_to_create.items():
@@ -687,10 +734,16 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
                     body = enrich_issue_description(task.title, body, openai_api_key_for_ai, context_text)
                 
                 content = f"{body}\n\nParent issue: #{parent_issue_obj.number}".strip()
-                task_issue = gh_client.create_issue(
-                    title=task.title.strip(), body=content, assignees=task.assignees,
-                    labels=task.labels, milestone=milestone
-                )
+                try:
+                    task_issue = gh_client.create_issue(
+                        title=task.title.strip(), body=content, assignees=task.assignees,
+                        labels=task.labels, milestone=milestone
+                    )
+                except GithubException as e:
+                    if e.status == 403:
+                        click.secho("Error: Cannot create task. Your GitHub token lacks permission to create issues. Please grant 'repo' or 'issues' scope.", fg="red", err=True)
+                        sys.exit(1)
+                    raise
                 click.secho(f"  -> Task issue created: #{task_issue.number}", fg="green")
 
 
@@ -744,15 +797,25 @@ def diff(roadmap_file, repo, token, no_ai, openai_key):
         if not actual_openai_key:
             click.secho("Error: OpenAI API key is required for AI mode.", fg="red", err=True)
             sys.exit(1)
-        try:
-            issues = extract_issues_from_markdown(
-                md_file=roadmap_file,
-                api_key=actual_openai_key
-            )
-            roadmap_titles = {issue['title'] for issue in issues}
-        except Exception as e:
-            click.secho(f"Error during AI extraction: {e}", fg="red", err=True)
-            sys.exit(1)
+        # Attempt extraction, retry once on invalid API key
+        attempts = 0
+        while True:
+            try:
+                issues = extract_issues_from_markdown(
+                    md_file=roadmap_file,
+                    api_key=actual_openai_key
+                )
+                roadmap_titles = {issue['title'] for issue in issues}
+                break
+            except Exception as e:
+                err_msg = str(e)
+                if attempts == 0 and ("invalid_api_key" in err_msg or "401" in err_msg):
+                    click.secho("OpenAI API key appears invalid. Please enter a valid key.", fg="yellow")
+                    actual_openai_key = prompt_for_openai_key()
+                    attempts += 1
+                    continue
+                click.secho(f"Error during AI extraction: {e}", fg="red", err=True)
+                sys.exit(1)
     else:
         try:
             raw = parse_roadmap(roadmap_file)
@@ -765,17 +828,36 @@ def diff(roadmap_file, repo, token, no_ai, openai_key):
             click.echo(f"Error: Failed to parse structured roadmap file '{roadmap_file}': {e}", err=True)
             sys.exit(1)
 
-    try:
-        gh_client = GitHubClient(actual_token, repo)
-        click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
-    except GithubException as e:
-        if e.status == 404:
-            click.echo(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", err=True)
-        elif e.status == 401:
-            click.echo("Error: GitHub token is invalid or has insufficient permissions.", err=True)
-        else:
-            click.echo(f"An unexpected GitHub error occurred: {e}", err=True)
-        sys.exit(1)
+    # Attempt to connect to GitHub repo, with fallback to detect or prompt if invalid
+    attempts = 0
+    while True:
+        try:
+            gh_client = GitHubClient(actual_token, repo)
+            click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+            break
+        except GithubException as e:
+            if e.status == 404:
+                click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+            elif e.status == 401:
+                click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+            else:
+                click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+            if attempts == 0:
+                # Try deriving from git config
+                if click.confirm("Would you like to detect the repository from your local Git config?", default=True):
+                    derived = get_repo_from_git_config()
+                    if derived:
+                        repo = derived
+                        click.secho(f"Using repository from git config: {repo}", fg="magenta")
+                        attempts += 1
+                        continue
+                    else:
+                        click.secho("Could not detect repository from git config.", fg="yellow")
+                # Prompt manual entry
+                repo = click.prompt("Please enter your GitHub repository (owner/repo)")
+                attempts += 1
+                continue
+            sys.exit(1)
 
     click.secho(f"Fetching existing GitHub issue titles...", fg="cyan")
     gh_titles = gh_client.get_all_issue_titles()
