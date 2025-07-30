@@ -1,12 +1,10 @@
 # Release Notes
 
-## v0.1.16 (2025-07-30)
-- **Fix**: Corrected the OpenAI API client initialization in the `enrich` command, which was using a deprecated calling convention and would fail.
-- **Docs**: Added a troubleshooting section to `usage.md` for the `command not found` error.
-
 ## v0.1.15 (2025-07-30)
 - **Fix**: Corrected package configuration in `pyproject.toml` to ensure the `gitscaffold` command-line script is created upon installation.
+- **Fix**: Corrected the OpenAI API client initialization in the `enrich` command, which was using a deprecated calling convention and would fail.
 - **Fix**: Added retry logic for OpenAI API calls in `sync` and `diff` commands. If an invalid API key is detected, the user is prompted to enter a new one, which is then saved to `.env` for immediate use.
+- **Docs**: Added a troubleshooting section to `usage.md` for the `command not found` error.
 
 ## v0.1.14 (2025-07-30)
 - **Feature**: Default AI-first extraction for unstructured Markdown in `sync` and `diff` commands; use `--no-ai` to disable or `--ai` to force.
