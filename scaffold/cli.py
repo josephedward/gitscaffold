@@ -7,7 +7,19 @@ import subprocess
 import logging
 import shlex
 from pathlib import Path
-from dotenv import load_dotenv, set_key
+try:
+    from dotenv import load_dotenv, set_key
+except ImportError:
+    def load_dotenv(*args, **kwargs):
+        # python-dotenv not installed; skipping .env loading
+        return False
+    def set_key(path, key, value):
+        # Cannot write to .env without python-dotenv
+        import click
+        raise click.ClickException(
+            "python-dotenv is required to save tokens to .env files. "
+            "Install it or set tokens via environment variables."
+        )
 from github import Github, GithubException
 
 from .parser import parse_markdown, parse_roadmap, write_roadmap
@@ -714,6 +726,30 @@ def diff(roadmap_file, repo, token, ai, openai_key):
             click.secho("Hint: If this is an unstructured markdown file, try running with the --ai flag.", fg="yellow")
             sys.exit(1)
 
+    # Fallback: simple markdown extraction when no structured items and not using AI
+    if not ai and not roadmap_titles and roadmap_file.lower().endswith('.md'):
+        click.secho("Falling back to simple markdown parsing...", fg="yellow")
+        titles = set()
+        heading_re = re.compile(r'^\s*#{1,6}\s*(.+)')
+        list_re = re.compile(r'^\s*[-*+]\s+(.+)')
+        try:
+            with open(roadmap_file, encoding='utf-8') as f:
+                for line in f:
+                    m = heading_re.match(line)
+                    if m:
+                        titles.add(m.group(1).strip())
+                        continue
+                    m2 = list_re.match(line)
+                    if m2:
+                        titles.add(m2.group(1).strip())
+            if titles:
+                click.secho(f"Extracted {len(titles)} items via simple markdown parsing.", fg="green")
+                roadmap_titles = titles
+            else:
+                click.secho("No items found via simple markdown parsing.", fg="yellow")
+        except Exception:
+            click.secho("Error reading markdown for simple parsing.", fg="red")
+
     try:
         gh_client = GitHubClient(actual_token, repo)
         click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
@@ -778,7 +814,7 @@ def next_command(repo, token, roadmap_file):
     milestone, issues = gh_client.get_next_action_items()
     
     if not milestone:
-        click.secho("No active milestones with open issues found on GitHub.", fg='yellow')
+        click.secho("No active milestones with open issues found.", fg='yellow')
         # If there are any open issues, pick one at random
         try:
             open_issues = list(gh_client.repo.get_issues(state='open'))
