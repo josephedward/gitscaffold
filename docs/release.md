@@ -4,6 +4,13 @@
 - **Feature**: Add `import-md` as a top-level command for AI-driven issue creation from unstructured markdown files.
 - **Fix**: Resolve issue with duplicate `import-md` command definitions in the CLI, which caused argument parsing errors.
 
+## v0.1.14 (2025-07-30)
+- **Feature**: Default AI-first extraction for unstructured Markdown in `sync` and `diff` commands; use `--no-ai` to disable or `--ai` to force.
+- **CLI**: Help texts updated to prominently mention `OPENAI_API_KEY` requirement and AI-first behavior.
+- **Fix**: Removed duplicate missing-token/key messages and streamlined prompting flow without requiring a rerun.
+- **Docs**: Trimmed duplicate blocks in `usage.md`, polished wording across README and usage guide.
+- **Version**: Bumped package version to `0.1.14`.
+
 ## Releasing
 
 ### Publishing to PyPI

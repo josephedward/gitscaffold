@@ -102,7 +102,7 @@ def run_repl(ctx):
 @click.option('--interactive', is_flag=True, help='Enter an interactive REPL to run multiple commands.')
 @click.pass_context
 def cli(ctx, interactive):
-    """Scaffold – Convert roadmaps to GitHub issues."""
+    """Scaffold – Convert roadmaps to GitHub issues (AI-first extraction for Markdown by default; disable with --no-ai)."""
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     load_dotenv()  # Load .env file at the start of CLI execution
     logging.info("CLI execution started.")
@@ -141,14 +141,13 @@ def get_github_token():
     token = os.getenv('GITHUB_TOKEN')
     if not token:
         logging.warning("GitHub PAT not found in environment or .env file.")
-        click.echo("GitHub PAT not found in environment or .env file.")
         token = click.prompt('Please enter your GitHub Personal Access Token (PAT)', hide_input=True)
         # Ensure .env file exists for set_key
         env_path = Path('.env')
         env_path.touch(exist_ok=True)
         set_key(str(env_path), 'GITHUB_TOKEN', token)
         logging.info("GitHub PAT saved to .env file.")
-        click.echo("GitHub PAT saved to .env file. Please re-run the command.")
+        click.echo("GitHub PAT saved to .env file.")
         # It's often better to ask the user to re-run so all parts of the app pick up the new env var.
         # Or, for immediate use, ensure os.environ is updated:
         os.environ['GITHUB_TOKEN'] = token
@@ -163,13 +162,12 @@ def get_openai_api_key():
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         logging.warning("OPENAI_API_KEY not found in environment or .env file.")
-        click.echo("OpenAI API key not found in environment or .env file.")
         api_key = click.prompt('Please enter your OpenAI API key', hide_input=True)
         env_path = Path('.env')
         env_path.touch(exist_ok=True)
         set_key(str(env_path), 'OPENAI_API_KEY', api_key)
         logging.info("OpenAI API key saved to .env file.")
-        click.echo("OpenAI API key saved to .env file. Please re-run the command.")
+        click.echo("OpenAI API key saved to .env file.")
         os.environ['OPENAI_API_KEY'] = api_key
     return api_key
 
@@ -381,15 +379,17 @@ def setup():
     click.secho("\nSetup complete! You can now run `git-scaffold sync ROADMAP.md` or `python3 -m scaffold.cli sync ROADMAP.md`", fg="bright_green", bold=True)
 
 
-@cli.command(name="sync", help='Sync roadmap with a GitHub repository')
+@cli.command(name="sync", help='Sync a local roadmap with a GitHub repository (AI-first extraction for unstructured Markdown; disable with --no-ai; requires OPENAI_API_KEY)')
 @click.argument('roadmap_file', type=click.Path(), metavar='ROADMAP_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--dry-run', is_flag=True, help='Simulate and show what would be created, without making changes.')
-@click.option('--ai', is_flag=True, help='Use AI to extract issues from unstructured files and to enrich descriptions.')
+@click.option('--ai', 'force_ai', is_flag=True, help='Force AI extraction for unstructured Markdown without prompt (requires OPENAI_API_KEY).')
+@click.option('--no-ai', 'no_ai', is_flag=True, help='Disable default AI fallback for unstructured Markdown.')
+@click.option('--ai-enrich', is_flag=True, help='Use AI to enrich descriptions of new issues (requires OPENAI_API_KEY).')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation and apply changes when populating an empty repo.')
 @click.option('--update-local', is_flag=True, help='Update the local roadmap file with issues from GitHub.')
-def sync(roadmap_file, token, repo, dry_run, ai, yes, update_local):
+def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, update_local):
     """Sync a Markdown roadmap with a GitHub repository.
 
     If the repository is empty, it populates it with issues from the roadmap.
@@ -421,21 +421,20 @@ def sync(roadmap_file, token, repo, dry_run, ai, yes, update_local):
 
     repo = _sanitize_repo_string(repo)
     path = Path(roadmap_file)
-    use_ai = ai
+    use_ai = force_ai
 
-    # Auto-detect if AI should be used for MD files
-    if not use_ai and path.suffix.lower() in ['.md', '.mdx', '.markdown']:
+    # AI-first extraction fallback for unstructured Markdown
+    if not use_ai and not no_ai and path.suffix.lower() in ['.md', '.mdx', '.markdown']:
         try:
             pre_raw = parse_roadmap(roadmap_file)
             pre_validated = validate_roadmap(pre_raw)
             if not pre_validated.features and not pre_validated.milestones:
                 click.secho("Warning: Roadmap appears to be empty or unstructured.", fg="yellow")
-                if click.confirm("Would you like to use AI to extract issues from it?", default=True):
+                if click.confirm("Use AI to extract issues instead?", default=True):
                     use_ai = True
         except Exception:
-            # Parsing failed, maybe it is an unstructured file.
             click.secho(f"Warning: Could not parse '{roadmap_file}' as a structured roadmap.", fg="yellow")
-            if click.confirm("Would you like to use AI to extract issues from it?", default=True):
+            if click.confirm("Use AI to extract issues instead?", default=True):
                 use_ai = True
     
     openai_api_key_for_ai = None
@@ -443,19 +442,19 @@ def sync(roadmap_file, token, repo, dry_run, ai, yes, update_local):
         openai_api_key_for_ai = get_openai_api_key()
         if not openai_api_key_for_ai:
             sys.exit(1)
-        
         click.secho("Using AI to extract issues from unstructured roadmap...", fg="cyan")
         try:
             issues = extract_issues_from_markdown(md_file=roadmap_file, api_key=openai_api_key_for_ai)
-            tasks = [Task(title=issue['title'], description=issue.get('description', '')) for issue in issues]
-            feature = Feature(title=f"AI-Extracted Issues from {path.name}", tasks=tasks)
-            raw_roadmap_data = {
-                "name": f"Roadmap from {path.name}",
-                "features": [feature.model_dump(exclude_none=True)]
-            }
         except Exception as e:
             click.secho(f"Error during AI extraction: {e}", fg="red", err=True)
             sys.exit(1)
+        # Convert extracted issues into a single AI-extracted feature with tasks
+        tasks = [Task(title=issue['title'], description=issue.get('description', '')) for issue in issues]
+        feature = Feature(title=f"AI-Extracted Issues from {path.name}", tasks=tasks)
+        raw_roadmap_data = {
+            "name": f"Roadmap from {path.name}",
+            "features": [feature.model_dump(exclude_none=True)]
+        }
     else:
         try:
             raw_roadmap_data = parse_roadmap(roadmap_file)
@@ -696,13 +695,13 @@ def sync(roadmap_file, token, repo, dry_run, ai, yes, update_local):
 
 
 
-@cli.command(name='diff', help='Diff local roadmap vs GitHub issues')
+@cli.command(name='diff', help='Diff a local roadmap with GitHub issues (AI-first extraction for unstructured Markdown; disable with --no-ai; requires OPENAI_API_KEY)')
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
-@click.option('--ai', is_flag=True, help='Use AI to extract issues from an unstructured roadmap file.')
-@click.option('--openai-key', help='OpenAI API key (for --ai mode).')
-def diff(roadmap_file, repo, token, ai, openai_key):
+@click.option('--no-ai', 'no_ai', is_flag=True, help='Disable AI fallback for unstructured Markdown.')
+@click.option('--openai-key', help='OpenAI API key (reads from OPENAI_API_KEY or .env; required for AI extraction).')
+def diff(roadmap_file, repo, token, no_ai, openai_key):
     """Compare a local roadmap file with GitHub issues and list differences."""
     click.secho("\n=== Diff Roadmap vs GitHub Issues ===", fg="bright_blue", bold=True)
     actual_token = token if token else get_github_token()
@@ -724,9 +723,9 @@ def diff(roadmap_file, repo, token, ai, openai_key):
 
     repo = _sanitize_repo_string(repo)
     roadmap_titles = set()
-    use_ai = ai
+    use_ai = False
 
-    if not use_ai and roadmap_file.lower().endswith(('.md', '.mdx', '.markdown')):
+    if not no_ai and roadmap_file.lower().endswith(('.md', '.mdx', '.markdown')):
         try:
             raw = parse_roadmap(roadmap_file)
             validated = validate_roadmap(raw)
