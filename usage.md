@@ -127,7 +127,7 @@
    gitscaffold diff roadmap.json --repo owner/repo
    ```
 
- Add `--ai` for AI-assisted extraction on Markdown files.
+ AI-powered extraction is automatic for Markdown files. Use `--no-ai` to disable AI fallback.
 
  ## 6. Navigate Your Work
 
@@ -183,7 +183,7 @@
  bash scripts/audit.sh
  ```
 
- Integrate into GitHub Actions or other CI pipelines as needed.# `gitscaffold` Usage Guide
+ Integrate into GitHub Actions or other CI pipelines as needed.
 
 `gitscaffold` helps manage software projects by keeping a local `ROADMAP.md` file in sync with GitHub issues. This guide outlines a typical workflow.
 
