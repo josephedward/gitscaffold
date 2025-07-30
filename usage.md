@@ -82,6 +82,16 @@ Would you like to use AI to extract issues from it? [Y/n]: y
 - To **force** AI extraction without prompt, use the `--ai` flag.
 - To **enrich** issue descriptions with AI-generated content (for any roadmap type), use the `--ai-enrich` flag.
 
+### Alternative AI Workflow: `import-md`
+
+As an alternative to using `sync` with an unstructured file, you can use the `import-md` command. This command is specifically designed to parse a Markdown file and create GitHub issues from it using AI.
+
+```bash
+gitscaffold import-md your_org/your_repo docs/plan.md
+```
+
+This is useful for quickly converting documents like meeting notes into actionable GitHub issues.
+
 ### Step 2: Check for Differences
 
 Use the `diff` command to see what's different between your local roadmap and GitHub.
@@ -110,6 +120,7 @@ This shows the active milestone and its open, unassigned issues.
 - `gitscaffold delete-closed`: Deletes all closed issues.
 - `gitscaffold sanitize`: Removes markdown formatting from issue titles.
 - `gitscaffold deduplicate`: Finds and closes duplicate open issues.
+- `gitscaffold enrich issue|batch`: Enriches GitHub issues with AI-generated content based on context from your roadmap.
 
 Run any command with `--dry-run` to preview changes without applying them.
 
