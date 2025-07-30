@@ -79,6 +79,7 @@ Warning: Roadmap appears to be empty or unstructured.
 Would you like to use AI to extract issues from it? [Y/n]: y
 ```
 - To **disable** this automatic AI behavior, use the `--no-ai` flag.
+- To **force** AI extraction without prompt, use the `--ai` flag.
 - To **enrich** issue descriptions with AI-generated content (for any roadmap type), use the `--ai-enrich` flag.
 
 ### Step 2: Check for Differences
@@ -89,7 +90,10 @@ Use the `diff` command to see what's different between your local roadmap and Gi
 gitscaffold diff ROADMAP.md --repo your_org/your_repo
 ```
 
-Like `sync`, `diff` will also automatically prompt for AI extraction when it detects an unstructured Markdown file. Use `--no-ai` to disable this.
+Like `sync`, `diff` will also automatically prompt for AI extraction when it detects an unstructured Markdown file:
+
+- Use `--no-ai` to disable this automatic AI behavior.
+- To specify your OpenAI API key directly (instead of environment or .env), use the `--openai-key` option.
 
 ### Step 3: See What's Next
 
