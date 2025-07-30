@@ -4,6 +4,10 @@
 - **Feature**: Add `import-md` as a top-level command for AI-driven issue creation from unstructured markdown files.
 - **Fix**: Resolve issue with duplicate `import-md` command definitions in the CLI, which caused argument parsing errors.
 
+## v0.1.15 (2025-07-30)
+- **Fix**: Corrected package configuration in `pyproject.toml` to ensure the `gitscaffold` command-line script is created upon installation.
+- **Fix**: Added retry logic for OpenAI API calls in `sync` and `diff` commands. If an invalid API key is detected, the user is prompted to enter a new one, which is then saved to `.env` for immediate use.
+
 ## v0.1.14 (2025-07-30)
 - **Feature**: Default AI-first extraction for unstructured Markdown in `sync` and `diff` commands; use `--no-ai` to disable or `--ai` to force.
 - **CLI**: Help texts updated to prominently mention `OPENAI_API_KEY` requirement and AI-first behavior.
