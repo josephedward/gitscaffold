@@ -30,6 +30,7 @@
 3. Build and upload:
    ```sh
    pip install --upgrade build twine
+   rm -rf dist/
    python -m build
    twine upload dist/*
    ```
