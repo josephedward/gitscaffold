@@ -542,7 +542,7 @@ def sync(roadmap_file, token, repo, dry_run, ai, yes, update_local):
     if not existing_issue_titles:
         click.secho("Repository is empty. Populating with issues from roadmap.", fg="green")
         
-        context_text = path.read_text(encoding='utf-8') if ai_enrich else ''
+        context_text = path.read_text(encoding='utf-8') if use_ai else ''
         
         # Display what will be done. This is effectively a dry run preview.
         _populate_repo_from_roadmap(
@@ -645,7 +645,7 @@ def sync(roadmap_file, token, repo, dry_run, ai, yes, update_local):
 
         # 5. Apply changes
         click.secho("\nApplying changes...", fg="cyan")
-        context_text = path.read_text(encoding='utf-8') if ai_enrich else ''
+        context_text = path.read_text(encoding='utf-8') if use_ai else ''
 
         for m in milestones_to_create:
             click.secho(f"Creating milestone: {m.name}", fg="cyan")
@@ -656,7 +656,7 @@ def sync(roadmap_file, token, repo, dry_run, ai, yes, update_local):
         for feat in features_to_create:
             click.secho(f"Creating feature issue: {feat.title.strip()}", fg="cyan")
             body = feat.description or ''
-            if ai_enrich and openai_api_key_for_ai:
+            if use_ai and openai_api_key_for_ai:
                 click.secho(f"  AI-enriching feature: {feat.title}...", fg="cyan")
                 body = enrich_issue_description(feat.title, body, openai_api_key_for_ai, context_text)
             
@@ -683,7 +683,7 @@ def sync(roadmap_file, token, repo, dry_run, ai, yes, update_local):
             for task in tasks:
                 click.secho(f"Creating task issue: {task.title.strip()} (under #{parent_issue_obj.number})", fg="cyan")
                 body = task.description or ''
-                if ai_enrich and openai_api_key_for_ai:
+                if use_ai and openai_api_key_for_ai:
                     click.secho(f"  AI-enriching task: {task.title}...", fg="cyan")
                     body = enrich_issue_description(task.title, body, openai_api_key_for_ai, context_text)
                 
