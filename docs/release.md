@@ -26,6 +26,13 @@
 - **Docs**: Trimmed duplicate blocks in `usage.md`, polished wording across README and usage guide.
 - **Version**: Bumped package version to `0.1.14`.
 
+## v0.1.16 (2025-07-30)
+- **Feature**: `sync --update-local` now marks locally the tasks closed on GitHub, prefixing them with checkboxes in the roadmap.
+- **Validator**: Added `completed` flag to tasks to track closed status.
+- **CLI**: Added editor prompt fallback to derive or manually enter `--repo` when automatic detection fails.
+- **Markdown Writer**: `write_roadmap` now renders task checkboxes for completed vs. pending tasks.
+- **Misc**: Bumped version to 0.1.16.
+
 ## Releasing
 
 ### Publishing to PyPI

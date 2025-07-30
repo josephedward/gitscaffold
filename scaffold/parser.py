@@ -217,7 +217,11 @@ def write_roadmap(roadmap_file, data):
         content.append('')
 
         for task in feature.get('tasks', []):
-            content.append(f"#### {task['title']}")
+            # Render completed status with checkbox
+            title = task.get('title', '')
+            completed = task.get('completed', False)
+            checkbox = '[x]' if completed else '[ ]'
+            content.append(f"#### {checkbox} {title}")
             if task.get('description'):
                 content.append(task['description'])
             # Also write labels, assignees, tests for task

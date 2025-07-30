@@ -14,6 +14,7 @@ class Task(BaseModel):
     labels: List[str] = Field(default_factory=list)
     assignees: List[str] = Field(default_factory=list)
     tests: List[str] = Field(default_factory=list)
+    completed: bool = False
 
 class Feature(BaseModel):
     title: str
