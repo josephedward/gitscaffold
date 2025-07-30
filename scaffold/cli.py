@@ -32,7 +32,7 @@ import random
 import webbrowser
 import time
 import difflib
-import openai
+from openai import OpenAI, OpenAIError
 from collections import defaultdict
 import csv
 
@@ -1271,7 +1271,9 @@ def _enrich_call_llm(title, existing_body, ctx):
     api_key = get_openai_api_key() # Re-use existing helper
     if not api_key:
         sys.exit(1) # get_openai_api_key handles messaging
-    openai.api_key = api_key
+    
+    client = OpenAI(api_key=api_key, timeout=20.0, max_retries=3)
+    
     system = {"role": "system", "content": "You are an expert software engineer and technical writer."}
     parts = [f"Title: {title}", f"Context: {ctx['context']}"]
     if ctx.get('goal'):
@@ -1282,13 +1284,19 @@ def _enrich_call_llm(title, existing_body, ctx):
         parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
     parts.append(f"Existing description:\n{existing_body or ''}")
     parts.append("Generate a detailed GitHub issue description with background, scope, acceptance criteria, implementation outline, code snippets, and a checklist.")
-    response = openai.chat.completions.create(
-        model=os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo'),
-        messages=[system, {"role": "user", "content": "\n\n".join(parts)}],
-        temperature=float(os.getenv('OPENAI_TEMPERATURE', '0.7')),
-        max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '800'))
-    )
-    return response.choices[0].message.content.strip()
+    
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo'),
+            messages=[system, {"role": "user", "content": "\n\n".join(parts)}],
+            temperature=float(os.getenv('OPENAI_TEMPERATURE', '0.7')),
+            max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '800'))
+        )
+        return response.choices[0].message.content.strip()
+    except OpenAIError as e:
+        logging.warning(f"OpenAI API call for enrichment failed: {e}. Returning existing body.")
+        click.secho(f"OpenAI API call failed: {e}", fg="red")
+        return existing_body or ''
 
 @cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
 def enrich():

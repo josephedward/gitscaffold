@@ -142,3 +142,28 @@ export TEST_REPO="your/test-repo"
 This script validates the complete user journey described in this guide.
 
 For more details on any command, run `gitscaffold <command> --help`.
+
+## 6. Troubleshooting
+
+### `gitscaffold: command not found`
+
+If you have successfully installed `gitscaffold` but your shell cannot find the command, the installation directory for command-line scripts is likely not in your shell's `PATH`.
+
+1.  **Find the script location:**
+    The location of installed command-line scripts depends on your environment.
+    - If you are in a virtual environment, it's typically in the `bin/` subdirectory of the environment.
+    - If you installed with `--user`, it's often in `~/.local/bin` (Linux/macOS).
+    
+    You can find your Python installation's script path by running:
+    ```sh
+    python -c "import sysconfig; print(sysconfig.get_path('scripts'))"
+    ```
+
+2.  **Add the location to your `PATH`:**
+    Once you find the script directory, add it to your `PATH`. For example, if the scripts are in `~/.local/bin`, add this line to your shell's startup file (e.g., `~/.zshrc`, `~/.bashrc`):
+
+    ```sh
+    export PATH="$HOME/.local/bin:$PATH"
+    ```
+
+    Restart your shell or run `source ~/.zshrc` (or equivalent) for the changes to take effect.
