@@ -33,4 +33,27 @@
  - `tests/test_cli_sync.py`
  - `demo/example_roadmap.md`
 
- **Date:** 2025-07-30
+ **Date:** 2025-07-30# Agent Coordination Context
+
+This file is intended to help multiple agents (and humans) understand the context of ongoing work.
+
+## Current Task
+
+**Request:** Create a `usage.md` document outlining the ideal workflow for `gitscaffold`, and use this file (`shared_context.md`) to log plans and updates.
+
+**My Plan:**
+
+1.  **Create `shared_context.md`:** This file. It will serve as a log of my actions and plans for this session.
+2.  **Create `usage.md`:**
+    *   Outline a standard user workflow for `gitscaffold`.
+    *   The workflow will cover:
+        *   Initial project setup (`gitscaffold setup`).
+        *   Defining tasks and milestones in `ROADMAP.md`.
+        *   Syncing the roadmap to GitHub issues (`gitscaffold sync`).
+        *   Checking for differences (`gitscaffold diff`).
+        *   Finding what to work on next (`gitscaffold next`).
+    *   I will use a sample `ROADMAP.md` as a concrete example.
+    *   The documentation will be written to be clear and easy to follow for a new user.
+    *   The user mentioned ensuring the workflow is 'tested and functional'. I'll base the workflow on the existing CLI commands and their tests, assuming they reflect the intended functionality.
+
+No existing files need to be modified for this request. I will create two new files: `usage.md` and `shared_context.md`.

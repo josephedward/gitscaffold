@@ -183,4 +183,126 @@
  bash scripts/audit.sh
  ```
 
- Integrate into GitHub Actions or other CI pipelines as needed.
+ Integrate into GitHub Actions or other CI pipelines as needed.# `gitscaffold` Usage Guide
+
+`gitscaffold` helps manage software projects by keeping a local `ROADMAP.md` file in sync with GitHub issues. This guide outlines a typical workflow.
+
+## 1. Setup
+
+First, you need to set up your environment and project.
+
+### Environment Setup
+
+1.  **GitHub Token:** `gitscaffold` needs a GitHub personal access token to interact with the API. You can create one from your GitHub developer settings. It needs `repo` scope.
+    You can set it as an environment variable:
+    ```bash
+    export GITHUB_TOKEN="your_token_here"
+    ```
+    `gitscaffold` will automatically pick it up.
+
+2.  **(Optional) OpenAI API Key:** For AI-powered features like `enrich` or `import-md`, you'll need an OpenAI API key, which can be set as `OPENAI_API_KEY`.
+
+### Project Initialization
+
+In your project's root directory, run:
+```bash
+gitscaffold setup
+```
+This command creates a `ROADMAP.md` file with a basic template.
+
+## 2. The `ROADMAP.md` File
+
+`ROADMAP.md` is a markdown file where you define your project's structure. It consists of:
+
+*   **Milestones:** High-level goals, often with due dates. Represented by `##` headers.
+*   **Features:** Collections of tasks. Represented by `###` headers.
+*   **Tasks:** Individual work items. Represented by markdown checklist items `- [ ]`.
+
+Here is an example `ROADMAP.md`:
+
+```markdown
+# Test Project
+
+This is a test project roadmap.
+
+## M1: Foundation
+
+- [ ] Task 1: Set up project structure
+- [ ] Task 2: Initial dependencies
+
+### Feature A: Core Auth
+
+- [ ] Sub-task A1
+- [ ] Sub-task A2
+
+## M2: API
+
+- [ ] Task 3: Define API endpoints
+
+### Feature B: User Profiles
+
+- [ ] Sub-task B1
+```
+
+## 3. Standard Workflow
+
+Here's how you can use `gitscaffold` in your day-to-day development.
+
+### Step 1: Define Work in `ROADMAP.md`
+
+Before starting a new feature or a batch of work, open `ROADMAP.md` and add your milestones, features, and tasks. For example, you might add a new feature to the "M2: API" milestone:
+
+```markdown
+## M2: API
+
+- [ ] Task 3: Define API endpoints
+
+### Feature B: User Profiles
+
+- [ ] Sub-task B1
+
+### Feature C: Payments
+
+- [ ] Integrate Stripe
+- [ ] Add payment endpoint
+```
+
+### Step 2: Sync Roadmap to GitHub
+
+Once you've updated your roadmap, sync it with your GitHub repository to create issues.
+
+```bash
+gitscaffold sync --repo your_org/your_repo
+```
+
+This command will:
+*   Parse your `ROADMAP.md`.
+*   Create GitHub milestones for any `##` headers that don't exist.
+*   Create GitHub issues for each task (`- [ ]`) that doesn't already exist.
+*   Issues are automatically labeled with their feature (`Feature C: Payments`) and assigned to the correct milestone (`M2: API`).
+
+Run with `--dry-run` first to see what changes will be made without actually making them.
+
+### Step 3: Check for Differences
+
+At any time, you can see the differences between your local `ROADMAP.md` and the state of your GitHub issues.
+
+```bash
+gitscaffold diff --repo your_org/your_repo
+```
+
+This is useful for seeing:
+*   Tasks in `ROADMAP.md` that haven't been created as issues yet.
+*   Issues on GitHub that are not (or no longer) in `ROADMAP.md`.
+
+### Step 4: See What's Next
+
+To get a quick summary of the current priorities, use the `next` command:
+
+```bash
+gitscaffold next --repo your_org/your_repo
+```
+
+This command shows the currently active milestone (based on due dates) and the open, unassigned issues within it, helping your team decide what to work on next.
+
+This covers the basics of the workflow. For more advanced commands and options, run `gitscaffold --help`.
