@@ -2,6 +2,9 @@
 
 import re
 import logging
+import json
+import shutil
+import subprocess
 from pathlib import Path
 try:
     import yaml
@@ -13,7 +16,6 @@ def parse_markdown(md_file):
     logging.info(f"Parsing markdown file: {md_file}")
     # If an external Rust parser is available, use it
     try:
-        import shutil, subprocess, json
         if shutil.which('mdparser'):
             out = subprocess.check_output(['mdparser', md_file], text=True)
             data = json.loads(out)
