@@ -84,61 +84,47 @@ def parse_markdown(md_file):
                 }
                 
                 rest_of_feature = '\n'.join(feature_lines)
-                # Split feature content into tasks by H4
-                task_parts = re.split(r'^####\s+', rest_of_feature.strip(), flags=re.M)
+                
+                # Split feature content into metadata and tasks by the '**Tasks:**' heading
+                parts = re.split(r'\n\s*\*\*Tasks:\*\*\s*\n', rest_of_feature, maxsplit=1, flags=re.IGNORECASE)
+                meta_part_str = parts[0]
+                tasks_part_str = parts[1] if len(parts) > 1 else ''
 
-                # Part before first task is feature metadata
-                feature_meta_part = task_parts.pop(0)
+                # Parse metadata from the first part
                 desc_lines = []
-                for line in feature_meta_part.strip().split('\n'):
-                    line_lower = line.lower()
-                    if line_lower.startswith('milestone:'):
-                        feature['milestone'] = line.split(':', 1)[1].strip()
-                    elif line_lower.startswith('labels:'):
-                        feature['labels'] = [l.strip() for l in line.split(':', 1)[1].split(',') if l.strip()]
-                    elif line_lower.startswith('assignees:'):
-                        feature['assignees'] = [a.strip() for a in line.split(':', 1)[1].split(',') if a.strip()]
+                for line in meta_part_str.strip().split('\n'):
+                    stripped_line = line.strip()
+                    line_lower = stripped_line.lower()
+
+                    # Handle formats like '- **Description:** ...'
+                    if line_lower.startswith('- **description:**'):
+                        feature['description'] = stripped_line.split(':', 1)[1].strip()
+                    elif line_lower.startswith('- **milestone:**'):
+                        feature['milestone'] = stripped_line.split(':', 1)[1].strip()
+                    elif line_lower.startswith('- **labels:**'):
+                        feature['labels'] = [l.strip() for l in stripped_line.split(':', 1)[1].split(',') if l.strip()]
+                    elif line_lower.startswith('- **assignees:**'):
+                        feature['assignees'] = [a.strip() for a in stripped_line.split(':', 1)[1].split(',') if a.strip()]
                     else:
                         desc_lines.append(line)
-                feature['description'] = '\n'.join(desc_lines).strip()
                 
-                # Remaining parts are tasks
-                for task_part in task_parts:
-                    if not task_part.strip():
-                        continue
-                    task_lines = task_part.strip().split('\n')
-                    task_title_line = task_lines.pop(0).strip()
-                    if not task_title_line:
-                        continue
-
-                    completed = '[x]' in task_title_line.lower()
-                    task_title = re.sub(r'\[[ x]\]\s*', '', task_title_line, flags=re.IGNORECASE).strip()
-                    
-                    task = {'title': task_title, 'description': '', 'tests': [], 'labels': [], 'assignees': [], 'completed': completed}
-                    
-                    desc_lines = []
-                    in_tests = False
-                    for line in task_lines:
-                        line_lower = line.lower()
-                        if line_lower.strip() == 'tests:':
-                            in_tests = True
-                            continue
+                # If description was not set via a specific field, use the collected lines
+                if not feature['description'] and desc_lines:
+                    feature['description'] = '\n'.join(desc_lines).strip()
+                
+                # Parse tasks from the second part
+                if tasks_part_str:
+                    for line in tasks_part_str.strip().split('\n'):
+                        stripped_line = line.strip()
+                        indent = len(line) - len(line.lstrip())
                         
-                        if in_tests:
-                            if line.strip().startswith('- '):
-                                task['tests'].append(line.strip()[2:].strip())
-                            else: # A non-list item ends the tests block
-                                in_tests = False
-                                if line.strip(): # if it's not empty, it's description
-                                    desc_lines.append(line)
-                        elif line_lower.startswith('labels:'):
-                            task['labels'] = [l.strip() for l in line.split(':', 1)[1].split(',') if l.strip()]
-                        elif line_lower.startswith('assignees:'):
-                            task['assignees'] = [a.strip() for a in line.split(':', 1)[1].split(',') if a.strip()]
-                        else:
-                            desc_lines.append(line)
-                    task['description'] = '\n'.join(desc_lines).strip()
-                    feature['tasks'].append(task)
+                        # A non-indented list item is a new task. Sub-tasks are indented and ignored.
+                        if stripped_line.startswith('- ') and indent == 0:
+                            task_title = stripped_line[2:].strip()
+                            if task_title:
+                                task = {'title': task_title, 'completed': False}
+                                feature['tasks'].append(task)
+                
                 data['features'].append(feature)
 
     logging.info(f"Parsed {len(data['features'])} features and {len(data['milestones'])} milestones from {md_file}")
