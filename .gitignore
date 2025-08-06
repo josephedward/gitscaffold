@@ -26,3 +26,4 @@ misc
 .DS_Store
 scaffold/.DS_Store
 .secrets
+/rust/mdparser
