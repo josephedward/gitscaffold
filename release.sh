@@ -18,21 +18,9 @@ else
   sed -i '' -E "s|^__version__ = \".*\"|__version__ = \"$VERSION\"|" "$INIT_FILE"
 fi
 
-git add "$INIT_FILE"
-git commit -m "chore: bump version to $VERSION"
+git add "$INIT_FILE" docs/release.md
+git commit -m "chore(release): v$VERSION"
 git tag "v$VERSION"
 git push origin main --tags
 
-echo "Building distributions..."
-# Ensure build and twine are installed; skip installation if already present
-if ! python3 -c "import build, twine" &>/dev/null; then
-  pip install --upgrade build twine
-else
-  echo "build and twine already installed, skipping installation"
-fi
-python3 -m build
-
-echo "Uploading to PyPI..."
-twine upload dist/*
-
-echo "Release $VERSION complete!"
+echo "Pushed git tag v$VERSION. The release workflow will now run on GitHub."

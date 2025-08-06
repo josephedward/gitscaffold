@@ -29,7 +29,7 @@
 
 ## Releasing
 
-The project is automatically published to PyPI via the `Publish & Notify Release` GitHub Action when a new tag matching `v*.*.*` is pushed.
+The project is automatically published to PyPI via the `Release` GitHub Action when a new tag matching `v*.*.*` is pushed.
 
 The process is:
 1.  **Update Version**: Bump the `__version__` in `scaffold/__init__.py`.
