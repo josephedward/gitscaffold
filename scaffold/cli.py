@@ -25,6 +25,7 @@ from github import Github, GithubException
 from .parser import parse_markdown, parse_roadmap, write_roadmap
 from .validator import validate_roadmap, Feature, Task
 from .github import GitHubClient
+from .kanban_client import VibeKanbanClient
 from .ai import enrich_issue_description, extract_issues_from_markdown
 from datetime import date
 import re
@@ -1558,3 +1559,60 @@ def start_api():
     except subprocess.CalledProcessError as e:
         click.secho(f"API server failed to start or exited with an error: {e}", fg='red', err=True)
         sys.exit(1)
+
+
+@cli.command(name='kanban-export', help='Export roadmap tasks to a Vibe Kanban board.')
+@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL (e.g., http://localhost:3000/api).')
+@click.option('--dry-run', is_flag=True, help='Simulate and show what would be exported, without making changes.')
+def kanban_export(roadmap_file, kanban_api, dry_run):
+    """Export tasks from a local roadmap file to a Vibe Kanban board."""
+    click.secho("\n=== Exporting to Vibe Kanban ===", fg="bright_blue", bold=True)
+
+    try:
+        raw_roadmap_data = parse_roadmap(roadmap_file)
+        validated_roadmap = validate_roadmap(raw_roadmap_data)
+    except Exception as e:
+        click.secho(f"Error: Failed to parse roadmap file '{roadmap_file}': {e}", fg="red", err=True)
+        sys.exit(1)
+
+    if not validated_roadmap.features:
+        click.secho("No features found in roadmap to export.", fg="yellow")
+        return
+
+    if dry_run:
+        click.secho("[dry-run] The following tasks would be exported:", fg="blue")
+    else:
+        click.secho("Connecting to Vibe Kanban...", fg="cyan")
+
+    kanban_client = VibeKanbanClient(api_base_url=kanban_api)
+
+    tasks_to_export = []
+    for feat in validated_roadmap.features:
+        # Export the feature itself as a task
+        tasks_to_export.append({'title': feat.title, 'description': feat.description or ''})
+        # Export all sub-tasks
+        for task in feat.tasks:
+            tasks_to_export.append({'title': task.title, 'description': task.description or ''})
+
+    if not tasks_to_export:
+        click.secho("No tasks to export.", fg="yellow")
+        return
+
+    click.secho(f"Found {len(tasks_to_export)} tasks to export.", fg="magenta")
+
+    exported_count = 0
+    for task_data in tasks_to_export:
+        title = task_data['title']
+        description = task_data['description']
+        if dry_run:
+            click.secho(f"  - Would export task: {title}", fg="white")
+            exported_count += 1
+        else:
+            if kanban_client.create_task(title=title, description=description):
+                exported_count += 1
+    
+    if dry_run:
+        click.secho(f"\n[dry-run] Would have exported {exported_count} tasks. No changes made.", fg="blue")
+    else:
+        click.secho(f"\nSuccessfully exported {exported_count} tasks to Vibe Kanban.", fg="green")

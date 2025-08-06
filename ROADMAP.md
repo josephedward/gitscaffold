@@ -144,6 +144,17 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
 - Document the new `gh` CLI authentication method and `--use-gh-cli` flag for end-users.
   - Tests: Verify documentation is clear and provides examples for `gh auth login` and command usage.
 
+### Vibe Kanban Integration
+- **Description:** Export roadmap tasks directly to a local Vibe Kanban instance for AI agent execution.
+- **Milestone:** v0.4 Advanced Features & Usability
+- **Labels:** integration, kanban, ai
+
+**Tasks:**
+- Implement `kanban-export` command to send tasks from roadmap to Vibe Kanban.
+- Create a client to interact with the Vibe Kanban API.
+- Add tests for the `kanban-export` command, mocking the Kanban API.
+- Document the Vibe Kanban integration and the `kanban-export` command.
+
 ### CI/CD and Release Management
 - **Description:** Automate testing, building, and publishing.
 - **Milestone:** v1.0 Stable Release
