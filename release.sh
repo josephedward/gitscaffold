@@ -24,7 +24,12 @@ git tag "v$VERSION"
 git push origin main --tags
 
 echo "Building distributions..."
-pip install --upgrade build twine
+# Ensure build and twine are installed; skip installation if already present
+if ! python3 -c "import build, twine" &>/dev/null; then
+  pip install --upgrade build twine
+else
+  echo "build and twine already installed, skipping installation"
+fi
 python3 -m build
 
 echo "Uploading to PyPI..."
