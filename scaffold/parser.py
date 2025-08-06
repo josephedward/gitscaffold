@@ -11,6 +11,16 @@ except ImportError:
 def parse_markdown(md_file):
     """Parse a Markdown roadmap file into a structured dictionary."""
     logging.info(f"Parsing markdown file: {md_file}")
+    # If an external Rust parser is available, use it
+    try:
+        import shutil, subprocess, json
+        if shutil.which('mdparser'):
+            out = subprocess.check_output(['mdparser', md_file], text=True)
+            data = json.loads(out)
+            logging.info("Used external mdparser for parsing Markdown.")
+            return data
+    except Exception:
+        logging.debug("External mdparser invocation failed; falling back to Python parser.")
     path = Path(md_file)
     with open(md_file, 'r', encoding='utf-8') as f:
         content = f.read()
