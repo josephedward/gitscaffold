@@ -131,6 +131,17 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
 - Write developer documentation
   - Tests: onboarding by new developer
 
+### Persistent Credential Storage
+- **Description:** Securely store and retrieve GitHub and OpenAI API keys to avoid repeated entry.
+- **Milestone:** v0.4 Advanced Features & Usability
+- **Labels:** configuration, usability, enhancement
+
+**Tasks:**
+- Implement persistent storage for API keys in `.env` file
+  - Prompt user to save keys if not found.
+  - Update `get_github_token` and `get_openai_api_key` in `scaffold/cli.py` to handle loading/saving.
+- Document `.env` file usage for authentication in `README.md` and `usage.md`.
+
 ### GH-CLI Backend Integration
 - **Description:** Allow using the local `gh` CLI for GitHub operations as an alternative to the REST API, to simplify authentication and avoid managing API tokens.
 - **Milestone:** v0.4 Advanced Features & Usability
