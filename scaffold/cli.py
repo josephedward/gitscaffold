@@ -785,23 +785,22 @@ def vibe_list_projects(api_base_url):
             click.echo(f"{proj_id}: {name}")
 
 @vibe.command(name='push', help='Push GitHub issues to a Vibe Kanban board')
-@click.argument('board', metavar='BOARD')
-@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--repo', required=True, help='GitHub repository in owner/repo format')
-@click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
-@click.option('--no-ai', 'no_ai', is_flag=True, help='Disable AI enrichment')
-@click.option('--ai-enrich', is_flag=True, help='Enrich issue content via AI')
-def vibe_push(board, roadmap_file, repo, token, no_ai, ai_enrich):
+@click.option('--board', required=True, help='Vibe Kanban board name or ID')
+def vibe_push(repo, board):
     """Push GitHub issues into a Vibe Kanban board."""
-    click.secho("Push command not implemented yet.", fg="yellow")
+    click.secho("Vibe Kanban push is not yet implemented.", fg="yellow")
+    click.echo(f"Repo: {repo}")
+    click.echo(f"Board: {board}")
 
 @vibe.command(name='pull', help='Pull task status from Vibe Kanban board into GitHub')
-@click.argument('board', metavar='BOARD')
 @click.option('--repo', required=True, help='GitHub repository in owner/repo format')
-@click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
-def vibe_pull(board, repo, token):
+@click.option('--board', required=True, help='Vibe Kanban board name or ID')
+def vibe_pull(repo, board):
     """Pull task status from Vibe Kanban board and sync to GitHub."""
-    click.secho("Pull command not implemented yet.", fg="yellow")
+    click.secho("Vibe Kanban pull is not yet implemented.", fg="yellow")
+    click.echo(f"Repo: {repo}")
+    click.echo(f"Board: {board}")
     
 @cli.command(name='diff', help='Diff a local roadmap with GitHub issues (AI-first extraction for unstructured Markdown; disable with --no-ai; requires OPENAI_API_KEY)')
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
@@ -1653,7 +1652,9 @@ def vibe():
 @click.option('--state', default='open', show_default=True, help='Only include issues with this state')
 def push(repo, board, milestone, label, state):
     """Push GitHub issues into a Vibe Kanban board."""
-    click.secho("Push command not implemented yet.", fg="yellow")
+    click.secho("Vibe Kanban push is not yet implemented.", fg="yellow")
+    click.echo(f"Repo: {repo}")
+    click.echo(f"Board: {board}")
 
 @vibe.command('pull', help='Pull task status from Vibe Kanban into GitHub')
 @click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
@@ -1661,4 +1662,6 @@ def push(repo, board, milestone, label, state):
 @click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
 def pull(repo, board, bidirectional):
     """Pull task status from Vibe Kanban into GitHub."""
-    click.secho("Pull command not implemented yet.", fg="yellow")
+    click.secho("Vibe Kanban pull is not yet implemented.", fg="yellow")
+    click.echo(f"Repo: {repo}")
+    click.echo(f"Board: {board}")
