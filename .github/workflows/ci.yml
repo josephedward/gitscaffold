@@ -1,0 +1,38 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: |
+        pip install --upgrade pip
+        pip install .
+        pip install pytest pytest-mock
+
+    - name: Set up Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Build mdparser
+      run: cargo build --release --manifest-path rust/mdparser/Cargo.toml
+
+    - name: Add mdparser to PATH
+      run: echo "$(pwd)/rust/mdparser/target/release" >> $GITHUB_PATH
+
+    - name: Run tests
+      run: pytest
