@@ -29,43 +29,19 @@
 
 ## Releasing
 
-### Publishing to PyPI
-1. Bump version in `scaffold/__init__.py`.
-2. Update release notes in `docs/release.md`.
-3. Commit and tag:
-   ```sh
-   git add scaffold/__init__.py docs/release.md
-   git commit -m "release: vX.Y.Z"
-   git tag vX.Y.Z
-   git push origin main --tags
-   ```
-3. Build and upload:
-   ```sh
-   pip install --upgrade build twine
-   rm -rf dist/
-   python -m build
-   twine upload dist/*
-   ```
+The project is automatically published to PyPI via the `Publish & Notify Release` GitHub Action when a new tag matching `v*.*.*` is pushed.
 
-### Automating Releases with GitHub Actions
-Add `.github/workflows/release.md`:
-```
-name: Publish
-on:
-  push:
-    tags:
-      - 'v*.*.*'
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-      - run: pip install --upgrade build twine
-      - run: python -m build
-      - uses: pypa/gh-action-pypi-publish@v1.5.1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-```
+The process is:
+1.  **Update Version**: Bump the `__version__` in `scaffold/__init__.py`.
+2.  **Update Release Notes**: Add a new section for the release at the top of this file (`docs/release.md`).
+3.  **Commit and Tag**:
+    ```sh
+    git add scaffold/__init__.py docs/release.md
+    git commit -m "chore(release): vX.Y.Z"
+    git tag vX.Y.Z
+    ```
+4.  **Push to GitHub**:
+    ```sh
+    git push origin main --tags
+    ```
+5.  **Monitor Workflow**: The `Publish & Notify Release` workflow will automatically trigger. Check the "Actions" tab in the repository to monitor its progress.
