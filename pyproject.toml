@@ -9,6 +9,24 @@ description = "Convert roadmaps to GitHub issues"
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
+license-file = "LICENSE"
+authors = [
+  { name = "Joseph Edward", email = "josephedward@gmail.com" }
+]
+
+urls = {
+  "Homepage" = "https://github.com/josephedward/gitscaffold",
+  "Repository" = "https://github.com/josephedward/gitscaffold"
+}
+
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Topic :: Software Development :: Version Control"
+]
 dependencies = [
     "PyGithub>=1.55",
     "click>=8.0",
