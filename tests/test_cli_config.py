@@ -63,21 +63,22 @@ def test_config_list(runner, mock_home):
 
 def test_get_github_token_reads_from_global_config(runner, mock_home, monkeypatch):
     """Test that get_github_token reads from the global config file."""
-    # Setup global config
-    runner.invoke(cli, ['config', 'set', 'GITHUB_TOKEN', 'global_test_token'])
+    with runner.isolated_filesystem():
+        # Setup global config
+        runner.invoke(cli, ['config', 'set', 'GITHUB_TOKEN', 'global_test_token'])
 
-    # Delete any existing token from the environment to ensure we test reading from file
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        # Delete any existing token from the environment to ensure we test reading from file
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
 
-    # Use a dummy command that triggers get_github_token
-    @cli.command('test-token-read')
-    def test_token_read():
-        token = get_github_token()
-        print(f"TOKEN={token}")
+        # Use a dummy command that triggers get_github_token
+        @cli.command('test-token-read')
+        def test_token_read():
+            token = get_github_token()
+            print(f"TOKEN={token}")
 
-    result = runner.invoke(cli, ['test-token-read'])
-    assert result.exit_code == 0
-    assert "TOKEN=global_test_token" in result.output
+        result = runner.invoke(cli, ['test-token-read'])
+        assert result.exit_code == 0
+        assert "TOKEN=global_test_token" in result.output
 
 def test_get_github_token_prompts_and_saves_to_global_config(runner, mock_home, monkeypatch):
     """Test that get_github_token prompts and saves to global config when no token is found."""
