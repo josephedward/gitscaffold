@@ -78,3 +78,50 @@ def test_config_set_command(temp_config_dir):
     assert ('MY_TEST_KEY="my_test_value"' in content or
             "MY_TEST_KEY='my_test_value'" in content or
             "MY_TEST_KEY=my_test_value" in content)
+
+
+def test_uninstall_command_deletes_config_on_yes(temp_config_dir):
+    """Test the uninstall command removes the config directory when user confirms."""
+    runner = CliRunner()
+    config_dir = temp_config_dir.parent
+    assert config_dir.exists()
+
+    with patch('click.confirm', return_value=True):
+        result = runner.invoke(cli, ['uninstall'])
+
+    assert result.exit_code == 0
+    assert f"Successfully deleted {config_dir}" in result.output
+    assert "pip uninstall gitscaffold" in result.output
+    assert not config_dir.exists()
+
+
+def test_uninstall_command_aborts_on_no(temp_config_dir):
+    """Test the uninstall command aborts if the user says no."""
+    runner = CliRunner()
+    config_dir = temp_config_dir.parent
+    assert config_dir.exists()
+
+    with patch('click.confirm', return_value=False):
+        result = runner.invoke(cli, ['uninstall'])
+
+    assert result.exit_code == 0
+    assert "Successfully deleted" not in result.output
+    assert "Aborted directory deletion." in result.output
+    assert "pip uninstall gitscaffold" in result.output
+    assert config_dir.exists()
+
+
+def test_uninstall_command_when_no_config_dir_exists(tmp_path):
+    """Test the uninstall command when the config directory does not exist."""
+    runner = CliRunner()
+    # Create a path for a config directory that does not exist
+    non_existent_config_dir = tmp_path / ".gitscaffold"
+    non_existent_config_file = non_existent_config_dir / "config"
+    assert not non_existent_config_dir.exists()
+
+    with patch('scaffold.cli.get_global_config_path', return_value=non_existent_config_file):
+        result = runner.invoke(cli, ['uninstall'])
+
+    assert result.exit_code == 0
+    assert "No global configuration directory found to remove." in result.output
+    assert "pip uninstall gitscaffold" in result.output

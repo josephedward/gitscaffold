@@ -1853,3 +1853,30 @@ def start_api():
         sys.exit(1)
 
 
+@cli.command(name='uninstall', help='Remove configuration files and show uninstall instructions.')
+def uninstall():
+    """Removes global configuration files and provides uninstall instructions."""
+    import shutil
+    config_path = get_global_config_path()
+    config_dir = config_path.parent
+
+    click.secho("This command will help you uninstall gitscaffold.", fg="yellow")
+    
+    if config_dir.exists():
+        click.secho(f"\nConfiguration directory found at: {config_dir}", fg="cyan")
+        prompt_message = click.style(f"Do you want to permanently delete this directory and all its contents?", fg="yellow", bold=True)
+        if click.confirm(prompt_message, default=False):
+            try:
+                shutil.rmtree(config_dir)
+                click.secho(f"✓ Successfully deleted {config_dir}", fg="green")
+            except Exception as e:
+                click.secho(f"✗ Error deleting {config_dir}: {e}", fg="red", err=True)
+        else:
+            click.secho("Aborted directory deletion.", fg="red")
+    else:
+        click.secho("\nNo global configuration directory found to remove.", fg="green")
+
+    click.secho("\nTo complete the uninstallation, please run the following command:", fg="cyan", bold=True)
+    click.echo("pip uninstall gitscaffold")
+
+
