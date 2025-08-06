@@ -898,6 +898,66 @@ def diff(roadmap_file, repo, token, no_ai, openai_key):
     else:
         click.secho("✓ No extra issues on GitHub.", fg="green")
 
+    if missing and click.confirm(
+        click.style(f"\nCreate {len(missing)} missing issues on GitHub?", fg="yellow", bold=True), default=True
+    ):
+        click.secho("\nCreating missing issues...", fg="cyan")
+        
+        created_count = 0
+        failed_count = 0
+        
+        for feat in validated.features:
+            # Check if the feature itself is missing
+            if feat.title in missing:
+                click.secho(f"Creating feature issue: {feat.title.strip()}", fg="cyan")
+                try:
+                    feat_issue = gh_client.create_issue(
+                        title=feat.title.strip(),
+                        body=feat.description or '',
+                        assignees=feat.assignees,
+                        labels=feat.labels,
+                        milestone=feat.milestone
+                    )
+                    click.secho(f"  -> Feature issue created: #{feat_issue.number}", fg="green")
+                    created_count += 1
+                except GithubException as e:
+                    click.secho(f"  -> Failed to create feature issue '{feat.title.strip()}': {e}", fg="red")
+                    failed_count += 1
+
+            # Check for missing tasks within this feature
+            parent_issue_for_tasks = None
+            for task in feat.tasks:
+                if task.title in missing:
+                    if not parent_issue_for_tasks:
+                        # Find the parent issue on GitHub. It might have just been created.
+                        parent_issue_for_tasks = gh_client._find_issue(feat.title)
+                    
+                    if not parent_issue_for_tasks:
+                        click.secho(f"Warning: Cannot find parent issue '{feat.title}' for task '{task.title}'. Skipping.", fg="magenta")
+                        continue
+
+                    click.secho(f"Creating task issue: {task.title.strip()} (under #{parent_issue_for_tasks.number})", fg="cyan")
+                    content = f"{task.description or ''}\n\nParent issue: #{parent_issue_for_tasks.number}".strip()
+
+                    try:
+                        task_issue = gh_client.create_issue(
+                            title=task.title.strip(),
+                            body=content,
+                            assignees=task.assignees,
+                            labels=task.labels,
+                            milestone=feat.milestone
+                        )
+                        click.secho(f"  -> Task issue created: #{task_issue.number}", fg="green")
+                        created_count += 1
+                    except GithubException as e:
+                        click.secho(f"  -> Failed to create task issue '{task.title.strip()}': {e}", fg="red")
+                        failed_count += 1
+        
+        click.secho("\nCreation finished.", fg="bright_green", bold=True)
+        click.secho(f"Successfully created: {created_count} issues.", fg="green")
+        if failed_count > 0:
+            click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
+
 
 @cli.command(name='next', help='Show next action items')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')

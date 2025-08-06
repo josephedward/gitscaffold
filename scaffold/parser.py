@@ -116,10 +116,8 @@ def parse_markdown(md_file):
                 if tasks_part_str:
                     for line in tasks_part_str.strip().split('\n'):
                         stripped_line = line.strip()
-                        indent = len(line) - len(line.lstrip())
-                        
-                        # A non-indented list item is a new task. Sub-tasks are indented and ignored.
-                        if stripped_line.startswith('- ') and indent == 0:
+                        # Any list item is considered a task, including indented ones.
+                        if stripped_line.startswith('- '):
                             task_title = stripped_line[2:].strip()
                             if task_title:
                                 task = {'title': task_title, 'completed': False}
