@@ -709,7 +709,11 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
         feature_object_map = {}
         for feat in features_to_create:
             click.secho(f"Creating feature issue: {feat.title.strip()}", fg="cyan")
-            body = feat.description or ''
+            # Prepare issue body, default to empty string on any error
+            try:
+                body = feat.description or ''
+            except Exception:
+                body = ''
             if use_ai and openai_api_key_for_ai:
                 click.secho(f"  AI-enriching feature: {feat.title}...", fg="cyan")
                 body = enrich_issue_description(feat.title, body, openai_api_key_for_ai, context_text)
@@ -1565,19 +1569,34 @@ def push(repo, board_name, milestone, labels, state, kanban_api, token):
     actual_token = token or get_github_token()
     repo = _sanitize_repo_string(repo)
     gh_client = GitHubClient(actual_token, repo)
-    
+
     click.echo("Fetching issues from GitHub...")
-    # Placeholder for issue filtering logic. A real implementation will filter.
-    issues = list(gh_client.get_all_issues())
-    click.echo(f"Found {len(issues)} issues to potentially push.")
-    
-    kanban_client = VibeKanbanClient(api_base_url=kanban_api)
+    params = {'state': state}
+    if milestone:
+        m = gh_client._find_milestone(milestone)
+        if not m:
+            click.secho(f"Error: milestone '{milestone}' not found.", fg="red", err=True)
+            sys.exit(1)
+        params['milestone'] = m.number
+    if labels:
+        params['labels'] = list(labels)
+    try:
+        issues = list(gh_client.repo.get_issues(**params))
+    except Exception as e:
+        click.secho(f"Error fetching issues from GitHub: {e}", fg="red", err=True)
+        sys.exit(1)
+    click.echo(f"Found {len(issues)} issues to push.")
+
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pushing {len(issues)} issues to board '{board_name}'...")
     try:
         kanban_client.push_issues_to_board(board_name=board_name, issues=issues)
+        click.secho("Push completed.", fg="green")
     except NotImplementedError as e:
         click.secho(f"Functionality not implemented: {e}", fg="yellow")
     except Exception as e:
-        click.secho(f"An error occurred: {e}", fg="red")
+        click.secho(f"An error occurred while pushing to Vibe Kanban: {e}", fg="red", err=True)
         sys.exit(1)
 
 
@@ -1586,17 +1605,41 @@ def push(repo, board_name, milestone, labels, state, kanban_api, token):
 @click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
 @click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
 def pull(repo, board_name, kanban_api):
-    """Pull task status from Vibe Kanban into GitHub."""
+    """Pull task status from a Vibe Kanban board into GitHub."""
+    token = get_github_token()
     repo = _sanitize_repo_string(repo)
-    kanban_client = VibeKanbanClient(api_base_url=kanban_api)
+    gh_client = GitHubClient(token, repo)
+
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pulling board status from '{board_name}'...")
     try:
-        updates = kanban_client.pull_board_status(board_name=board_name)
-        click.echo(f"Pulled {len(updates)} updates from board '{board_name}'. Syncing to GitHub not implemented.")
+        statuses = kanban_client.pull_board_status(board_name=board_name)
     except NotImplementedError as e:
         click.secho(f"Functionality not implemented: {e}", fg="yellow")
+        return
     except Exception as e:
-        click.secho(f"An error occurred: {e}", fg="red")
+        click.secho(f"An error occurred while pulling from Vibe Kanban: {e}", fg="red", err=True)
         sys.exit(1)
+    mapping = {'done': 'closed'}
+    for item in statuses or []:
+        number = item.get('number')
+        status = item.get('status', '').lower()
+        if not number or not status:
+            continue
+        try:
+            issue = gh_client.repo.get_issue(number)
+        except Exception as e:
+            click.secho(f"Warning: cannot fetch issue #{number}: {e}", fg="yellow")
+            continue
+        desired_state = mapping.get(status)
+        if desired_state == 'closed' and issue.state != 'closed':
+            try:
+                issue.edit(state='closed')
+                click.secho(f"Issue #{number} closed.", fg="green")
+            except Exception as e:
+                click.secho(f"Error closing issue #{number}: {e}", fg="red")
+    click.secho("Pull completed.", fg="green")
 
 
 @cli.command(name='start-api', help='Run the FastAPI server')
