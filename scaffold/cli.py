@@ -1614,7 +1614,7 @@ def push(repo, board_name, milestone, labels, state, kanban_api, token):
     
     # Initialize Vibe Kanban client
     kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
-    kanban_client = VibeKanbanClient(api_base_url=kanban_api, token=kanban_token)
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
     click.echo(f"Pushing {len(issues_data)} issues to board '{board_name}'...")
     try:
         kanban_client.push_issues_to_board(board_name=board_name, issues=issues_data)

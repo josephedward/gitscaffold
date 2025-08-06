@@ -143,7 +143,7 @@ This script validates the complete user journey described in this guide.
 
 For more details on any command, run `gitscaffold <command> --help`.
 
-## 7. Vibe Kanban Integration (Experimental)
+## 6. Vibe Kanban Integration (Experimental)
 
 You can synchronize your GitHub issues with a [Vibe Kanban](https://vibekanban.com/) board. This feature is currently experimental.
 

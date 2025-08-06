@@ -20,7 +20,7 @@ class VibeKanbanClient:
         # A real implementation would go here.
         raise NotImplementedError("push_issues_to_board")
 
-    def pull_board_status(self, board_name: str):
+    def pull_board_status(self, board_name: str, bidirectional: bool = False):
         """
         Pulls updates from a Vibe Kanban board to sync with GitHub.
         This is a placeholder.

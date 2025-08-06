@@ -30,11 +30,12 @@ Provide a robust, two-way sync between GitHub issues managed by `git-scaffold` a
 2.  Scaffold `vibe` CLI commands and `VibeKanbanClient` stubs. [✓]
 3.  Fix test suite for `vibe` command scaffolding. [✓]
 4.  Add initial documentation for `vibe` commands to `usage.md`. [✓]
-5.  Investigate the `vibe-kanban` API to determine endpoints for creating boards, columns, and cards. [ ]
-6.  Implement `vibe push` functionality. [ ]
-7.  Implement `vibe pull` functionality. [ ]
-8.  Add comprehensive tests for both push and pull workflows. [ ]
-9.  Update documentation (`ROADMAP.md`, `usage.md`). [ ]
+5.  Flesh out `vibe pull` command to sync status back to GitHub. [✓]
+6.  Investigate the `vibe-kanban` API to determine endpoints for creating boards, columns, and cards. [ ]
+7.  Implement `vibe push` functionality. [ ]
+8.  Implement `vibe pull` functionality. [ ]
+9.  Add comprehensive tests for both push and pull workflows. [ ]
+10. Update documentation (`ROADMAP.md`, `usage.md`). [ ]
 
 ---
 
