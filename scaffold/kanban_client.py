@@ -23,10 +23,12 @@ class VibeKanbanClient:
         click.secho(f"[Stub] Pushing {len(issues)} issues to board '{board_name}'...", fg="cyan")
         raise NotImplementedError("push_issues_to_board is not yet implemented.")
 
-    def pull_board_status(self, board_name: str) -> List[Dict[str, Any]]:
+    def pull_board_status(self, board_name: str, bidirectional: bool = False) -> List[Dict[str, Any]]:
         """
         Pulls the status of all cards from a Vibe Kanban board.
         This would be used to sync changes back to GitHub issues.
         """
         click.secho(f"[Stub] Pulling status from board '{board_name}'...", fg="cyan")
+        if bidirectional:
+            click.secho("[Stub] Bidirectional sync is enabled.", fg="cyan")
         raise NotImplementedError("pull_board_status is not yet implemented.")

@@ -1604,7 +1604,8 @@ def push(repo, board_name, milestone, labels, state, kanban_api, token):
 @click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
 @click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
 @click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
-def pull(repo, board_name, kanban_api):
+@click.option('--bidirectional', is_flag=True, help='Enable two-way sync, including comments.')
+def pull(repo, board_name, kanban_api, bidirectional):
     """Pull task status from a Vibe Kanban board into GitHub."""
     token = get_github_token()
     repo = _sanitize_repo_string(repo)
@@ -1614,7 +1615,7 @@ def pull(repo, board_name, kanban_api):
     kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
     click.echo(f"Pulling board status from '{board_name}'...")
     try:
-        statuses = kanban_client.pull_board_status(board_name=board_name)
+        statuses = kanban_client.pull_board_status(board_name=board_name, bidirectional=bidirectional)
     except NotImplementedError as e:
         click.secho(f"Functionality not implemented: {e}", fg="yellow")
         return
