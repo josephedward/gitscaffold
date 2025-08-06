@@ -25,7 +25,7 @@ from github import Github, GithubException
 from .parser import parse_markdown, parse_roadmap, write_roadmap
 from .validator import validate_roadmap, Feature, Task
 from .github import GitHubClient
-from .kanban_client import VibeKanbanClient
+from .kanban import VibeKanbanClient
 from .ai import enrich_issue_description, extract_issues_from_markdown
 from datetime import date
 import re
@@ -756,51 +756,6 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
 
 
 
-@cli.group(name='vibe', help='Integrate with a Vibe Kanban board.')
-def vibe():
-    """Commands for Vibe Kanban integration."""
-    pass
-
-@vibe.command(name='list-projects', help='List Vibe Kanban projects')
-@click.option(
-    '--api-base-url', 'api_base_url',
-    envvar='VIBE_KANBAN_API',
-    default=None,
-    help='Vibe Kanban API base URL (overrides VIBE_KANBAN_API env var)'
-)
-def vibe_list_projects(api_base_url):
-    """List Vibe Kanban projects."""
-    client = VibeKanbanClient(api_base_url=api_base_url)
-    try:
-        projects = client.list_projects()
-    except Exception as e:
-        click.secho(f"Error fetching projects: {e}", fg="red")
-        sys.exit(1)
-    if not projects:
-        click.secho("No projects found.", fg="yellow")
-    else:
-        for proj in projects:
-            proj_id = proj.get('id')
-            name = proj.get('name', '')
-            click.echo(f"{proj_id}: {name}")
-
-@vibe.command(name='push', help='Push GitHub issues to a Vibe Kanban board')
-@click.option('--repo', required=True, help='GitHub repository in owner/repo format')
-@click.option('--board', required=True, help='Vibe Kanban board name or ID')
-def vibe_push(repo, board):
-    """Push GitHub issues into a Vibe Kanban board."""
-    click.secho("Vibe Kanban push is not yet implemented.", fg="yellow")
-    click.echo(f"Repo: {repo}")
-    click.echo(f"Board: {board}")
-
-@vibe.command(name='pull', help='Pull task status from Vibe Kanban board into GitHub')
-@click.option('--repo', required=True, help='GitHub repository in owner/repo format')
-@click.option('--board', required=True, help='Vibe Kanban board name or ID')
-def vibe_pull(repo, board):
-    """Pull task status from Vibe Kanban board and sync to GitHub."""
-    click.secho("Vibe Kanban pull is not yet implemented.", fg="yellow")
-    click.echo(f"Repo: {repo}")
-    click.echo(f"Board: {board}")
     
 @cli.command(name='diff', help='Diff a local roadmap with GitHub issues (AI-first extraction for unstructured Markdown; disable with --no-ai; requires OPENAI_API_KEY)')
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
