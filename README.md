@@ -171,17 +171,19 @@ gitscaffold diff ROADMAP.md --repo owner/repo
 gitscaffold diff docs/brainstorm.md --repo owner/repo --ai
 ```
 
-### Vibe Kanban Integration
+### Vibe Kanban Integration (`vibe`)
 
-Use the `vibe` command group to integrate with a [Vibe Kanban](https://github.com/BloopAI/vibe-kanban) board. This allows you to push GitHub issues to a Kanban board for AI agents and pull status updates back.
+Synchronize GitHub issues with a [Vibe Kanban](https://github.com/BloopAI/vibe-kanban) board to manage tasks for AI agents. Push filtered GitHub issues to a board, and pull status updates back to GitHub. This feature allows you to bridge your planning in GitHub with execution on a Kanban board.
 
-*(Note: This feature is in early development. The `push` command has an initial implementation to send issues to a board, while `pull` remains a placeholder.)*
+For detailed setup and usage instructions, see the [Vibe Kanban Integration Guide](./docs/integration_vibe-kanban.md).
+
+*(Note: This feature is in early development.)*
 
 ```sh
-# Push GitHub issues to a board
+# Push open issues with the "bug" label to a Vibe Kanban board
 gitscaffold vibe push --repo owner/repo --board-name "My AI Tasks" --label bug
 
-# Pull status updates from a board back to GitHub
+# Pull status updates from the board back to GitHub
 gitscaffold vibe pull --repo owner/repo --board-name "My AI Tasks"
 ```
 

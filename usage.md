@@ -145,46 +145,13 @@ For more details on any command, run `gitscaffold <command> --help`.
 
 ## 6. Vibe Kanban Integration (Experimental)
 
-You can synchronize your GitHub issues with a [Vibe Kanban](https://vibekanban.com/) board. This feature is currently experimental.
+You can synchronize your GitHub issues with a [Vibe Kanban](https://vibekanban.com/) board, which is useful for managing tasks delegated to AI agents. This feature is currently experimental.
 
-### Environment
+The integration allows you to:
+-   `push`: Send filtered GitHub issues to a Vibe Kanban board as cards.
+-   `pull`: Sync status changes from the Kanban board back to GitHub issues.
 
-You need to provide the URL for your Vibe Kanban API server and an optional token:
-```dotenv
-VIBE_KANBAN_API="http://localhost:3001"
-VIBE_KANBAN_TOKEN="your_kanban_token_if_needed"
-```
-You can also provide the API URL with the `--kanban-api` flag.
-
-### Listing Available Kanban Boards
-
-To verify connectivity with your Vibe Kanban instance and list available boards:
-
-```bash
-gitscaffold vibe list-projects --kanban-api http://localhost:3001
-# Example output:
-# - My Project Board
-# - Sprint Planning
-```
-
-### Pushing Issues to Vibe Kanban
-
-gitscaffold vibe push --repo your_org/your_repo --board "My Project Board"
-To push all open issues from your GitHub repository to a Vibe Kanban board:
-```bash
-gitscaffold vibe push --repo your_org/your_repo --board "My Project Board" --kanban-api http://localhost:3001
-```
-This command fetches open issues and sends them to your Vibe Kanban instance to be created as cards. You can filter which issues are pushed using the `--milestone` or `--label` flags.
-
-### Pulling Status from Vibe Kanban
-
-gitscaffold vibe pull --repo your_org/your_repo --board "My Project Board"
-To sync status changes from your Kanban board back to GitHub:
-```bash
-gitscaffold vibe pull --repo your_org/your_repo --board "My Project Board" --kanban-api http://localhost:3001
-```
-This command will fetch card statuses and update the corresponding GitHub issues. For example, moving a card to the "Done" column could close the issue on GitHub.
-You can enable two-way comment synchronization with the `--bidirectional` flag.
+For a complete guide on setting up a local Vibe Kanban server, configuring API endpoints, and detailed command usage, please see the [Vibe Kanban Integration Guide](./docs/integration_vibe-kanban.md).
 
 ## 6. Troubleshooting
 
