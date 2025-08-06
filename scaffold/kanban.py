@@ -6,10 +6,10 @@ import click
 class VibeKanbanClient:
     """Client for the Vibe Kanban API."""
 
-    def __init__(self, api_base_url: str, token: str = None):
-        if not api_base_url:
-            raise click.ClickException("Vibe Kanban API base URL is required.")
-        self.api_base_url = api_base_url
+    def __init__(self, api_url: str, token: str = None):
+        if not api_url:
+            raise click.ClickException("Vibe Kanban API URL is required.")
+        self.api_url = api_url
         self.token = token
 
     def push_issues_to_board(self, board_name: str, issues: list):

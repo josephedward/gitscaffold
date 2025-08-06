@@ -31,7 +31,7 @@ def test_vibe_push_invokes_stub(mock_gh_client_class, mock_kanban_client_class, 
     assert result.exit_code == 0
     mock_get_token.assert_called_once()
     mock_gh_client_class.assert_called_with('fake-token', 'owner/repo')
-    mock_kanban_client_class.assert_called_with(api_base_url='http://fake.api/v1')
+    mock_kanban_client_class.assert_called_with(api_url='http://fake.api/v1', token=None)
     mock_kanban_instance.push_issues_to_board.assert_called_with(
         board_name='My Awesome Board',
         issues=[{'title': 'Test Issue'}]
@@ -53,6 +53,6 @@ def test_vibe_pull_invokes_stub(mock_kanban_client_class, runner):
     ])
 
     assert result.exit_code == 0
-    mock_kanban_client_class.assert_called_with(api_base_url='http://fake.api/v1')
+    mock_kanban_client_class.assert_called_with(api_url='http://fake.api/v1', token=None)
     mock_kanban_instance.pull_board_status.assert_called_with(board_name='My Cool Board')
     assert "Functionality not implemented: pull_board_status" in result.output
