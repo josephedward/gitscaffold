@@ -1853,30 +1853,24 @@ def start_api():
         sys.exit(1)
 
 
-@cli.command(name='uninstall', help='Remove configuration files and show uninstall instructions.')
+@cli.command(name='uninstall', help='Show uninstall instructions.')
 def uninstall():
-    """Removes global configuration files and provides uninstall instructions."""
-    import shutil
-    config_path = get_global_config_path()
-    config_dir = config_path.parent
+    """Provides instructions for uninstalling gitscaffold."""
+    click.secho("Since gitscaffold is a standard Python package, you can remove it the same way you’d remove any pip-installed package.", fg='yellow')
 
-    click.secho("This command will help you uninstall gitscaffold.", fg="yellow")
+    click.secho("\n1. Uninstall the package:", fg="cyan", bold=True)
+    click.echo("\n   • If you installed in a virtualenv or system Python:")
+    click.secho("     pip uninstall gitscaffold", fg="green")
     
-    if config_dir.exists():
-        click.secho(f"\nConfiguration directory found at: {config_dir}", fg="cyan")
-        prompt_message = click.style(f"Do you want to permanently delete this directory and all its contents?", fg="yellow", bold=True)
-        if click.confirm(prompt_message, default=False):
-            try:
-                shutil.rmtree(config_dir)
-                click.secho(f"✓ Successfully deleted {config_dir}", fg="green")
-            except Exception as e:
-                click.secho(f"✗ Error deleting {config_dir}: {e}", fg="red", err=True)
-        else:
-            click.secho("Aborted directory deletion.", fg="red")
-    else:
-        click.secho("\nNo global configuration directory found to remove.", fg="green")
+    click.echo("\n   • If you used pipx:")
+    click.secho("     pipx uninstall gitscaffold", fg="green")
 
-    click.secho("\nTo complete the uninstallation, please run the following command:", fg="cyan", bold=True)
-    click.echo("pip uninstall gitscaffold")
+    click.echo("\nThis will remove the `gitscaffold` console script and library files.")
+    
+    click.secho("\n2. (Optional) Clean up your global config directory:", fg="cyan", bold=True)
+    click.echo("   This directory stores your saved tokens.")
+    click.secho("   rm -rf ~/.gitscaffold", fg="green")
+
+    click.secho("\nAfter that, everything that gitscaffold created will be gone.", fg='yellow')
 
 
