@@ -179,12 +179,28 @@ For detailed setup and usage instructions, see the [Vibe Kanban Integration Guid
 
 *(Note: This feature is in early development.)*
 
-```sh
-# Push open issues with the "bug" label to a Vibe Kanban board
-gitscaffold vibe push --repo owner/repo --board-name "My AI Tasks" --label bug
+#### Listing Available Kanban Boards
 
+```bash
+# Verify connectivity and list available boards
+gitscaffold vibe list-projects --kanban-api http://localhost:3000/api
+# Example Output:
+# - Project Board A
+# - AIPowered Tasks
+```
+
+#### Pushing Issues to Vibe Kanban
+
+```bash
+# Push open issues with the "bug" label to a Vibe Kanban board
+gitscaffold vibe push --repo owner/repo --board "My AI Tasks" --kanban-api http://localhost:3000/api --label bug
+```
+
+#### Pulling Status from Vibe Kanban
+
+```bash
 # Pull status updates from the board back to GitHub
-gitscaffold vibe pull --repo owner/repo --board-name "My AI Tasks"
+gitscaffold vibe pull --repo owner/repo --board "My AI Tasks" --kanban-api http://localhost:3000/api
 ```
 
 ### From the source checkout
