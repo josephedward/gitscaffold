@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # This script demonstrates using gitscaffold on its own repository.
-# It runs a "diff" to compare the local ROADMAP.md with GitHub issues.
+# It runs a "sync" to create missing issues from the local ROADMAP.md on GitHub.
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
@@ -23,9 +23,9 @@ echo "Step 1: Installing gitscaffold..."
 pip install -e .
 
 echo ""
-echo "Step 2: Running diff against josephedward/gitscaffold..."
-# Run the diff command
-gitscaffold diff ROADMAP.md --repo josephedward/gitscaffold --token "$GITHUB_TOKEN"
+echo "Step 2: Running sync against josephedward/gitscaffold..."
+# Run the sync command to create missing issues. The --yes flag auto-confirms.
+gitscaffold sync ROADMAP.md --repo josephedward/gitscaffold --token "$GITHUB_TOKEN" --yes
 
 echo ""
 echo "--- Demonstration complete ---"
