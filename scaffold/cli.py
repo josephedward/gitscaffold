@@ -707,19 +707,21 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
             if use_ai and openai_api_key_for_ai:
                 click.secho(f"  AI-enriching feature: {feat.title}...", fg="cyan")
                 body = enrich_issue_description(feat.title, body, openai_api_key_for_ai, context_text)
-            
-        try:
-            feat_issue_obj = gh_client.create_issue(
-                title=feat.title.strip(), body=body, assignees=feat.assignees,
-                labels=feat.labels, milestone=feat.milestone
-            )
-        except GithubException as e:
-            if e.status == 403:
-                click.secho("Error: Cannot create issue. Your GitHub token lacks permission to create issues. Please grant 'repo' or 'issues' scope.", fg="red", err=True)
-                sys.exit(1)
-            raise
-        feature_object_map[feat.title] = feat_issue_obj
-        click.secho(f"  -> Feature issue created: #{feat_issue_obj.number}", fg="green")
+            try:
+                feat_issue_obj = gh_client.create_issue(
+                    title=feat.title.strip(), body=body, assignees=feat.assignees,
+                    labels=feat.labels, milestone=feat.milestone
+                )
+            except GithubException as e:
+                if e.status == 403:
+                    click.secho(
+                        "Error: Cannot create issue. Your GitHub token lacks permission to create issues. "
+                        "Please grant 'repo' or 'issues' scope.", fg="red", err=True
+                    )
+                    sys.exit(1)
+                raise
+            feature_object_map[feat.title] = feat_issue_obj
+            click.secho(f"  -> Feature issue created: #{feat_issue_obj.number}", fg="green")
 
         # Create all tasks, whether for new or existing features
         for feat_title, tasks in tasks_to_create.items():
@@ -1400,34 +1402,6 @@ def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_change
         click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
 
 
-@cli.group(name='vibe', help='Integrate with a Vibe Kanban board.')
-def vibe():
-    """Commands for Vibe Kanban integration."""
-    pass
-
-@vibe.command(name='push', help='Push GitHub issues to a Vibe Kanban board.')
-@click.option('--repo', required=True, help='Source GitHub repository in `owner/repo` format.')
-@click.option('--board', 'board_name', required=True, help='Target Vibe Kanban board name.')
-@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
-@click.option('--milestone', help='Filter issues by a specific GitHub milestone.')
-@click.option('--label', help='Filter issues by a specific GitHub label.')
-def vibe_push(repo, board_name, kanban_api, milestone, label):
-    """Pushes GitHub issues to a Vibe Kanban board."""
-    click.secho("Vibe Kanban push is not yet implemented.", fg="yellow")
-    click.echo(f"Repo: {repo}, Board: {board_name}, API: {kanban_api or 'Not provided'}")
-    if milestone:
-        click.echo(f"Filtering by milestone: {milestone}")
-    if label:
-        click.echo(f"Filtering by label: {label}")
-
-@vibe.command(name='pull', help='Pull updates from a Vibe Kanban board to GitHub.')
-@click.option('--repo', required=True, help='Target GitHub repository in `owner/repo` format.')
-@click.option('--board', 'board_name', required=True, help='Source Vibe Kanban board name.')
-@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
-def vibe_pull(repo, board_name, kanban_api):
-    """Pulls card statuses from Vibe Kanban and updates linked GitHub issues."""
-    click.secho("Vibe Kanban pull is not yet implemented.", fg="yellow")
-    click.echo(f"Repo: {repo}, Board: {board_name}, API: {kanban_api or 'Not provided'}")
 
 
 @cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
