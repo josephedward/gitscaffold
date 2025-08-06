@@ -20,7 +20,7 @@ jobs:
       - name: Install build tools
         run: pip install --upgrade build twine
       - name: Build distribution
-        run: python -m build --sdist --wheel
+        run: python -m build --sdist --wheel --no-isolation
       - name: Verify version matches tag
         run: |
           PACKAGE_VERSION=$(python -c 'from scaffold import __version__; print(__version__)')
