@@ -709,11 +709,8 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
         feature_object_map = {}
         for feat in features_to_create:
             click.secho(f"Creating feature issue: {feat.title.strip()}", fg="cyan")
-            # Prepare issue body, default to empty string on any error
-            try:
-                body = feat.description or ''
-            except Exception:
-                body = ''
+            # Prepare issue body
+            body = getattr(feat, 'description', '') or ''
             if use_ai and openai_api_key_for_ai:
                 click.secho(f"  AI-enriching feature: {feat.title}...", fg="cyan")
                 body = enrich_issue_description(feat.title, body, openai_api_key_for_ai, context_text)
