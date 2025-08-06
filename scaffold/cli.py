@@ -1592,31 +1592,3 @@ def start_api():
         sys.exit(1)
 
 
-    
-# Vibe Kanban integration commands
-@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
-def vibe():
-    """Vibe Kanban integration subcommands."""
-    pass
-
-@vibe.command('push', help='Push GitHub issues to a Vibe Kanban board')
-@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
-@click.option('--board', help='Vibe Kanban board name or ID.')
-@click.option('--milestone', help='Only include issues in this milestone')
-@click.option('--label', 'label', multiple=True, help='Only include issues with these labels')
-@click.option('--state', default='open', show_default=True, help='Only include issues with this state')
-def push(repo, board, milestone, label, state):
-    """Push GitHub issues into a Vibe Kanban board."""
-    click.secho("Vibe Kanban push is not yet implemented.", fg="yellow")
-    click.echo(f"Repo: {repo}")
-    click.echo(f"Board: {board}")
-
-@vibe.command('pull', help='Pull task status from Vibe Kanban into GitHub')
-@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
-@click.option('--board', help='Vibe Kanban board name or ID.')
-@click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
-def pull(repo, board, bidirectional):
-    """Pull task status from Vibe Kanban into GitHub."""
-    click.secho("Vibe Kanban pull is not yet implemented.", fg="yellow")
-    click.echo(f"Repo: {repo}")
-    click.echo(f"Board: {board}")
