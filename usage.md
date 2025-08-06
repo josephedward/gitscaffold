@@ -156,21 +156,35 @@ VIBE_KANBAN_TOKEN="your_kanban_token_if_needed"
 ```
 You can also provide the API URL with the `--kanban-api` flag.
 
+### Listing Available Kanban Boards
+
+To verify connectivity with your Vibe Kanban instance and list available boards:
+
+```bash
+gitscaffold vibe list-projects --kanban-api http://localhost:3001
+# Example output:
+# - My Project Board
+# - Sprint Planning
+```
+
 ### Pushing Issues to Vibe Kanban
 
+gitscaffold vibe push --repo your_org/your_repo --board "My Project Board"
 To push all open issues from your GitHub repository to a Vibe Kanban board:
 ```bash
-gitscaffold vibe push --repo your_org/your_repo --board "My Project Board"
+gitscaffold vibe push --repo your_org/your_repo --board "My Project Board" --kanban-api http://localhost:3001
 ```
-This command will fetch open issues and (in the future) create them as cards on the specified board. You can filter the issues pushed using `--milestone` or `--label` flags.
+This command fetches open issues and sends them to your Vibe Kanban instance to be created as cards. You can filter which issues are pushed using the `--milestone` or `--label` flags.
 
 ### Pulling Status from Vibe Kanban
 
+gitscaffold vibe pull --repo your_org/your_repo --board "My Project Board"
 To sync status changes from your Kanban board back to GitHub:
 ```bash
-gitscaffold vibe pull --repo your_org/your_repo --board "My Project Board"
+gitscaffold vibe pull --repo your_org/your_repo --board "My Project Board" --kanban-api http://localhost:3001
 ```
-This command will fetch card statuses and update the corresponding GitHub issues. For example, moving a card to the "Done" column will close the issue on GitHub.
+This command will fetch card statuses and update the corresponding GitHub issues. For example, moving a card to the "Done" column could close the issue on GitHub.
+You can enable two-way comment synchronization with the `--bidirectional` flag.
 
 ## 6. Troubleshooting
 
