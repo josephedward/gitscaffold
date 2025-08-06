@@ -4,6 +4,8 @@ from pathlib import Path
 import os
 import stat
 
+from dotenv import dotenv_values
+
 from scaffold.cli import cli, get_global_config_path, get_github_token
 
 @pytest.fixture
@@ -32,7 +34,10 @@ def test_config_set_and_get(runner, mock_home):
     
     config_file = get_global_config_path()
     assert config_file.exists()
-    assert "MY_KEY=my_value" in config_file.read_text()
+    
+    # Parse the .env file to check the value robustly
+    config_values = dotenv_values(config_file)
+    assert config_values.get('MY_KEY') == 'my_value'
 
     # Test get
     result = runner.invoke(cli, ['config', 'get', 'MY_KEY'])
@@ -61,13 +66,8 @@ def test_get_github_token_reads_from_global_config(runner, mock_home, monkeypatc
     # Setup global config
     runner.invoke(cli, ['config', 'set', 'GITHUB_TOKEN', 'global_test_token'])
 
-    # Mock os.getenv to ensure it's not reading from shell env var
-    original_getenv = os.getenv
-    def mock_getenv(key, default=None):
-        if key == 'GITHUB_TOKEN':
-            return None # Force reading from file
-        return original_getenv(key, default)
-    monkeypatch.setattr(os, 'getenv', mock_getenv)
+    # Delete any existing token from the environment to ensure we test reading from file
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
 
     # Use a dummy command that triggers get_github_token
     @cli.command('test-token-read')
@@ -96,8 +96,10 @@ def test_get_github_token_prompts_and_saves_to_global_config(runner, mock_home, 
 
     config_file = get_global_config_path()
     assert config_file.exists()
-    content = config_file.read_text()
-    assert "GITHUB_TOKEN=prompted_token" in content
+    
+    # Parse the .env file to check the value robustly
+    config_values = dotenv_values(config_file)
+    assert config_values.get('GITHUB_TOKEN') == 'prompted_token'
 
 def test_config_file_permissions(runner, mock_home):
     """Test that the config directory and file are created with secure permissions."""
