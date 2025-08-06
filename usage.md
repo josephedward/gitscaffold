@@ -153,7 +153,7 @@ The integration allows you to:
 
 For a complete guide on setting up a local Vibe Kanban server, configuring API endpoints, and detailed command usage, please see the [Vibe Kanban Integration Guide](./docs/integration_vibe-kanban.md).
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 ### `gitscaffold: command not found`
 
