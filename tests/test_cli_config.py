@@ -63,8 +63,13 @@ def test_config_list(runner, mock_home):
 
 def test_get_github_token_reads_from_global_config(runner, mock_home, monkeypatch):
     """Test that get_github_token reads from the global config file."""
+    # Prevent `load_dotenv()` from finding a real .env file in the project root by patching `find_dotenv`.
+    # This ensures that we are only testing the loading from the global config.
+    monkeypatch.setattr('dotenv.find_dotenv', lambda *args, **kwargs: None)
+    
     with runner.isolated_filesystem():
-        # Setup global config
+        # Setup global config. This still works because an explicit path is used for the global config,
+        # which bypasses `find_dotenv`.
         runner.invoke(cli, ['config', 'set', 'GITHUB_TOKEN', 'global_test_token'])
 
         # Delete any existing token from the environment to ensure we test reading from file
