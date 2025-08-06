@@ -2,12 +2,10 @@
 set -euo pipefail
 
 usage() {
-  cat <<EOF
-Usage: $(basename "$0") [-n COUNT] [-i INTERVAL] -- [codex args…]
-  -n COUNT     number of times to run (default: infinite)
-  -i INTERVAL  secs between runs (default: 20)
-  [codex args] everything after “--” is passed straight to codex
-EOF
+  echo "Usage: $(basename "$0") [-n COUNT] [-i INTERVAL] -- [codex args…]"
+  echo "  -n COUNT     number of times to run (default: infinite)"
+  echo "  -i INTERVAL  secs between runs (default: 20)"
+  echo "  [codex args] everything after “--” is passed straight to codex"
   exit 1
 }
 
