@@ -1399,6 +1399,21 @@ def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_change
         click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
 
 
+@cli.group(name='kanban', help='Integrate with a Vibe Kanban board.')
+def kanban():
+    """Commands for Vibe Kanban integration."""
+    pass
+
+@kanban.command(name='export', help='Export roadmap to a Vibe Kanban board.')
+@click.option('--roadmap-file', type=click.Path(exists=True), default='ROADMAP.md', show_default=True, help='Roadmap file to export.')
+@click.option('--board-url', help='URL of the Vibe Kanban board. Can also be set via VIBE_KANBAN_URL env var.')
+def export(roadmap_file, board_url):
+    """Exports a roadmap to a Vibe Kanban board."""
+    click.secho("Kanban export is not yet implemented.", fg="yellow")
+    click.echo(f"Roadmap file: {roadmap_file}")
+    click.echo(f"Board URL: {board_url or 'Not provided'}")
+
+
 @cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
