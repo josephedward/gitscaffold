@@ -34,8 +34,10 @@ def test_get_github_token_prompts_and_saves(temp_config_dir):
         # Assert the config file was created and contains the token
         assert temp_config_dir.exists()
         content = temp_config_dir.read_text()
-        # python-dotenv can save with or without quotes, so check for both possibilities
-        assert f'GITHUB_TOKEN="{fake_token}"' in content or f"GITHUB_TOKEN={fake_token}" in content
+        # python-dotenv can save with different quoting styles, check for common ones.
+        assert (f'GITHUB_TOKEN="{fake_token}"' in content or
+                f"GITHUB_TOKEN='{fake_token}'" in content or
+                f"GITHUB_TOKEN={fake_token}" in content)
 
 def test_get_openai_api_key_prompts_and_saves(temp_config_dir):
     """Test get_openai_api_key prompts for a key and saves it when not found."""
@@ -49,7 +51,9 @@ def test_get_openai_api_key_prompts_and_saves(temp_config_dir):
         assert key == fake_key
         assert temp_config_dir.exists()
         content = temp_config_dir.read_text()
-        assert f'OPENAI_API_KEY="{fake_key}"' in content or f"OPENAI_API_KEY={fake_key}" in content
+        assert (f'OPENAI_API_KEY="{fake_key}"' in content or
+                f"OPENAI_API_KEY='{fake_key}'" in content or
+                f"OPENAI_API_KEY={fake_key}" in content)
 
 def test_get_github_token_loads_from_env(monkeypatch):
     """Test that get_github_token loads from environment and does not prompt."""
@@ -71,4 +75,6 @@ def test_config_set_command(temp_config_dir):
     assert "Set MY_TEST_KEY" in result.output
     
     content = temp_config_dir.read_text()
-    assert 'MY_TEST_KEY="my_test_value"' in content or "MY_TEST_KEY=my_test_value" in content
+    assert ('MY_TEST_KEY="my_test_value"' in content or
+            "MY_TEST_KEY='my_test_value'" in content or
+            "MY_TEST_KEY=my_test_value" in content)
