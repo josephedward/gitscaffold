@@ -63,13 +63,21 @@ def test_config_list(runner, mock_home):
 
 def test_get_github_token_reads_from_global_config(runner, mock_home, monkeypatch):
     """Test that get_github_token reads from the global config file."""
-    # Prevent `load_dotenv()` from finding a real .env file in the project root by patching `find_dotenv`.
-    # This ensures that we are only testing the loading from the global config.
-    monkeypatch.setattr('dotenv.find_dotenv', lambda *args, **kwargs: None)
+    # Patch `load_dotenv` to prevent it from finding a real .env file.
+    # The default `load_dotenv()` searches from the script's location up, which
+    # can find a real .env file during testing. We mock it to only load a
+    # dotenv file when an explicit path is given, which is how the global
+    # config is loaded.
+    from scaffold.cli import load_dotenv as original_load_dotenv
+    def mocked_load_dotenv(dotenv_path=None, **kwargs):
+        if dotenv_path is not None:
+            return original_load_dotenv(dotenv_path=dotenv_path, **kwargs)
+        return False  # Suppress searching for local .env
+    
+    monkeypatch.setattr('scaffold.cli.load_dotenv', mocked_load_dotenv)
     
     with runner.isolated_filesystem():
-        # Setup global config. This still works because an explicit path is used for the global config,
-        # which bypasses `find_dotenv`.
+        # Setup global config
         runner.invoke(cli, ['config', 'set', 'GITHUB_TOKEN', 'global_test_token'])
 
         # Delete any existing token from the environment to ensure we test reading from file
