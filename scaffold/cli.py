@@ -31,7 +31,7 @@ except ImportError:
 from .parser import parse_markdown, parse_roadmap, write_roadmap
 from .validator import validate_roadmap, Feature, Task
 from .github import GitHubClient
-from .kanban import VibeKanbanClient
+from .kanban_client import VibeKanbanClient
 from .ai import enrich_issue_description, extract_issues_from_markdown
 from datetime import date
 import re
@@ -1570,25 +1570,11 @@ def push(repo, board_name, milestone, labels, state, kanban_api, token):
     repo = _sanitize_repo_string(repo)
     gh_client = GitHubClient(actual_token, repo)
 
-    click.echo("Fetching issues from GitHub...")
-    params = {'state': state}
-    if milestone:
-        m = gh_client._find_milestone(milestone)
-        if not m:
-            click.secho(f"Error: milestone '{milestone}' not found.", fg="red", err=True)
-            sys.exit(1)
-        params['milestone'] = m.number
-    if labels:
-        params['labels'] = list(labels)
-    try:
-        issues = list(gh_client.repo.get_issues(**params))
-    except Exception as e:
-        click.secho(f"Error fetching issues from GitHub: {e}", fg="red", err=True)
-        sys.exit(1)
-    click.echo(f"Found {len(issues)} issues to push.")
+    # Retrieve all open issues via our GitHubClient wrapper
+    issues = list(gh_client.get_all_issues())
 
-    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
-    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    # Initialize Vibe Kanban client
+    kanban_client = VibeKanbanClient(api_base_url=kanban_api)
     click.echo(f"Pushing {len(issues)} issues to board '{board_name}'...")
     try:
         kanban_client.push_issues_to_board(board_name=board_name, issues=issues)
@@ -1600,46 +1586,23 @@ def push(repo, board_name, milestone, labels, state, kanban_api, token):
         sys.exit(1)
 
 
-@vibe.command('pull', help='Pull task status from Vibe Kanban into GitHub')
+@vibe.command('pull', help='Pull task status from a Vibe Kanban board')
 @click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
-@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
-@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
-@click.option('--bidirectional', is_flag=True, help='Enable two-way sync, including comments.')
-def pull(repo, board_name, kanban_api, bidirectional):
+@click.option('--board', 'board_name', required=True, help='Vibe Kanban board name or ID.')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', required=True, help='Vibe Kanban API base URL.')
+def pull(repo, board_name, kanban_api):
     """Pull task status from a Vibe Kanban board into GitHub."""
-    token = get_github_token()
-    repo = _sanitize_repo_string(repo)
-    gh_client = GitHubClient(token, repo)
-
-    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
-    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    # Initialize Vibe Kanban client
+    kanban_client = VibeKanbanClient(api_base_url=kanban_api)
     click.echo(f"Pulling board status from '{board_name}'...")
     try:
-        statuses = kanban_client.pull_board_status(board_name=board_name, bidirectional=bidirectional)
+        statuses = kanban_client.pull_board_status(board_name=board_name)
     except NotImplementedError as e:
         click.secho(f"Functionality not implemented: {e}", fg="yellow")
         return
     except Exception as e:
         click.secho(f"An error occurred while pulling from Vibe Kanban: {e}", fg="red", err=True)
         sys.exit(1)
-    mapping = {'done': 'closed'}
-    for item in statuses or []:
-        number = item.get('number')
-        status = item.get('status', '').lower()
-        if not number or not status:
-            continue
-        try:
-            issue = gh_client.repo.get_issue(number)
-        except Exception as e:
-            click.secho(f"Warning: cannot fetch issue #{number}: {e}", fg="yellow")
-            continue
-        desired_state = mapping.get(status)
-        if desired_state == 'closed' and issue.state != 'closed':
-            try:
-                issue.edit(state='closed')
-                click.secho(f"Issue #{number} closed.", fg="green")
-            except Exception as e:
-                click.secho(f"Error closing issue #{number}: {e}", fg="red")
     click.secho("Pull completed.", fg="green")
 
 
