@@ -161,8 +161,7 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
   - Implement the `pull` logic to sync status and comments from the board to GitHub.
   - Enhance unit tests for `push` and `pull` to mock API calls and verify behavior.
   - Perform manual end-to-end testing against a live Vibe Kanban server.
-- **Documentation (In Progress):**
-  - Document the `vibe` command group in `README.md` and `usage.md`.
+- **Documentation (In Progress):** See [`docs/vibe-kanban_integration.md`](docs/vibe-kanban_integration.md).
 
 ### CI/CD and Release Management
 - **Description:** Automate testing, building, and publishing.
