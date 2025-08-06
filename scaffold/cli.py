@@ -560,6 +560,13 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
                     click.secho(f"  + Adding feature '{issue.title}'", fg="green")
                     validated_roadmap.features.append(Feature(title=issue.title, description=issue.body, labels=labels, assignees=assignees, milestone=milestone))
 
+        # Mark completed tasks in the local roadmap for closed GitHub issues
+        closed_titles = {issue.title for issue in all_gh_issues if getattr(issue, 'state', None) == 'closed'}
+        for feat in validated_roadmap.features:
+            for task in feat.tasks:
+                if task.title in closed_titles:
+                    setattr(task, 'completed', True)
+        
         if not dry_run:
             prompt_msg = f"Update '{roadmap_file}' with {len(extra_titles)} new items from GitHub?"
             if not yes and not click.confirm(prompt_msg, default=True):
