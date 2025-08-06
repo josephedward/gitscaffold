@@ -44,4 +44,4 @@ The process is:
     ```sh
     git push origin main --tags
     ```
-5.  **Monitor Workflow**: The `Publish & Notify Release` workflow will automatically trigger. Check the "Actions" tab in the repository to monitor its progress.
+5.  **Monitor Workflow**: The `Release` workflow will automatically trigger. Check the "Actions" tab in the repository to monitor its progress.

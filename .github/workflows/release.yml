@@ -1,11 +1,9 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'New version number (e.g. 1.2.3)'
-        required: true
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
   release:
@@ -16,9 +14,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -28,11 +23,6 @@ jobs:
       - name: Install build tools
         run: pip install --upgrade build twine
 
-      - name: Bump version, commit & tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash release.sh ${{ github.event.inputs.version }}
-
       - name: Build distribution
         run: python -m build
 
@@ -41,12 +31,19 @@ jobs:
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
 
+      - name: Extract release notes
+        id: extract_release_notes
+        run: |
+          # Extracts content for the release note. It looks for a heading with the git tag,
+          # and captures everything until the next heading.
+          # GITHUB_REF_NAME is the tag that triggered the workflow (e.g. v1.2.3)
+          awk '/^## / {if(p) exit; if($2 == "${{ github.ref_name }}") p=1; next} p' docs/release.md > release_notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: 'v${{ github.event.inputs.version }}'
-          name: 'v${{ github.event.inputs.version }}'
-          body: |
-            Release version ${{ github.event.inputs.version }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: release_notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
