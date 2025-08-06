@@ -69,6 +69,26 @@ Example `ROADMAP.md`:
 
 You can also use any free-form Markdown file (e.g., meeting notes, a design doc). `gitscaffold` will use AI to automatically extract tasks and features.
 
+### High-Performance Parsing (Optional)
+
+For significantly faster processing of Markdown files, `gitscaffold` can use a companion parser written in Rust.
+
+**How it works**:
+- If `gitscaffold` finds an executable named `mdparser` in your system's `PATH`, it will use it to parse Markdown files.
+- If `mdparser` is not found, `gitscaffold` seamlessly falls back to its built-in Python parser.
+
+**How to build and install `mdparser`**:
+1.  **Install Rust**: If you don't have it, install the Rust toolchain from [rust-lang.org](https://www.rust-lang.org/tools/install).
+2.  **Build the binary**: From the root of the `gitscaffold` repository, run:
+    ```sh
+    cargo build --manifest-path rust/mdparser/Cargo.toml --release
+    ```
+3.  **Install the binary**: Copy the compiled executable to a location in your `PATH`.
+    ```sh
+    # Example for Linux/macOS
+    cp rust/mdparser/target/release/mdparser ~/.local/bin/
+    ```
+
 ## 3. The Standard Workflow
 
 ### Step 1: Sync Your Roadmap with GitHub

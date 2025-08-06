@@ -17,6 +17,7 @@ Gitscaffold is a command-line tool and GitHub Action that converts Markdown-base
 *   **Show Next Action Items (`next`)**: Display open issues for the earliest active milestone.
 *   **Show Next Task (`next-task`)**: Display or select your next open task for the current roadmap phase, with optional random pick and browser opening.
 *   **Diff Local Roadmap vs GitHub Issues (`diff`)**: Compare your local Markdown roadmap file against your repository’s open and closed issues.
+*   **High-Performance Parsing**: Optional Rust-based parser (`mdparser`) for significantly faster Markdown processing, with a graceful fallback to the native Python parser.
 *   **Flexible Authentication**: Supports GitHub tokens and OpenAI keys via environment variables, `.env` files, or command-line options.
 
 ## Installation
