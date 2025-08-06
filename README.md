@@ -93,6 +93,46 @@ Here's how to use `gitscaffold` to populate a new repository with issues from a 
 
     That's it! Your repository is now populated based on your roadmap.
 
+## Example: Running Gitscaffold on Itself
+
+You can run `gitscaffold` on its own repository to see it in action. The `diff` command is a great way to compare the `ROADMAP.md` file with the current state of GitHub issues.
+
+This is a process often called "dogfooding"—using your own product.
+
+1.  **Install from source**:
+    Make sure you have installed `gitscaffold` in editable mode from your local clone as described in the ["From the source checkout"](#from-the-source-checkout) section.
+
+2.  **Set your GitHub Token**:
+    Ensure you have set your `GITHUB_TOKEN` environment variable.
+
+3.  **Run the `diff` command**:
+    ```sh
+    # From the root of the gitscaffold repository:
+    gitscaffold diff ROADMAP.md --repo josephinedward/gitscaffold
+    ```
+
+### Interpreting the Output
+
+The command will analyze the repository and produce a report. If the roadmap and issues are perfectly aligned, you'll see:
+
+```
+✅ Roadmap and GitHub issues are perfectly in sync. No differences found.
+```
+
+Or, if there are discrepancies, the output will look something like this:
+
+```
+⚠️ Found differences between ROADMAP.md and GitHub issues for josephinedward/gitscaffold.
+
+Items in ROADMAP.md but not in GitHub:
+- [ ] A new task that was just added to the roadmap
+
+Issues on GitHub but not in ROADMAP.md:
+- #99: A bug report filed directly on GitHub
+```
+
+This provides a clear overview of the alignment between your plan and the work being tracked in GitHub.
+
 ## CLI Usage
 
 
@@ -178,30 +218,6 @@ Synchronize GitHub issues with a [Vibe Kanban](https://github.com/BloopAI/vibe-k
 For detailed setup and usage instructions, see the [Vibe Kanban Integration Guide](./docs/integration_vibe-kanban.md).
 
 *(Note: This feature is in early development.)*
-
-#### Listing Available Kanban Boards
-
-```bash
-# Verify connectivity and list available boards
-gitscaffold vibe list-projects --kanban-api http://localhost:3000/api
-# Example Output:
-# - Project Board A
-# - AIPowered Tasks
-```
-
-#### Pushing Issues to Vibe Kanban
-
-```bash
-# Push open issues with the "bug" label to a Vibe Kanban board
-gitscaffold vibe push --repo owner/repo --board "My AI Tasks" --kanban-api http://localhost:3000/api --label bug
-```
-
-#### Pulling Status from Vibe Kanban
-
-```bash
-# Pull status updates from the board back to GitHub
-gitscaffold vibe pull --repo owner/repo --board "My AI Tasks" --kanban-api http://localhost:3000/api
-```
 
 #### Listing Available Kanban Boards
 

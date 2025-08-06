@@ -113,6 +113,19 @@ gitscaffold next --repo your_org/your_repo
 ```
 This shows the active milestone and its open, unassigned issues.
 
+### Example: Auditing the `gitscaffold` Repository Itself
+
+A great way to see `gitscaffold` in action is to run it on its own codebase (a practice known as "dogfooding"). The `diff` command is perfect for this, as it provides a safe, read-only comparison of the project's `ROADMAP.md` against the issues in the `josephedward/gitscaffold` repository.
+
+1.  **Run `diff` from your local clone:**
+    ```sh
+    # Ensure GITHUB_TOKEN is set
+    gitscaffold diff ROADMAP.md --repo josephinedward/gitscaffold
+    ```
+
+2.  **Interpret the output:**
+    If the local roadmap and GitHub are in sync, you'll get a success message. If not, `gitscaffold` will list the differences, showing you which tasks from the roadmap are missing as GitHub issues, and which issues exist on GitHub but aren't in the roadmap. This helps maintain alignment between your project plan and tracked work.
+
 ## 4. Maintenance Commands
 
 `gitscaffold` provides several commands to keep your repository clean:
