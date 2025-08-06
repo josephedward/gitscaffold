@@ -151,6 +151,36 @@ The integration allows you to:
 -   `push`: Send filtered GitHub issues to a Vibe Kanban board as cards.
 -   `pull`: Sync status changes from the Kanban board back to GitHub issues.
 
+### Listing Available Kanban Boards
+
+To verify connectivity and see which boards are available on your Vibe Kanban server, you can use the `list-projects` command. You must provide the API endpoint for your server.
+
+```bash
+# Verify connectivity and list available boards
+gitscaffold vibe list-projects --kanban-api http://localhost:3000/api
+# Example Output:
+# - Project Board A
+# - AIPowered Tasks
+```
+
+### Pushing Issues to Vibe Kanban
+
+To push filtered GitHub issues from your repository to a specific board:
+
+```bash
+# Push open issues with the "bug" label to a Vibe Kanban board
+gitscaffold vibe push --repo owner/repo --board "My AI Tasks" --kanban-api http://localhost:3000/api --label bug
+```
+
+### Pulling Status from Vibe Kanban
+
+To sync status changes from your Kanban board back to GitHub:
+
+```bash
+# Pull status updates from the board back to GitHub
+gitscaffold vibe pull --repo owner/repo --board "My AI Tasks" --kanban-api http://localhost:3000/api
+```
+
 For a complete guide on setting up a local Vibe Kanban server, configuring API endpoints, and detailed command usage, please see the [Vibe Kanban Integration Guide](./docs/integration_vibe-kanban.md).
 
 ## 7. Troubleshooting
