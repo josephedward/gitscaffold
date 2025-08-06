@@ -160,7 +160,7 @@ gitscaffold next-task ROADMAP_FILE --repo owner/repo --token $GITHUB_TOKEN [--pi
 
 Use `diff` to compare a local roadmap file against GitHub issues. It lists items present in your roadmap but missing on GitHub, and issues on GitHub not in your roadmap.
 
-For unstructured Markdown roadmaps, use the `--ai` flag to extract issues using AI before comparing.
+For unstructured Markdown roadmaps, AI extraction is prompted by default; disable with the `--no-ai` flag.
 
 ```sh
 # Compare a structured roadmap file
