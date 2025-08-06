@@ -44,12 +44,12 @@ fn main() {
                 let ev = match &event {
                     Event::Start(tag) => format!("Start {:?}", tag),
                     Event::End(tag) => format!("End {:?}", tag),
-                    Event::Code(text) => format!("Code {{}}", text),
-                    Event::Html(html) => format!("Html {{}}", html),
+                    Event::Code(text) => format!("Code({:?})", text),
+                    Event::Html(html) => format!("Html({:?})", html),
                     Event::SoftBreak => "SoftBreak".into(),
                     Event::HardBreak => "HardBreak".into(),
                     Event::Rule => "Rule".into(),
-                    Event::FootnoteReference(name) => format!("FootnoteReference {{}}", name),
+                    Event::FootnoteReference(name) => format!("FootnoteReference({:?})", name),
                     _ => format!("{:?}", event),
                 };
                 nodes.push(Node { event: ev, text: None });
