@@ -143,6 +143,35 @@ This script validates the complete user journey described in this guide.
 
 For more details on any command, run `gitscaffold <command> --help`.
 
+## 7. Vibe Kanban Integration (Experimental)
+
+You can synchronize your GitHub issues with a [Vibe Kanban](https://vibekanban.com/) board. This feature is currently experimental.
+
+### Environment
+
+You need to provide the URL for your Vibe Kanban API server and an optional token:
+```dotenv
+VIBE_KANBAN_API="http://localhost:3001"
+VIBE_KANBAN_TOKEN="your_kanban_token_if_needed"
+```
+You can also provide the API URL with the `--kanban-api` flag.
+
+### Pushing Issues to Vibe Kanban
+
+To push all open issues from your GitHub repository to a Vibe Kanban board:
+```bash
+gitscaffold vibe push --repo your_org/your_repo --board "My Project Board"
+```
+This command will fetch open issues and (in the future) create them as cards on the specified board. You can filter the issues pushed using `--milestone` or `--label` flags.
+
+### Pulling Status from Vibe Kanban
+
+To sync status changes from your Kanban board back to GitHub:
+```bash
+gitscaffold vibe pull --repo your_org/your_repo --board "My Project Board"
+```
+This command will fetch card statuses and update the corresponding GitHub issues. For example, moving a card to the "Done" column will close the issue on GitHub.
+
 ## 6. Troubleshooting
 
 ### `gitscaffold: command not found`
