@@ -3,7 +3,10 @@
 import re
 import logging
 from pathlib import Path
-import yaml
+try:
+    import yaml
+except ImportError:
+    yaml = None  # PyYAML is optional; structured parsing may not be available
 
 def parse_markdown(md_file):
     """Parse a Markdown roadmap file into a structured dictionary."""
