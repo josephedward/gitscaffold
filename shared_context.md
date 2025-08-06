@@ -1,4 +1,42 @@
- # Shared Context
+# Shared Context
+
+## Vibe Kanban Integration
+
+**Purpose:** Plan and coordinate the integration of `git-scaffold` with `vibe-kanban`.
+
+**Objective:**
+Provide a robust, two-way sync between GitHub issues managed by `git-scaffold` and a `vibe-kanban` board. The initial focus is on pushing GitHub issues to Vibe Kanban and pulling status updates back to GitHub.
+
+**High-Level Feature List (v1):**
+1.  **Push to Vibe Kanban**: Export open GitHub issues to a Vibe Kanban board.
+    - Create the board and default columns if they don't exist.
+    - Filter issues by milestone or label.
+2.  **Pull from Vibe Kanban**: Sync card status from Vibe Kanban back to GitHub issues.
+    - Map Kanban columns (e.g., "Done") to GitHub issue states (e.g., closed).
+    - Sync comments from cards back to their corresponding GitHub issues.
+
+**Planned Code Changes:**
+- `scaffold/cli.py`:
+  - Create a new `vibe` command group.
+  - Implement `vibe push` to send GitHub issues to a board.
+  - Implement `vibe pull` to sync board status back to GitHub.
+- `scaffold/vibe_kanban.py` (new file/renamed):
+  - Implement a `VibeKanbanClient` with methods for `push_to_board` and `pull_from_board`.
+- `tests/test_cli_vibe.py`:
+  - Add tests for `vibe push` and `vibe pull` commands, mocking the GitHub and Kanban APIs.
+
+**Next Steps:**
+1.  Finalize this integration plan. [✓]
+2.  Scaffold `vibe` CLI commands and `VibeKanbanClient` stubs. [✓]
+3.  Investigate the `vibe-kanban` API to determine endpoints for creating boards, columns, and cards. [ ]
+4.  Implement `vibe push` functionality. [ ]
+5.  Implement `vibe pull` functionality. [ ]
+6.  Add comprehensive tests for both push and pull workflows. [ ]
+7.  Update documentation (`ROADMAP.md`, `usage.md`). [ ]
+
+---
+
+## Completed: AI-First Extraction
 
  **Purpose:** Centralized plan and coordination notes for implementing AI-first extraction in gitscaffold.
 

@@ -25,7 +25,6 @@ from github import Github, GithubException
 from .parser import parse_markdown, parse_roadmap, write_roadmap
 from .validator import validate_roadmap, Feature, Task
 from .github import GitHubClient
-from .kanban_client import VibeKanbanClient
 from .ai import enrich_issue_description, extract_issues_from_markdown
 from datetime import date
 import re
@@ -1399,19 +1398,34 @@ def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_change
         click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
 
 
-@cli.group(name='kanban', help='Integrate with a Vibe Kanban board.')
-def kanban():
+@cli.group(name='vibe', help='Integrate with a Vibe Kanban board.')
+def vibe():
     """Commands for Vibe Kanban integration."""
     pass
 
-@kanban.command(name='export', help='Export roadmap to a Vibe Kanban board.')
-@click.option('--roadmap-file', type=click.Path(exists=True), default='ROADMAP.md', show_default=True, help='Roadmap file to export.')
-@click.option('--board-url', help='URL of the Vibe Kanban board. Can also be set via VIBE_KANBAN_URL env var.')
-def export(roadmap_file, board_url):
-    """Exports a roadmap to a Vibe Kanban board."""
-    click.secho("Kanban export is not yet implemented.", fg="yellow")
-    click.echo(f"Roadmap file: {roadmap_file}")
-    click.echo(f"Board URL: {board_url or 'Not provided'}")
+@vibe.command(name='push', help='Push GitHub issues to a Vibe Kanban board.')
+@click.option('--repo', required=True, help='Source GitHub repository in `owner/repo` format.')
+@click.option('--board', 'board_name', required=True, help='Target Vibe Kanban board name.')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+@click.option('--milestone', help='Filter issues by a specific GitHub milestone.')
+@click.option('--label', help='Filter issues by a specific GitHub label.')
+def vibe_push(repo, board_name, kanban_api, milestone, label):
+    """Pushes GitHub issues to a Vibe Kanban board."""
+    click.secho("Vibe Kanban push is not yet implemented.", fg="yellow")
+    click.echo(f"Repo: {repo}, Board: {board_name}, API: {kanban_api or 'Not provided'}")
+    if milestone:
+        click.echo(f"Filtering by milestone: {milestone}")
+    if label:
+        click.echo(f"Filtering by label: {label}")
+
+@vibe.command(name='pull', help='Pull updates from a Vibe Kanban board to GitHub.')
+@click.option('--repo', required=True, help='Target GitHub repository in `owner/repo` format.')
+@click.option('--board', 'board_name', required=True, help='Source Vibe Kanban board name.')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+def vibe_pull(repo, board_name, kanban_api):
+    """Pulls card statuses from Vibe Kanban and updates linked GitHub issues."""
+    click.secho("Vibe Kanban pull is not yet implemented.", fg="yellow")
+    click.echo(f"Repo: {repo}, Board: {board_name}, API: {kanban_api or 'Not provided'}")
 
 
 @cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
@@ -1576,61 +1590,6 @@ def start_api():
         sys.exit(1)
 
 
-@cli.command(name='kanban-export', help='Export roadmap tasks to a Vibe Kanban board.')
-@click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
-@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL (e.g., http://localhost:3000/api).')
-@click.option('--dry-run', is_flag=True, help='Simulate and show what would be exported, without making changes.')
-def kanban_export(roadmap_file, kanban_api, dry_run):
-    """Export tasks from a local roadmap file to a Vibe Kanban board."""
-    click.secho("\n=== Exporting to Vibe Kanban ===", fg="bright_blue", bold=True)
-
-    try:
-        raw_roadmap_data = parse_roadmap(roadmap_file)
-        validated_roadmap = validate_roadmap(raw_roadmap_data)
-    except Exception as e:
-        click.secho(f"Error: Failed to parse roadmap file '{roadmap_file}': {e}", fg="red", err=True)
-        sys.exit(1)
-
-    if not validated_roadmap.features:
-        click.secho("No features found in roadmap to export.", fg="yellow")
-        return
-
-    if dry_run:
-        click.secho("[dry-run] The following tasks would be exported:", fg="blue")
-    else:
-        click.secho("Connecting to Vibe Kanban...", fg="cyan")
-
-    kanban_client = VibeKanbanClient(api_base_url=kanban_api)
-
-    tasks_to_export = []
-    for feat in validated_roadmap.features:
-        # Export the feature itself as a task
-        tasks_to_export.append({'title': feat.title, 'description': feat.description or ''})
-        # Export all sub-tasks
-        for task in feat.tasks:
-            tasks_to_export.append({'title': task.title, 'description': task.description or ''})
-
-    if not tasks_to_export:
-        click.secho("No tasks to export.", fg="yellow")
-        return
-
-    click.secho(f"Found {len(tasks_to_export)} tasks to export.", fg="magenta")
-
-    exported_count = 0
-    for task_data in tasks_to_export:
-        title = task_data['title']
-        description = task_data['description']
-        if dry_run:
-            click.secho(f"  - Would export task: {title}", fg="white")
-            exported_count += 1
-        else:
-            if kanban_client.create_task(title=title, description=description):
-                exported_count += 1
-    
-    if dry_run:
-        click.secho(f"\n[dry-run] Would have exported {exported_count} tasks. No changes made.", fg="blue")
-    else:
-        click.secho(f"\nSuccessfully exported {exported_count} tasks to Vibe Kanban.", fg="green")
     
 # Vibe Kanban integration commands
 @cli.group('vibe', help='Manage Vibe Kanban integration commands.')

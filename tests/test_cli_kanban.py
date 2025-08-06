@@ -7,18 +7,28 @@ from scaffold.cli import cli
 def runner():
     return CliRunner()
 
-def test_kanban_export_placeholder(runner, tmp_path):
-    """Test that the kanban export command shows a placeholder message."""
-    roadmap_file = tmp_path / "ROADMAP.md"
-    roadmap_file.write_text("# Test Roadmap")
-
+def test_vibe_push_placeholder(runner):
+    """Test that the vibe push command shows a placeholder message."""
     result = runner.invoke(cli, [
-        'kanban', 'export',
-        '--roadmap-file', str(roadmap_file),
-        '--board-url', 'http://localhost:3000/board/1'
+        'vibe', 'push',
+        '--repo', 'owner/repo',
+        '--board', 'My Board'
     ])
 
     assert result.exit_code == 0
-    assert "Kanban export is not yet implemented." in result.output
-    assert "Roadmap file:" in result.output
-    assert "Board URL:" in result.output
+    assert "Vibe Kanban push is not yet implemented." in result.output
+    assert "Repo: owner/repo" in result.output
+    assert "Board: My Board" in result.output
+
+def test_vibe_pull_placeholder(runner):
+    """Test that the vibe pull command shows a placeholder message."""
+    result = runner.invoke(cli, [
+        'vibe', 'pull',
+        '--repo', 'owner/repo',
+        '--board', 'My Board'
+    ])
+
+    assert result.exit_code == 0
+    assert "Vibe Kanban pull is not yet implemented." in result.output
+    assert "Repo: owner/repo" in result.output
+    assert "Board: My Board" in result.output
