@@ -31,7 +31,7 @@ except ImportError:
 from .parser import parse_markdown, parse_roadmap, write_roadmap
 from .validator import validate_roadmap, Feature, Task
 from .github import GitHubClient
-from .kanban import VibeKanbanClient
+from .vibe_kanban import VibeKanbanClient
 from .ai import enrich_issue_description, extract_issues_from_markdown
 from datetime import date
 import re
@@ -1543,6 +1543,31 @@ def start_demo():
     except subprocess.CalledProcessError as e:
         click.secho(f"Demo server failed to start or exited with an error: {e}", fg='red', err=True)
         sys.exit(1)
+
+
+# Vibe Kanban integration commands
+@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+def vibe_group():
+    """Vibe Kanban integration subcommands."""
+    pass
+
+@vibe_group.command('push', help='Push GitHub issues to a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.')
+@click.option('--milestone', help='Only include issues in this milestone')
+@click.option('--label', 'labels', multiple=True, help='Only include issues with these labels')
+@click.option('--state', default='open', show_default=True, help='Only include issues with this state')
+def vibe_push(repo, board_name, milestone, labels, state):
+    """Push GitHub issues into a Vibe Kanban board."""
+    click.secho("Push command not implemented yet.", fg="yellow")
+
+@vibe_group.command('pull', help='Pull task status from Vibe Kanban into GitHub')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.')
+@click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
+def vibe_pull(repo, board_name, bidirectional):
+    """Pull task status from Vibe Kanban into GitHub."""
+    click.secho("Pull command not implemented yet.", fg="yellow")
 
 
 @cli.command(name='start-api', help='Run the FastAPI server')
