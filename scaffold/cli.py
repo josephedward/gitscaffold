@@ -141,9 +141,8 @@ def config():
 @click.argument('value')
 def config_set(key, value):
     """Sets a key-value pair in the global config file."""
+    set_global_config_key(key.upper(), value)
     config_path = get_global_config_path()
-    # Use the imported set_key which handles missing python-dotenv
-    set_key(str(config_path), key.upper(), value)
     click.secho(f"Set {key.upper()} in {config_path}", fg="green")
 
 @config.command('get', help='Get a configuration value.')
@@ -226,9 +225,8 @@ def get_github_token():
     if not token:
         logging.warning("GitHub PAT not found in environment or config files.")
         token = click.prompt('Please enter your GitHub Personal Access Token (PAT)', hide_input=True)
-        # Save to global config file
-        config_path = get_global_config_path()
-        set_key(str(config_path), 'GITHUB_TOKEN', token)
+        # Save to global config file with secure permissions
+        set_global_config_key('GITHUB_TOKEN', token)
         logging.info("GitHub PAT saved to global config file.")
         click.secho("GitHub PAT saved to global config file.", fg="green")
         # It's often better to ask the user to re-run so all parts of the app pick up the new env var.
@@ -246,8 +244,7 @@ def get_openai_api_key():
     if not api_key:
         logging.warning("OPENAI_API_KEY not found in environment or config files.")
         api_key = click.prompt('Please enter your OpenAI API key', hide_input=True)
-        config_path = get_global_config_path()
-        set_key(str(config_path), 'OPENAI_API_KEY', api_key)
+        set_global_config_key('OPENAI_API_KEY', api_key)
         logging.info("OpenAI API key saved to global config file.")
         click.secho("OpenAI API key saved to global config file.", fg="green")
         os.environ['OPENAI_API_KEY'] = api_key
@@ -258,8 +255,7 @@ def prompt_for_openai_key():
     Prompt for an OpenAI API key, save it to the global config and environment, and return it.
     """
     key = click.prompt('Please enter your OpenAI API key', hide_input=True)
-    config_path = get_global_config_path()
-    set_key(str(config_path), 'OPENAI_API_KEY', key)
+    set_global_config_key('OPENAI_API_KEY', key)
     click.secho("OpenAI API key saved to global config file.", fg="green")
     os.environ['OPENAI_API_KEY'] = key
     return key
@@ -300,8 +296,19 @@ def get_repo_from_git_config():
 def get_global_config_path():
     """Returns the path to the global config file, creating parent dir if needed."""
     config_dir = Path.home() / '.gitscaffold'
-    config_dir.mkdir(exist_ok=True)
+    # Create with secure permissions (user access only)
+    config_dir.mkdir(mode=0o700, exist_ok=True)
     return config_dir / 'config'
+
+
+def set_global_config_key(key: str, value: str):
+    """Sets a key-value pair in the global config file with secure permissions."""
+    config_path = get_global_config_path()
+    set_key(str(config_path), key, value)
+    # Ensure config file has secure permissions (owner read/write only).
+    # This is not applicable/standard on Windows.
+    if os.name != 'nt':
+        os.chmod(config_path, 0o600)
 
 
 def _sanitize_repo_string(repo_string: str) -> str:
