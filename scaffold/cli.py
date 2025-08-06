@@ -1570,14 +1570,54 @@ def push(repo, board_name, milestone, labels, state, kanban_api, token):
     repo = _sanitize_repo_string(repo)
     gh_client = GitHubClient(actual_token, repo)
 
-    # Retrieve all open issues via our GitHubClient wrapper
-    issues = list(gh_client.get_all_issues())
+    # Build query parameters for fetching issues
+    params = {'state': state}
+    if labels:
+        try:
+            # PyGithub expects Label objects, not strings
+            params['labels'] = [gh_client.repo.get_label(l) for l in labels]
+        except GithubException as e:
+            click.secho(f"Error: Could not find one or more labels: {labels}. Details: {e}", fg="red", err=True)
+            sys.exit(1)
 
-    # Initialize Vibe Kanban client
-    kanban_client = VibeKanbanClient(api_base_url=kanban_api)
-    click.echo(f"Pushing {len(issues)} issues to board '{board_name}'...")
+    if milestone:
+        milestone_obj = gh_client._find_milestone(milestone)
+        if not milestone_obj:
+            click.secho(f"Error: Milestone '{milestone}' not found.", fg="red", err=True)
+            sys.exit(1)
+        params['milestone'] = milestone_obj
+    
+    click.secho(f"Fetching issues from '{repo}'...", fg="cyan")
     try:
-        kanban_client.push_issues_to_board(board_name=board_name, issues=issues)
+        issues = list(gh_client.repo.get_issues(**params))
+    except GithubException as e:
+        click.secho(f"Error fetching issues from GitHub: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    click.echo(f"Found {len(issues)} issues to push.")
+    if not issues:
+        click.secho("No issues match the criteria. Nothing to push.", fg="yellow")
+        return
+
+    # Serialize PyGithub issue objects into a simple format for the client
+    issues_data = [
+        {
+            "number": issue.number,
+            "title": issue.title,
+            "body": issue.body or "",
+            "url": issue.html_url,
+            "state": issue.state,
+            "labels": [label.name for label in issue.labels],
+        }
+        for issue in issues
+    ]
+    
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_base_url=kanban_api, token=kanban_token)
+    click.echo(f"Pushing {len(issues_data)} issues to board '{board_name}'...")
+    try:
+        kanban_client.push_issues_to_board(board_name=board_name, issues=issues_data)
         click.secho("Push completed.", fg="green")
     except NotImplementedError as e:
         click.secho(f"Functionality not implemented: {e}", fg="yellow")
