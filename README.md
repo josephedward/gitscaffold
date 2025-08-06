@@ -17,7 +17,7 @@ Gitscaffold is a command-line tool and GitHub Action that converts Markdown-base
 *   **Show Next Action Items (`next`)**: Display open issues for the earliest active milestone.
 *   **Show Next Task (`next-task`)**: Display or select your next open task for the current roadmap phase, with optional random pick and browser opening.
 *   **Diff Local Roadmap vs GitHub Issues (`diff`)**: Compare your local Markdown roadmap file against your repository’s open and closed issues.
-*   **Vibe Kanban Integration (`vibe`)**: Push GitHub issues to a Vibe Kanban board and pull status updates back.
+*   **Vibe Kanban Integration (`vibe`)**: Synchronize GitHub issues with a Vibe Kanban board, including pushing issues as cards and pulling status updates back to GitHub.
 *   **Flexible Authentication**: Supports GitHub tokens and OpenAI keys via environment variables, `.env` files, or command-line options.
 
 ## Installation
@@ -175,7 +175,7 @@ gitscaffold diff docs/brainstorm.md --repo owner/repo --ai
 
 Use the `vibe` command group to integrate with a [Vibe Kanban](https://github.com/BloopAI/vibe-kanban) board. This allows you to push GitHub issues to a Kanban board for AI agents and pull status updates back.
 
-*(Note: This feature is under development. The commands are placeholders.)*
+*(Note: This feature is in early development. The `push` command has an initial implementation to send issues to a board, while `pull` remains a placeholder.)*
 
 ```sh
 # Push GitHub issues to a board
