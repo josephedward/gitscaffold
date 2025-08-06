@@ -27,6 +27,7 @@ jobs:
         run: python -m build
 
       - name: Publish to PyPI
+        if: ${{ !env.ACT }}
         uses: pypa/gh-action-pypi-publish@v1.5.0
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
@@ -40,6 +41,7 @@ jobs:
           awk '/^## / {if(p) exit; if($2 == "${{ github.ref_name }}") p=1; next} p' docs/release.md > release_notes.md
 
       - name: Create GitHub Release
+        if: ${{ !env.ACT }}
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
