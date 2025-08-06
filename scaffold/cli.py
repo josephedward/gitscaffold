@@ -1630,14 +1630,35 @@ def push(repo, board_name, milestone, labels, state, kanban_api, token):
 @click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
 @click.option('--board', 'board_name', required=True, help='Vibe Kanban board name or ID.')
 @click.option('--kanban-api', envvar='VIBE_KANBAN_API', required=True, help='Vibe Kanban API base URL.')
-@click.option('--bidirectional', is_flag=True, help='Enable two-way sync, including comments.')
-def pull(repo, board_name, kanban_api, bidirectional):
+@click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def pull(repo, board_name, kanban_api, bidirectional, token):
     """Pull task status from a Vibe Kanban board into GitHub."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
     # Initialize Vibe Kanban client
-    kanban_client = VibeKanbanClient(api_base_url=kanban_api)
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
     click.echo(f"Pulling board status from '{board_name}'...")
     try:
         statuses = kanban_client.pull_board_status(board_name=board_name, bidirectional=bidirectional)
+        click.echo(f"Pulled {len(statuses)} updates from board '{board_name}'.")
+
+        # Process updates and sync to GitHub
+        for status in statuses:
+            issue_number = status.get("issue_number")
+            new_state = status.get("state")
+            if issue_number and new_state:
+                click.echo(f"Updating issue #{issue_number} to state '{new_state}'...")
+                try:
+                    issue = gh_client.repo.get_issue(number=issue_number)
+                    issue.edit(state=new_state)
+                    click.secho(f"  -> Successfully updated issue #{issue_number}.", fg="green")
+                except GithubException as e:
+                    click.secho(f"  -> Failed to update issue #{issue_number}: {e}", fg="red")
+
     except NotImplementedError as e:
         click.secho(f"Functionality not implemented: {e}", fg="yellow")
         return
