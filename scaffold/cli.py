@@ -111,7 +111,12 @@ def run_repl(ctx):
 def cli(ctx, interactive):
     """Scaffold – Convert roadmaps to GitHub issues (AI-first extraction for Markdown by default; disable with --no-ai)."""
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    load_dotenv()  # Load .env file at the start of CLI execution
+    # Load env files. Precedence is: shell env -> local .env -> global config.
+    load_dotenv()  # Load local .env file first.
+    global_config_path = get_global_config_path()
+    if global_config_path.exists():
+        # Load global config, which will not override vars from shell or local .env
+        load_dotenv(dotenv_path=global_config_path)
     logging.info("CLI execution started.")
 
     # If --interactive is passed, we want to enter the REPL.
@@ -124,6 +129,78 @@ def cli(ctx, interactive):
     # If no subcommand is invoked and not in interactive mode, show help.
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
+
+
+@cli.group(name='config', help='Manage global configuration and secrets.')
+def config():
+    """Manages global configuration stored in a file like ~/.gitscaffold/config."""
+    pass
+
+@config.command('set', help='Set a configuration key-value pair.')
+@click.argument('key')
+@click.argument('value')
+def config_set(key, value):
+    """Sets a key-value pair in the global config file."""
+    config_path = get_global_config_path()
+    # Use the imported set_key which handles missing python-dotenv
+    set_key(str(config_path), key.upper(), value)
+    click.secho(f"Set {key.upper()} in {config_path}", fg="green")
+
+@config.command('get', help='Get a configuration value.')
+@click.argument('key')
+def config_get(key):
+    """Gets a value from the global config file."""
+    config_path = get_global_config_path()
+    try:
+        from dotenv import dotenv_values
+    except ImportError:
+        click.secho("python-dotenv is required to read config files.", fg="red", err=True)
+        sys.exit(1)
+        
+    if not config_path.exists():
+        click.secho(f"Config file not found: {config_path}", fg="yellow")
+        sys.exit(1)
+
+    values = dotenv_values(config_path)
+    value = values.get(key.upper())
+    if value is not None:
+        click.echo(value)
+    else:
+        click.secho(f"Key '{key.upper()}' not found in {config_path}", fg="yellow")
+        sys.exit(1)
+
+@config.command('list', help='List all global configuration key-value pairs.')
+def config_list():
+    """Lists all key-value pairs from the global config file."""
+    config_path = get_global_config_path()
+    if not config_path.exists():
+        click.secho(f"Config file not found: {config_path}", fg="yellow")
+        return
+
+    try:
+        from dotenv import dotenv_values
+    except ImportError:
+        click.secho("python-dotenv is required to read config files.", fg="red", err=True)
+        sys.exit(1)
+
+    values = dotenv_values(config_path)
+    if not values:
+        click.echo("Config file is empty.")
+        return
+    
+    table = Table(title=f"Global Configuration ({config_path})")
+    table.add_column("Key", style="cyan")
+    table.add_column("Value", style="magenta")
+    for key, value in values.items():
+        table.add_row(key, value)
+    
+    console = Console()
+    console.print(table)
+
+@config.command('path', help='Show path to the global config file.')
+def config_path_command():
+    """Shows the path to the global config file."""
+    click.echo(get_global_config_path())
 
 
 def prompt_for_github_token():
@@ -140,21 +217,20 @@ def prompt_for_github_token():
 
 def get_github_token():
     """
-    Retrieves the GitHub token from .env file or prompts the user if not found.
-    Saves the token to .env if newly provided.
+    Retrieves the GitHub token from environment or config files, or prompts the user if not found.
+    Saves the token to the global config file if newly provided.
     Assumes load_dotenv() has already been called.
     """
     # load_dotenv() # Moved to cli()
     token = os.getenv('GITHUB_TOKEN')
     if not token:
-        logging.warning("GitHub PAT not found in environment or .env file.")
+        logging.warning("GitHub PAT not found in environment or config files.")
         token = click.prompt('Please enter your GitHub Personal Access Token (PAT)', hide_input=True)
-        # Ensure .env file exists for set_key
-        env_path = Path('.env')
-        env_path.touch(exist_ok=True)
-        set_key(str(env_path), 'GITHUB_TOKEN', token)
-        logging.info("GitHub PAT saved to .env file.")
-        click.secho("GitHub PAT saved to .env file.", fg="green")
+        # Save to global config file
+        config_path = get_global_config_path()
+        set_key(str(config_path), 'GITHUB_TOKEN', token)
+        logging.info("GitHub PAT saved to global config file.")
+        click.secho("GitHub PAT saved to global config file.", fg="green")
         # It's often better to ask the user to re-run so all parts of the app pick up the new env var.
         # Or, for immediate use, ensure os.environ is updated:
         os.environ['GITHUB_TOKEN'] = token
@@ -163,30 +239,28 @@ def get_github_token():
 
 def get_openai_api_key():
     """
-    Retrieves the OpenAI API key from .env file or environment.
+    Retrieves the OpenAI API key from environment or config files.
     Assumes load_dotenv() has already been called.
     """
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
-        logging.warning("OPENAI_API_KEY not found in environment or .env file.")
+        logging.warning("OPENAI_API_KEY not found in environment or config files.")
         api_key = click.prompt('Please enter your OpenAI API key', hide_input=True)
-        env_path = Path('.env')
-        env_path.touch(exist_ok=True)
-        set_key(str(env_path), 'OPENAI_API_KEY', api_key)
-        logging.info("OpenAI API key saved to .env file.")
-        click.secho("OpenAI API key saved to .env file.", fg="green")
+        config_path = get_global_config_path()
+        set_key(str(config_path), 'OPENAI_API_KEY', api_key)
+        logging.info("OpenAI API key saved to global config file.")
+        click.secho("OpenAI API key saved to global config file.", fg="green")
         os.environ['OPENAI_API_KEY'] = api_key
     return api_key
   
 def prompt_for_openai_key():
     """
-    Prompt for an OpenAI API key, save it to .env and environment, and return it.
+    Prompt for an OpenAI API key, save it to the global config and environment, and return it.
     """
     key = click.prompt('Please enter your OpenAI API key', hide_input=True)
-    env_path = Path('.env')
-    env_path.touch(exist_ok=True)
-    set_key(str(env_path), 'OPENAI_API_KEY', key)
-    click.secho("OpenAI API key saved to .env file.", fg="green")
+    config_path = get_global_config_path()
+    set_key(str(config_path), 'OPENAI_API_KEY', key)
+    click.secho("OpenAI API key saved to global config file.", fg="green")
     os.environ['OPENAI_API_KEY'] = key
     return key
 
@@ -221,6 +295,13 @@ def get_repo_from_git_config():
     except (subprocess.CalledProcessError, FileNotFoundError):
         logging.warning("Could not get repo from git config. Not a git repository or git is not installed.")
         return None
+
+
+def get_global_config_path():
+    """Returns the path to the global config file, creating parent dir if needed."""
+    config_dir = Path.home() / '.gitscaffold'
+    config_dir.mkdir(exist_ok=True)
+    return config_dir / 'config'
 
 
 def _sanitize_repo_string(repo_string: str) -> str:
