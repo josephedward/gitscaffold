@@ -20,7 +20,13 @@ except ImportError:
             "python-dotenv is required to save tokens to .env files. "
             "Install it or set tokens via environment variables."
         )
-from github import Github, GithubException
+try:
+    from github import Github, GithubException
+except ImportError:
+    # Define a dummy exception class if PyGithub is not installed.
+    # This allows the CLI to load and show help text without the library.
+    class GithubException(Exception):
+        pass
 
 from .parser import parse_markdown, parse_roadmap, write_roadmap
 from .validator import validate_roadmap, Feature, Task

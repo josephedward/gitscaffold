@@ -12,18 +12,18 @@ class VibeKanbanClient:
         self.api_base_url = api_base_url
         self.token = token
 
-    def push_to_board(self, board_name: str, issues: list):
+    def push_issues_to_board(self, board_name: str, issues: list):
         """
         Pushes GitHub issues to a Vibe Kanban board.
         This is a placeholder.
         """
-        click.secho(f"Would push {len(issues)} issues to board '{board_name}'. (Not implemented)", fg="yellow")
-        pass
+        # A real implementation would go here.
+        raise NotImplementedError("push_issues_to_board")
 
-    def pull_from_board(self, board_name: str):
+    def pull_board_status(self, board_name: str):
         """
         Pulls updates from a Vibe Kanban board to sync with GitHub.
         This is a placeholder.
         """
-        click.secho(f"Would pull updates from board '{board_name}'. (Not implemented)", fg="yellow")
-        return [] # Return empty list of updates
+        # A real implementation would go here.
+        raise NotImplementedError("pull_board_status")
