@@ -14,11 +14,6 @@ authors = [
   { name = "Joseph Edward", email = "josephedward@gmail.com" }
 ]
 
-urls = {
-  "Homepage" = "https://github.com/josephedward/gitscaffold",
-  "Repository" = "https://github.com/josephedward/gitscaffold"
-}
-
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -38,6 +33,10 @@ dependencies = [
     "streamlit>=1.20.0",
     "uvicorn[standard]>=0.20.0"
 ]
+
+[project.urls]
+Homepage = "https://github.com/josephedward/gitscaffold"
+Repository = "https://github.com/josephedward/gitscaffold"
 
 [project.scripts]
 gitscaffold = "scaffold.cli:cli"
