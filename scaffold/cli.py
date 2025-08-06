@@ -1547,27 +1547,56 @@ def start_demo():
 
 # Vibe Kanban integration commands
 @cli.group('vibe', help='Manage Vibe Kanban integration commands.')
-def vibe_group():
+def vibe():
     """Vibe Kanban integration subcommands."""
     pass
 
-@vibe_group.command('push', help='Push GitHub issues to a Vibe Kanban board')
+
+@vibe.command('push', help='Push GitHub issues to a Vibe Kanban board')
 @click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
-@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.')
+@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
 @click.option('--milestone', help='Only include issues in this milestone')
 @click.option('--label', 'labels', multiple=True, help='Only include issues with these labels')
 @click.option('--state', default='open', show_default=True, help='Only include issues with this state')
-def vibe_push(repo, board_name, milestone, labels, state):
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def push(repo, board_name, milestone, labels, state, kanban_api, token):
     """Push GitHub issues into a Vibe Kanban board."""
-    click.secho("Push command not implemented yet.", fg="yellow")
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+    
+    click.echo("Fetching issues from GitHub...")
+    # Placeholder for issue filtering logic. A real implementation will filter.
+    issues = list(gh_client.get_all_issues())
+    click.echo(f"Found {len(issues)} issues to potentially push.")
+    
+    kanban_client = VibeKanbanClient(api_base_url=kanban_api)
+    try:
+        kanban_client.push_issues_to_board(board_name=board_name, issues=issues)
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+    except Exception as e:
+        click.secho(f"An error occurred: {e}", fg="red")
+        sys.exit(1)
 
-@vibe_group.command('pull', help='Pull task status from Vibe Kanban into GitHub')
+
+@vibe.command('pull', help='Pull task status from Vibe Kanban into GitHub')
 @click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
-@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.')
-@click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
-def vibe_pull(repo, board_name, bidirectional):
+@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+def pull(repo, board_name, kanban_api):
     """Pull task status from Vibe Kanban into GitHub."""
-    click.secho("Pull command not implemented yet.", fg="yellow")
+    repo = _sanitize_repo_string(repo)
+    kanban_client = VibeKanbanClient(api_base_url=kanban_api)
+    try:
+        updates = kanban_client.pull_board_status(board_name=board_name)
+        click.echo(f"Pulled {len(updates)} updates from board '{board_name}'. Syncing to GitHub not implemented.")
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+    except Exception as e:
+        click.secho(f"An error occurred: {e}", fg="red")
+        sys.exit(1)
 
 
 @cli.command(name='start-api', help='Run the FastAPI server')
