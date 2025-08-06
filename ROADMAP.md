@@ -145,16 +145,16 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
   - Tests: Verify documentation is clear and provides examples for `gh auth login` and command usage.
 
 ### Vibe Kanban Integration
-- **Description:** Export roadmap tasks directly to a local Vibe Kanban instance for AI agent execution.
+- **Description:** Two-way synchronization between GitHub issues and a Vibe Kanban board.
 - **Milestone:** v0.4 Advanced Features & Usability
 - **Labels:** integration, kanban, ai
 
 **Tasks:**
-- Implement `vibe push` command to send GitHub issues to a Vibe Kanban board.
-- Implement `vibe pull` command to sync status from Vibe Kanban back to GitHub issues.
-- Create a client to interact with the Vibe Kanban API (`scaffold/vibe_kanban.py`).
-- Add tests for the `vibe` commands, mocking the Kanban API.
-- Document the Vibe Kanban integration and the `vibe` commands.
+- Implement `vibe push` to push GitHub issues to a Vibe Kanban board.
+- Implement `vibe pull` to pull status and comments from Vibe Kanban back to GitHub.
+- Create a `VibeKanbanClient` in `scaffold/vibe_kanban.py` to handle API interactions.
+- Add tests for the `vibe push` and `vibe pull` commands, mocking both GitHub and Kanban APIs.
+- Document the Vibe Kanban integration and the new `vibe` command group.
 
 ### CI/CD and Release Management
 - **Description:** Automate testing, building, and publishing.
