@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  # Also allow manual dispatch of this workflow
+  workflow_dispatch:
 
 jobs:
   release:
@@ -14,8 +16,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          # Fetch full history including tags for version checks and changelogs
+          fetch-depth: 0
+          # Persist GitHub token for pushing tags/releases if needed
+          persist-credentials: true
 
-      - name: Set up Python
+      - name: Set up Python environment
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
@@ -24,13 +31,13 @@ jobs:
         run: pip install --upgrade build twine
 
       - name: Build distribution
-        run: python -m build
+        run: python -m build --sdist --wheel --no-isolation
 
       - name: Publish to PyPI
-        if: ${{ !env.ACT }}
-        uses: pypa/gh-action-pypi-publish@v1.5.0
+        uses: pypa/gh-action-pypi-publish@v1.5.1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          # Use the API token secret for authentication
+          pypi_token: ${{ secrets.PYPI_API_TOKEN }}
 
       - name: Extract release notes
         id: extract_release_notes
