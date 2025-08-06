@@ -1631,3 +1631,28 @@ def kanban_export(roadmap_file, kanban_api, dry_run):
         click.secho(f"\n[dry-run] Would have exported {exported_count} tasks. No changes made.", fg="blue")
     else:
         click.secho(f"\nSuccessfully exported {exported_count} tasks to Vibe Kanban.", fg="green")
+    
+# Vibe Kanban integration commands
+@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+def vibe():
+    """Vibe Kanban integration subcommands."""
+    pass
+
+
+@vibe.command('list-projects', help='List Vibe Kanban projects.')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+def list_projects_command(kanban_api):
+    """List all projects available in the Vibe Kanban instance."""
+    client = VibeKanbanClient(api_base_url=kanban_api)
+    try:
+        projects = client.list_projects()
+        if not projects:
+            click.secho("No Vibe Kanban projects found.", fg="yellow")
+            return
+        for proj in projects:
+            proj_id = proj.get('id')
+            name = proj.get('name')
+            click.echo(f"{proj_id}: {name}")
+    except Exception as e:
+        click.secho(f"Error listing Vibe Kanban projects: {e}", fg="red")
+        sys.exit(1)

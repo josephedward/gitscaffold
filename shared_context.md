@@ -1,38 +1,83 @@
-# Agent Coordination Context
+ # Shared Context
 
-This file is intended to help multiple agents (and humans) understand the context of ongoing work.
+ **Purpose:** Centralized plan and coordination notes for implementing AI-first extraction in gitscaffold.
 
-## Project Status
+ ## Created Files
+ - **usage.md**: User-facing workflow documentation.
+ - **shared_context.md**: This coordination document.
 
-- `usage.md` has been created to document the standard user workflow.
-- This `shared_context.md` file is used to track ongoing tasks.
+ ## Objective
+ Make AI extraction the default for unstructured Markdown roadmaps (`.md` files) in `diff` and `sync` commands:
+ 1. **Diff Command**
+    - Detect `.md` file input and automatically invoke `extract_issues_from_markdown`.
+    - Use `get_openai_api_key()` to load or prompt for the key from `.env` or environment.
+    - Emit prominent warnings about the importance of protecting API keys.
+ 2. **Sync Command**
+    - For Markdown roadmaps with no structured sections, auto-extract features/tasks via AI.
+    - Integrate extracted issues into the same validation and creation flow.
+    - Prompt for or load OpenAI key as above.
 
-## Current Task
+ ## Additional Requirements
+ - Prompt user if `OPENAI_API_KEY` is missing, save it to `.env`, then re-run.
+ - Warn users about secrets in logs (e.g., never print API keys).
 
-**Request:** Ensure the workflow described in `usage.md` is covered by testing.
+ ## Planned Code Changes
+ - Update `scaffold/cli.py`:
+    * Rework `diff()` to default to AI extraction for `.md`, dropping manual `--ai` flag requirement.
+    * Enhance `sync()` to fallback to AI extraction when structured parsing yields no items.
+    * Call `get_openai_api_key()` at start and log warnings.
+ - Adjust tests:
+    * Add unit tests mocking AI extraction path in `diff` and `sync`.
+    * Ensure prompting logic for missing keys is covered.
 
-**My Plan:**
+ ## Next Steps
+ 1. Implement the code changes outlined above. [✓]
+ 2. Write tests for the new AI-default paths. [✓]
+ 3. Update `usage.md` to describe AI-first behavior and key management. [✓]
+ 4. Run `pytest` to verify all scenarios pass. [✓]
+ 5. Release a new patch version (e.g., 0.1.13). [✓]
 
-1.  **Create an end-to-end workflow test script:** `scripts/test_workflow.sh`.
-    - This script will act as an integration test, simulating the user journey described in `usage.md`.
-    - It will require `GITHUB_TOKEN` and `TEST_REPO` environment variables to run against a real test repository on GitHub.
-2.  **The script will perform the following actions:**
-    - Use `demo/example_roadmap.md` as a starting point.
-    - Run `gitscaffold import-md` to populate the repo.
-    - Create a new roadmap file `temp_roadmap.md` and add more tasks.
-    - Run `gitscaffold sync` to create the new items.
-    - Run `gitscaffold diff` to check the state.
-    - Run `gitscaffold next` to check priorities.
-    - Run cleanup commands like `gitscaffold delete-closed`.
-    - The script will echo its progress and fail on any command failures.
-3.  **Update this `shared_context.md` file** to reflect the plan and completion.
+## Progress Summary
 
-## Next Steps for Agents
+- Implementation of AI-first default behavior in `diff` and `sync`: Completed
+- Added and updated tests for AI extraction and fallback paths: Completed
+- Updated documentation (`usage.md`, CLI help text) to highlight default AI-first behavior and `--no-ai` flag: Completed
+- Version bumped to `0.1.13`; patch release ready: Completed
 
-- **Testing agents:**
-  - Run the new `scripts/test_workflow.sh` script to validate the end-to-end workflow.
-  - Review existing `pytest` tests to ensure full coverage of individual command features.
-- **CI agents:**
-  - Integrate `scripts/test_workflow.sh` into the CI pipeline. This will likely require setting up a test repository and secrets for `GITHUB_TOKEN`.
-- **Documentation agents:**
-  - Update `usage.md` or other documentation to mention this new test script.
+## Discussion: AI-First Default Behavior
+### Problem
+- The built-in markdown parser often finds 0 items in free-form `.md` roadmaps, causing `diff` to mark all GitHub issues as extra and `sync` to do nothing.
+- Users must remember to pass `--ai` (for diff) or `--ai-enrich` (for sync) to leverage AI, which is inconsistent and error-prone.
+
+### Proposed Solution
+1. **Default to AI extraction** whenever a roadmap is a Markdown file with no structured milestones/features:
+   - In `diff`, detect `.md` input, run structured parser first; if no items, automatically prompt:
+     "No structured roadmap items found. Try AI-powered extraction? [y/N]"
+     - On confirmation, call `extract_issues_from_markdown` and proceed.
+   - In `sync`, after structured parse yields no features/tasks, similarly prompt and extract.
+2. **Unify flags**:
+   - Remove `--ai` flag from `diff` (AI becomes implicit).
+   - Add a global `--no-ai` flag to disable AI fallback when desired.
+   - In `sync`, repurpose `--ai-enrich` strictly for enrichment; AI extraction implicit for Markdown.
+3. **Key management & warnings**:
+   - Use `get_openai_api_key()` to load or prompt/save key from `.env` or env.
+   - Emit clear warnings about protecting API keys (never log them).
+
+### Files to Modify
+- **scaffold/cli.py**: Update `diff()` and `sync()` commands to implement AI-first fallback and flag changes.
+- **tests/test_cli_diff.py**: Add tests for Markdown diff with AI fallback and `--no-ai` disable.
+- **tests/test_cli_sync.py**: Add tests for Markdown sync creating issues via AI extraction.
+
+### Implementation Steps
+1. Code changes in `scaffold/cli.py`:
+   - Refactor argument definitions: remove `--ai` from `diff`, add `--no-ai` to both commands.
+   - During execution, check file extension and structured parse result, prompt for AI fallback.
+2. Update unit tests:
+   - Mock `extract_issues_from_markdown` to return a known set of titles.
+   - Verify `diff docs/roadmap.md` triggers AI path by default and lists extracted items.
+   - Verify `gitscaffold sync docs/roadmap.md` with AI creates correct issue creation messages.
+3. Manual smoke test using a simple `.md` with headings to confirm behavior.
+4. Update `usage.md` and README to reflect new default AI behavior and `--no-ai` option.
+5. Ensure CI and pre-commit hooks pass; adjust configuration if necessary.
+
+ **Date:** 2025-07-30
