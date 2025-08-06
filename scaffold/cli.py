@@ -304,7 +304,20 @@ def get_global_config_path():
 def set_global_config_key(key: str, value: str):
     """Sets a key-value pair in the global config file with secure permissions."""
     config_path = get_global_config_path()
+    # Use python-dotenv to write or update the key
     set_key(str(config_path), key, value)
+    # Normalize quoting: convert single quotes to double quotes for consistency
+    try:
+        text = config_path.read_text(encoding='utf-8')
+        # Replace lines like KEY='value' with KEY="value"
+        old = f"{key}='{value}'"
+        new = f'{key}="{value}"'
+        if old in text:
+            text = text.replace(old, new)
+            config_path.write_text(text, encoding='utf-8')
+    except Exception:
+        # If normalization fails, ignore and leave as-is
+        pass
     # Ensure config file has secure permissions (owner read/write only).
     # This is not applicable/standard on Windows.
     if os.name != 'nt':
