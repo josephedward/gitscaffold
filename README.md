@@ -17,7 +17,6 @@ Gitscaffold is a command-line tool and GitHub Action that converts Markdown-base
 *   **Show Next Action Items (`next`)**: Display open issues for the earliest active milestone.
 *   **Show Next Task (`next-task`)**: Display or select your next open task for the current roadmap phase, with optional random pick and browser opening.
 *   **Diff Local Roadmap vs GitHub Issues (`diff`)**: Compare your local Markdown roadmap file against your repository’s open and closed issues.
-*   **Vibe Kanban Integration (`vibe`)**: Synchronize GitHub issues with a Vibe Kanban board, including pushing issues as cards and pulling status updates back to GitHub.
 *   **Flexible Authentication**: Supports GitHub tokens and OpenAI keys via environment variables, `.env` files, or command-line options.
 
 ## Installation
@@ -52,7 +51,7 @@ Here's how to use `gitscaffold` to populate a new repository with issues from a 
 
 1.  **Create a Roadmap File**
 
-    Create a file named `ROADMAP.md` and add your project structure. You can start with a simple structured format like this:
+    Create a file named `docs/ROADMAP.md` and add your project structure. You can start with a simple structured format like this:
 
     ```json
     {
@@ -88,14 +87,14 @@ Here's how to use `gitscaffold` to populate a new repository with issues from a 
 
     ```sh
     # Make sure you have set GITHUB_TOKEN
-    gitscaffold sync ROADMAP.md --repo your-github-name/your-repo
+    gitscaffold sync docs/ROADMAP.md --repo your-github-name/your-repo
     ```
 
     That's it! Your repository is now populated based on your roadmap.
 
 ## Example: Running Gitscaffold on Itself
 
-You can run `gitscaffold` on its own repository to see it in action. The `diff` command is a great way to compare the `ROADMAP.md` file with the current state of GitHub issues.
+You can run `gitscaffold` on its own repository to see it in action. The `diff` command is a great way to compare the `docs/ROADMAP.md` file with the current state of GitHub issues.
 
 This is a process often called "dogfooding"—using your own product.
 
@@ -108,7 +107,7 @@ This is a process often called "dogfooding"—using your own product.
 3.  **Run the `diff` command**:
     ```sh
     # From the root of the gitscaffold repository:
-    gitscaffold diff ROADMAP.md --repo josephinedward/gitscaffold
+    gitscaffold diff docs/ROADMAP.md --repo josephinedward/gitscaffold
     ```
 
 ### Interpreting the Output
@@ -122,12 +121,12 @@ The command will analyze the repository and produce a report. If the roadmap and
 Or, if there are discrepancies, the output will look something like this:
 
 ```
-⚠️ Found differences between ROADMAP.md and GitHub issues for josephinedward/gitscaffold.
+⚠️ Found differences between docs/ROADMAP.md and GitHub issues for josephinedward/gitscaffold.
 
-Items in ROADMAP.md but not in GitHub:
+Items in docs/ROADMAP.md but not in GitHub:
 - [ ] A new task that was just added to the roadmap
 
-Issues on GitHub but not in ROADMAP.md:
+Issues on GitHub but not in docs/ROADMAP.md:
 - #99: A bug report filed directly on GitHub
 ```
 
@@ -139,14 +138,14 @@ This provides a clear overview of the alignment between your plan and the work b
 Use `sync` to create and update GitHub issues from a structured roadmap file. It compares the roadmap with the repository and creates any missing milestones or issues.
 
 ```sh
-# Sync with a structured roadmap file (e.g., ROADMAP.md containing JSON)
-gitscaffold sync ROADMAP.md --repo owner/repo
+# Sync with a structured roadmap file (e.g., docs/ROADMAP.md containing JSON)
+gitscaffold sync docs/ROADMAP.md --repo owner/repo
 
 # To enrich descriptions of new issues with AI during sync
-gitscaffold sync ROADMAP.md --repo owner/repo --ai-enrich
+gitscaffold sync docs/ROADMAP.md --repo owner/repo --ai-enrich
 
 # Simulate the sync operation without making changes
-gitscaffold sync ROADMAP.md --repo owner/repo --dry-run
+gitscaffold sync docs/ROADMAP.md --repo owner/repo --dry-run
 ```
 
 ### Delete closed issues
@@ -176,7 +175,7 @@ gitscaffold sanitize --repo owner/repo --token $GITHUB_TOKEN
 
 Use `next` to view open issues from the earliest active milestone in your repository.
 If there are no active milestones but open issues exist on GitHub, `next` will pick one at random.
-Only if there are no open issues will it fall back to your local roadmap tasks (from `ROADMAP.md` by default).
+Only if there are no open issues will it fall back to your local roadmap tasks (from `docs/ROADMAP.md` by default).
 
 ```sh
 # List open issues for the next milestone:
@@ -186,7 +185,7 @@ gitscaffold next --repo owner/repo --token $GITHUB_TOKEN
 gitscaffold next --repo owner/repo --token $GITHUB_TOKEN
 
 # If no open issues at all, fall back to local roadmap tasks:
-gitscaffold next --repo owner/repo --token $GITHUB_TOKEN --roadmap-file ROADMAP.md
+gitscaffold next --repo owner/repo --token $GITHUB_TOKEN --roadmap-file docs/ROADMAP.md
 ```
 
 ### Show Next Task for Current Phase
@@ -205,42 +204,10 @@ For unstructured Markdown roadmaps, AI extraction is prompted by default; disabl
 
 ```sh
 # Compare a structured roadmap file
-gitscaffold diff ROADMAP.md --repo owner/repo
+gitscaffold diff docs/ROADMAP.md --repo owner/repo
 
 # Compare an unstructured roadmap file using AI
 gitscaffold diff docs/brainstorm.md --repo owner/repo --ai
-```
-
-### Vibe Kanban Integration (`vibe`)
-
-Synchronize GitHub issues with a [Vibe Kanban](https://github.com/BloopAI/vibe-kanban) board to manage tasks for AI agents. Push filtered GitHub issues to a board, and pull status updates back to GitHub. This feature allows you to bridge your planning in GitHub with execution on a Kanban board.
-
-For detailed setup and usage instructions, see the [Vibe Kanban Integration Guide](./docs/integration_vibe-kanban.md).
-
-*(Note: This feature is in early development.)*
-
-#### Listing Available Kanban Boards
-
-```bash
-# Verify connectivity and list available boards
-gitscaffold vibe list-projects --kanban-api http://localhost:3000/api
-# Example Output:
-# - Project Board A
-# - AIPowered Tasks
-```
-
-#### Pushing Issues to Vibe Kanban
-
-```bash
-# Push open issues with the "bug" label to a Vibe Kanban board
-gitscaffold vibe push --repo owner/repo --board "My AI Tasks" --kanban-api http://localhost:3000/api --label bug
-```
-
-#### Pulling Status from Vibe Kanban
-
-```bash
-# Pull status updates from the board back to GitHub
-gitscaffold vibe pull --repo owner/repo --board "My AI Tasks" --kanban-api http://localhost:3000/api
 ```
 
 ### From the source checkout
@@ -254,10 +221,10 @@ pip install -e .
 
 # Now any command is available via `gitscaffold`:
 gitscaffold setup
-gitscaffold sync ROADMAP.md --repo owner/repo
+gitscaffold sync docs/ROADMAP.md --repo owner/repo
 gitscaffold import-md markdown_roadmap.md --repo owner/repo
 gitscaffold delete-closed --repo owner/repo
-gitscaffold enrich batch --repo owner/repo --path ROADMAP.md --apply
+gitscaffold enrich batch --repo owner/repo --path docs/ROADMAP.md --apply
 ```
 
 ### Audit Repository (cleanup, deduplicate, diff)
