@@ -37,7 +37,7 @@ def extract_issues_from_markdown(md_file, api_key: str, model_name=None, tempera
                 {'role': 'user', 'content': prompt}
             ],
             temperature=float(os.getenv('OPENAI_TEMPERATURE', temperature)),
-            max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '1024')) # Increased max_tokens for potentially larger JSON
+            max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '4096')) # Increased max_tokens for potentially larger JSON
         )
         text = response.choices[0].message.content
         if text is None:
