@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.1.17 (2025-08-06)
+- **Fix**: Resolved an UnboundLocalError in the `sync` command by defaulting issue bodies when missing descriptions.
+- **Docs**: Moved Vibe Kanban integration details to `docs/integration_vibe-kanban.md` and removed detailed examples from README.md and usage.md.
+- **Cleanup**: Deleted deprecated `shared_context.md` and `shared_context_vibe-kanban.md`.
+- **Feature**: Added stub `vibe list-projects` command and documented it.
+
 ## v0.1.16 (2025-07-30)
 - **Feature**: The `sync --update-local` command now marks tasks as completed in the local roadmap file with `[x]` if their corresponding GitHub issue is closed.
 - **Parser**: The Markdown parser now recognizes `[x]` and `[ ]` in task titles to correctly set their completion status upon reading the file.
