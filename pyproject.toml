@@ -9,7 +9,6 @@ description = "Convert roadmaps to GitHub issues"
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
-license-file = "LICENSE"
 authors = [
   { name = "Joseph Edward", email = "josephedward@gmail.com" }
 ]
