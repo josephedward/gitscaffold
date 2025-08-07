@@ -1,0 +1,25 @@
+name: Gemini Assistant
+
+on:
+  issue_comment:
+    types: [created]
+    branches:
+      - main
+  pull_request_review_comment:
+    types: [created]
+    branches:
+      - main
+
+jobs:
+  run-gemini-cli:
+    runs-on: ubuntu-latest
+    if: contains(github.event.comment.body, '@gemini-cli')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run Gemini CLI
+        uses: google-github-actions/run-gemini-cli@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
