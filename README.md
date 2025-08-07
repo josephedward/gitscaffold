@@ -254,3 +254,23 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           dry-run: 'true'
 ```
+
+## Gemini Integration Feature
+
+The Gemini integration allows `gitscaffold` to leverage Google's Gemini models for automated tasks such as AI-driven issue generation and enrichment. This feature is enabled through the use of the `--with-gemini-action` flag when running the `gitscaffold` command.
+
+### Setting Up Gemini Integration
+
+1. **Enable Gemini on your project:** Use the `--with-gemini-action` flag when you run `gitscaffold` to include the Gemini GitHub Action and configuration in your project.
+
+2. **Configure your GitHub repository:**
+   - You must set the `GEMINI_API_KEY` in your repository's secrets to authenticate with the Gemini API.
+   - Ensure that the `GITHUB_TOKEN` is also set with appropriate permissions to interact with GitHub issues and pull requests.
+
+### Example Usage
+
+```sh
+gitscaffold setup --with-gemini-action --repo your-github-name/your-new-repo
+```
+
+This command will scaffold a new project including the Gemini GitHub Action workflow and configuration file, enabling on-demand AI assistance directly in your GitHub repository's issues and pull requests.
