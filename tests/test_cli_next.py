@@ -139,10 +139,12 @@ def test_next_fails_if_no_token(mock_get_token, runner, monkeypatch):
     """Test `next` command fails if no token is provided."""
     # We must unset GITHUB_TOKEN env var, because the --token option uses it as a default.
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    
+
     # Here we don't provide a token, so the command calls get_github_token.
     # We mock it to return None to simulate no token being available.
-    result = runner.invoke(cli, ['next', '--repo', 'owner/repo'])
+    # We use isolated_filesystem to ensure no .env file is loaded.
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli, ['next', '--repo', 'owner/repo'])
 
     assert result.exit_code == 1
     assert "GitHub token is required." in result.output
