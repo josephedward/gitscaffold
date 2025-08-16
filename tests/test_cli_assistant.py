@@ -1,6 +1,6 @@
 import pytest
 from click.testing import CliRunner
-from unittest.mock import patch, call
+from unittest.mock import patch, call, ANY
 import subprocess
 
 from scaffold.cli import cli
@@ -17,7 +17,7 @@ def test_assistant_passthrough(runner):
         assert result.exit_code == 0, result.output
         mock_run.assert_called_once_with(
             ['aider', 'some/file.py', '--message', 'a fix'],
-            env=pytest.ANY
+            env=ANY
         )
 
 def test_assistant_process_issues_success(runner, tmp_path):
