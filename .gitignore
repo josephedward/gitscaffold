@@ -28,3 +28,4 @@ scaffold/.DS_Store
 .secrets
 /rust/mdparser
 *.pem
+docs/issues.md
