@@ -1955,10 +1955,12 @@ def assistant(ctx, args):
         cmd_name = args[0]
         cmd_args = list(args[1:])
         cmd = ctx.command.commands[cmd_name]
-        # In order for click to parse the subcommand's arguments correctly,
-        # we create a new context for it and invoke it.
-        with cmd.make_context(cmd_name, cmd_args) as cmd_ctx:
-            sys.exit(cmd.invoke(cmd_ctx))
+        
+        # To ensure argument parsing and validation, we must call the subcommand's `main` method.
+        # `standalone_mode=False` allows exceptions to propagate up to the test runner.
+        # When `main` returns successfully, we must exit to prevent falling through to passthrough logic.
+        cmd.main(args=cmd_args, standalone_mode=False)
+        ctx.exit(0)
 
     # This is a passthrough invocation to `aider`.
     # Ensure AI keys are loaded in environment
