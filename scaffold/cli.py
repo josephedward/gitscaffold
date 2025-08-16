@@ -1956,8 +1956,8 @@ def assistant(ctx, args):
         env = os.environ.copy()
         cmd = ['aider'] + list(args)
         try:
-            return_code = subprocess.call(cmd, env=env)
-            sys.exit(return_code)
+            result = subprocess.run(cmd, env=env)
+            sys.exit(result.returncode)
         except FileNotFoundError:
             click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
             sys.exit(1)

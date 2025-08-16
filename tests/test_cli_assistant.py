@@ -11,11 +11,11 @@ def runner():
 
 def test_assistant_passthrough(runner):
     """Test that `assistant` command passes arguments to aider."""
-    with patch('subprocess.call') as mock_call:
-        mock_call.return_value = 0
+    with patch('scaffold.cli.subprocess.run') as mock_run:
+        mock_run.return_value.returncode = 0
         result = runner.invoke(cli, ['assistant', 'some/file.py', '--message', 'a fix'])
         assert result.exit_code == 0, result.output
-        mock_call.assert_called_once_with(
+        mock_run.assert_called_once_with(
             ['aider', 'some/file.py', '--message', 'a fix'],
             env=pytest.ANY
         )
@@ -25,7 +25,7 @@ def test_assistant_process_issues_success(runner, tmp_path):
     issues_file = tmp_path / "issues.txt"
     issues_file.write_text("issue 1\nissue 2")
     
-    with patch('subprocess.run') as mock_run:
+    with patch('scaffold.cli.subprocess.run') as mock_run:
         # Mock successful execution
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "stdout"
@@ -51,7 +51,7 @@ def test_assistant_process_issues_failure(runner, tmp_path):
     issues_file = tmp_path / "issues.txt"
     issues_file.write_text("issue 1")
     
-    with patch('subprocess.run') as mock_run:
+    with patch('scaffold.cli.subprocess.run') as mock_run:
         # Mock failed execution
         mock_run.return_value.returncode = 1
         mock_run.return_value.stdout = "stdout"
@@ -80,7 +80,7 @@ def test_assistant_process_issues_timeout(runner, tmp_path):
     issues_file = tmp_path / "issues.txt"
     issues_file.write_text("long running issue")
     
-    with patch('subprocess.run', side_effect=subprocess.TimeoutExpired(cmd='aider', timeout=300)) as mock_run:
+    with patch('scaffold.cli.subprocess.run', side_effect=subprocess.TimeoutExpired(cmd='aider', timeout=300)) as mock_run:
         result = runner.invoke(cli, ['assistant', 'process-issues', str(issues_file)])
         assert result.exit_code == 0, result.output
         assert "Processing: long running issue" in result.output
