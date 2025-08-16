@@ -8,7 +8,7 @@ import logging
 import shlex
 from pathlib import Path
 try:
-    from dotenv import load_dotenv, set_key
+    from dotenv import load_dotenv, set_key, unset_key
 except ImportError:
     def load_dotenv(*args, **kwargs):
         # python-dotenv not installed; skipping .env loading
@@ -18,6 +18,13 @@ except ImportError:
         import click
         raise click.ClickException(
             "python-dotenv is required to save tokens to .env files. "
+            "Install it or set tokens via environment variables."
+        )
+    def unset_key(path, key):
+        # Cannot remove keys without python-dotenv
+        import click
+        raise click.ClickException(
+            "python-dotenv is required to remove tokens from .env files. "
             "Install it or set tokens via environment variables."
         )
 try:
@@ -200,6 +207,21 @@ def config_list():
 def config_path_command():
     """Shows the path to the global config file."""
     click.echo(get_global_config_path())
+@config.command('remove', help='Remove a configuration key.')
+@click.argument('key')
+def config_remove(key):
+    """Removes a key-value pair from the global config file."""
+    config_path = get_global_config_path()
+    try:
+        removed, _ = unset_key(str(config_path), key.upper())
+        if removed:
+            click.secho(f"Removed {key.upper()} from {config_path}", fg="green")
+        else:
+            click.secho(f"Key '{key.upper()}' not found in {config_path}", fg="yellow")
+    except click.ClickException:
+        raise
+    except Exception as e:
+        click.secho(f"Error removing key '{key.upper()}': {e}", fg="red", err=True)
 
 
 def prompt_for_github_token():
@@ -258,6 +280,31 @@ def prompt_for_openai_key():
     set_global_config_key('OPENAI_API_KEY', key)
     click.secho("OpenAI API key saved to global config file.", fg="green")
     os.environ['OPENAI_API_KEY'] = key
+    return key
+
+def get_gemini_api_key():
+    """
+    Retrieves the Google Gemini API key from environment or config files.
+    Assumes load_dotenv() has already been called.
+    """
+    api_key = os.getenv('GEMINI_API_KEY')
+    if not api_key:
+        logging.warning("GEMINI_API_KEY not found in environment or config files.")
+        api_key = click.prompt('Please enter your Google Gemini API key', hide_input=True)
+        set_global_config_key('GEMINI_API_KEY', api_key)
+        logging.info("Google Gemini API key saved to global config file.")
+        click.secho("Google Gemini API key saved to global config file.", fg="green")
+        os.environ['GEMINI_API_KEY'] = api_key
+    return api_key
+
+def prompt_for_gemini_key():
+    """
+    Prompt for a Google Gemini API key, save it to the global config and environment, and return it.
+    """
+    key = click.prompt('Please enter your Google Gemini API key', hide_input=True)
+    set_global_config_key('GEMINI_API_KEY', key)
+    click.secho("Google Gemini API key saved to global config file.", fg="green")
+    os.environ['GEMINI_API_KEY'] = key
     return key
 
 
@@ -1852,6 +1899,25 @@ def start_api():
         click.secho(f"API server failed to start or exited with an error: {e}", fg='red', err=True)
         sys.exit(1)
 
+
+@cli.command(name='assistant', help='Invoke the Aider AI assistant.')
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+def assistant(args):
+    """Invokes the Aider AI assistant CLI tool with the given arguments."""
+    # Ensure AI keys are loaded in environment
+    if not os.getenv('OPENAI_API_KEY'):
+        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+    if not os.getenv('GEMINI_API_KEY'):
+        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+    # Build environment for subprocess
+    env = os.environ.copy()
+    cmd = ['aider'] + list(args)
+    try:
+        return_code = subprocess.call(cmd, env=env)
+        sys.exit(return_code)
+    except FileNotFoundError:
+        click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+        sys.exit(1)
 
 @cli.command(name='uninstall', help='Show uninstall instructions.')
 def uninstall():
