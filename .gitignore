@@ -27,3 +27,4 @@ misc
 scaffold/.DS_Store
 .secrets
 /rust/mdparser
+*.pem
