@@ -1941,23 +1941,16 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True, context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True,
+))
 @click.pass_context
 def assistant(ctx):
     """Invokes the Aider AI assistant CLI tool with the given arguments."""
     if ctx.invoked_subcommand is None:
         # When no subcommand is given, we treat this as a passthrough to aider.
-        # We need to get the raw arguments from sys.argv, as click has not parsed them for us.
-        try:
-            # sys.argv will be like ['.../pytest', 'assistant', 'some/file.py', ...]
-            # or ['gitscaffold', 'assistant', ...] when run normally.
-            # Find the index of 'assistant' and take everything after it.
-            assistant_index = sys.argv.index('assistant')
-            args = sys.argv[assistant_index + 1:]
-        except ValueError:
-            # This case might happen in some testing scenarios if sys.argv is weird.
-            # Fallback to empty args.
-            args = []
+        args = ctx.args
 
         # Ensure AI keys are loaded in environment
         if not os.getenv('OPENAI_API_KEY'):
