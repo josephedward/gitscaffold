@@ -29,7 +29,7 @@ This approach is useful for:
     Invoke `gitscaffold` to process the file:
 
     ```bash
-    gitscaffold assistant process-issues tasks.txt
+    gitscaffold process-issues tasks.txt
     ```
 
     `gitscaffold` will then call `aider` for each line in `tasks.txt`. Aider will attempt to complete the task and commit the changes if successful.

@@ -1941,34 +1941,13 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@cli.command(name='assistant', help='Invoke the Aider AI assistant with passthrough arguments.')
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
-@click.pass_context
-def assistant(ctx, args):
+def assistant(args):
     """
     Invokes the Aider AI assistant CLI tool with the given arguments.
-    If the first argument is a known subcommand, it's executed. Otherwise,
-    all arguments are passed through to the `aider` command.
+    All arguments are passed through to the `aider` command.
     """
-    if args and args[0] in ctx.command.commands:
-        # This is a subcommand invocation.
-        cmd_name = args[0]
-        cmd_args = list(args[1:])
-        cmd = ctx.command.commands[cmd_name]
-        
-        # We need to create a new context for the subcommand to ensure
-        # its arguments are parsed correctly.
-        with cmd.make_context(cmd_name, cmd_args, parent=ctx) as cmd_ctx:
-            # `invoke` will call the subcommand. If there's an error like
-            # a missing file, Click's default error handling will take over,
-            # print a message, and exit. The CliRunner will catch this exit.
-            cmd.invoke(cmd_ctx)
-        
-        # After a successful subcommand run, we must exit to prevent
-        # falling through to the passthrough logic for `aider`.
-        ctx.exit()
-
-    # This is a passthrough invocation to `aider`.
     # Ensure AI keys are loaded in environment
     if not os.getenv('OPENAI_API_KEY'):
         click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
@@ -1992,7 +1971,7 @@ def assistant(ctx, args):
         sys.exit(1)
 
 
-@assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
+@cli.command('process-issues', help='Process a list of issues sequentially with Aider.')
 @click.argument('issues_file', type=click.Path(exists=True))
 @click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
 @click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
