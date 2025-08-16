@@ -21,14 +21,14 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
 - **Labels:** core, cli
 
 #### Implement main CLI group using Click
-Description: Establish entry point and command structure using Click (`scaffold/cli.py`, `gitscaffold.py`)
+Description: Establish entry point and command structure using Click (`scaffold/cli.py`, `scripts/example_cli_wrapper.py`)
 Tests:
  - Verify CLI invocation (`gitscaffold --help`)
  - Test version option (`gitscaffold --version`)
  - Ensure all top-level commands are listed in help output
 
-#### Implement `init` command
-Description: Develop command to generate a template roadmap file (`gitscaffold.py::init`)
+#### Implement `setup` command
+Description: Develop command to generate a template roadmap file (`scaffold/cli.py::setup`)
 Tests:
  - Confirm file creation
  - Validate content against template
@@ -70,14 +70,14 @@ Tests:
     - Dry run and actual run
     - Verify creation of milestones/issues
     - Check assignees, labels, milestones
- - Implement `setup` command
-  - Initialize repo with labels/milestones (`gitscaffold.py::setup`, `scripts/github_setup.py`)
+- Implement `setup` command
+  - Initialize repo with labels/milestones (`scaffold/cli.py::setup`, `scripts/github_roadmap_setup.py`)
   - Tests:
     - Mock API: label/milestone creation
    - Idempotency
 - Implement `config` command to persistently store GitHub PAT and OpenAI API key in `~/.gitscaffold/config` (avoid repeated prompts)
 - Implement `delete-closed` command
-  - Delete closed issues (`gitscaffold.py::delete-closed`)
+  - Delete closed issues (`scaffold/cli.py::delete-closed`)
   - Tests:
     - Dry run, actual deletion, method options
 
@@ -95,7 +95,7 @@ Tests:
   - Tests: mock LLM API, context variations
 - Integrate AI extraction/enrichment into `sync` command (`scaffold/cli.py::sync`)
   - Tests: mock LLM & GitHub, verify processing
-- Implement `enrich` command (`gitscaffold.py::enrich`, `scripts/enrich.py`)
+- Implement `enrich` command (`scaffold/cli.py::enrich`, `scripts/enrich.py`)
   - Tests: mock LLM/GitHub, batch, interactive, apply changes
 
 ### Testing Framework and Coverage
@@ -244,7 +244,7 @@ Tests:
 **Tasks:**
 - Refactor `scripts/` functionalities into core CLI
   - Tests: functionality preserved, tests updated
-- Consolidate entry points (`gitscaffold.py`, `scaffold/cli.py`)
+- Consolidate entry points (`scripts/example_cli_wrapper.py`, `scaffold/cli.py`)
   - Tests: command functionality, consistent behavior
 - Improve error handling and user feedback
   - Tests: failure scenarios, error output
