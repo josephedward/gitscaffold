@@ -1956,18 +1956,17 @@ def assistant(ctx, args):
         cmd_args = list(args[1:])
         cmd = ctx.command.commands[cmd_name]
         
-        # To ensure argument parsing and validation, we must call the subcommand's `main` method.
-        # `standalone_mode=False` allows exceptions to propagate up to the test runner.
-        # We catch them here to provide proper exit codes and prevent fall-through.
-        try:
-            cmd.main(args=cmd_args, standalone_mode=False)
-        except click.ClickException as e:
-            # Show the error message and exit with the error's exit code.
-            e.show()
-            ctx.exit(e.exit_code)
+        # We need to create a new context for the subcommand to ensure
+        # its arguments are parsed correctly.
+        with cmd.make_context(cmd_name, cmd_args, parent=ctx) as cmd_ctx:
+            # `invoke` will call the subcommand. If there's an error like
+            # a missing file, Click's default error handling will take over,
+            # print a message, and exit. The CliRunner will catch this exit.
+            cmd.invoke(cmd_ctx)
         
-        # When `main` returns successfully, we must exit to prevent falling through to passthrough logic.
-        ctx.exit(0)
+        # After a successful subcommand run, we must exit to prevent
+        # falling through to the passthrough logic for `aider`.
+        ctx.exit()
 
     # This is a passthrough invocation to `aider`.
     # Ensure AI keys are loaded in environment
@@ -2002,9 +2001,6 @@ def process_issues(issues_file, results_dir, timeout):
     Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
     This implements the "atomic issue resolution" pattern.
     """
-    # Double-check existence, as the manual dispatcher might interfere with Click's validation
-    if not Path(issues_file).exists():
-        raise click.BadParameter(f"Path '{issues_file}' does not exist.", param_hint='ISSUES_FILE')
     results_path = Path(results_dir)
     results_path.mkdir(exist_ok=True)
     
