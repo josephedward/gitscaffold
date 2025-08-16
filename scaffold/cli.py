@@ -1561,7 +1561,7 @@ def enrich(ctx, ai_provider):
 @click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
 @click.option('--apply', 'apply_changes', is_flag=True, help='Apply the update')
 @click.pass_context
-def enrich_issue_command(ctx, repo, issue_number, roadmap_path, apply_changes):
+def enrich_issue_command(click_ctx, repo, issue_number, roadmap_path, apply_changes):
     """Enrich a single issue."""
     token = get_github_token()
     if not token: sys.exit(1)
@@ -1575,11 +1575,11 @@ def enrich_issue_command(ctx, repo, issue_number, roadmap_path, apply_changes):
     
     roadmap = _enrich_parse_roadmap(roadmap_path)
     issue = repo_obj.get_issue(number=issue_number)
-    ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
-    if not ctx:
+    roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+    if not roadmap_ctx:
         click.secho(f"No roadmap context for issue #{issue_number}", fg="red", err=True)
         sys.exit(1)
-    enriched = _enrich_call_llm(issue.title, issue.body, ctx, ctx.obj['ai_provider'], None)
+    enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
     click.echo(enriched)
     if apply_changes:
         issue.edit(body=enriched)
@@ -1593,7 +1593,7 @@ def enrich_issue_command(ctx, repo, issue_number, roadmap_path, apply_changes):
 @click.option('--interactive', is_flag=True, help='Interactive approval')
 @click.option('--apply', 'apply_changes', is_flag=True, help='Apply all updates')
 @click.pass_context
-def enrich_batch_command(ctx, repo, roadmap_path, csv_path, interactive, apply_changes):
+def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, apply_changes):
     """Batch enrich issues."""
     token = get_github_token()
     if not token: sys.exit(1)
@@ -1609,11 +1609,11 @@ def enrich_batch_command(ctx, repo, roadmap_path, csv_path, interactive, apply_c
     issues = list(repo_obj.get_issues(state='open'))
     records = []
     for issue in issues:
-        ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
-        if not ctx:
+        roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+        if not roadmap_ctx:
             continue
-        enriched = _enrich_call_llm(issue.title, issue.body, ctx, ctx.obj['ai_provider'], None)
-        records.append((issue.number, issue.title, ctx['context'], matched, enriched))
+        enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+        records.append((issue.number, issue.title, roadmap_ctx['context'], matched, enriched))
     
     if csv_path:
         with open(csv_path, 'w', newline='', encoding='utf-8') as f:

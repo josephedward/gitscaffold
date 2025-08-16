@@ -38,7 +38,7 @@ def mock_api_keys(monkeypatch):
     monkeypatch.setattr("scaffold.cli.get_openai_api_key", lambda: "fake-openai-key")
     monkeypatch.setattr("scaffold.cli.get_gemini_api_key", lambda: "fake-gemini-key")
 
-def test_import_md_openai_dry_run(runner, tmp_path, monkeypatch):
+def test_import_md_openai_dry_run(runner, tmp_path, monkeypatch, mock_github_client_for_import):
     md_content = "- an issue to import"
     md_file = tmp_path / "test.md"
     md_file.write_text(md_content)
