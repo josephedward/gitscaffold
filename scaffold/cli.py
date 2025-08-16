@@ -38,7 +38,7 @@ except ImportError:
 from .parser import parse_markdown, parse_roadmap, write_roadmap
 from .validator import validate_roadmap, Feature, Task
 from .github import GitHubClient
-from .kanban_client import VibeKanbanClient
+from .vibe_kanban import VibeKanbanClient
 from .ai import enrich_issue_description, extract_issues_from_markdown
 from datetime import date
 import re

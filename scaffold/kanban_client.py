@@ -7,11 +7,11 @@ class VibeKanbanClient:
     Client for interacting with the Vibe Kanban API.
     """
 
-    def __init__(self, api_base_url: str = None, token: str = None):
+    def __init__(self, api_url: str = None, token: str = None):
         """Initializes the client."""
         # The actual API URL and authentication method will be determined
         # by investigating the vibe-kanban codebase.
-        self.api_url = api_base_url or "http://127.0.0.1:3001/api"  # Default guess
+        self.api_url = api_url or "http://127.0.0.1:3001/api"  # Default guess
         self.headers = {"Authorization": f"Bearer {token}"} if token else {}
         self.timeout = 10
 
