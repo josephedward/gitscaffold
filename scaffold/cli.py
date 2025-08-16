@@ -395,14 +395,6 @@ def _sanitize_repo_string(repo_string: str) -> str:
     return repo_string
 
 
-def _check_ai_keys():
-    """Checks for AI API keys and warns if they are not set."""
-    if not os.getenv('OPENAI_API_KEY'):
-        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
-    if not os.getenv('GEMINI_API_KEY'):
-        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
-
-
 def _populate_repo_from_roadmap(
     gh_client: GitHubClient,
     roadmap_data,
@@ -1949,38 +1941,30 @@ def start_api():
         sys.exit(1)
 
 
-@cli.command(name='assistant', help='Invoke the Aider AI assistant with passthrough arguments.', context_settings=dict(
-    ignore_unknown_options=True,
-    allow_extra_args=True,
-))
+@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
-def assistant(ctx):
-    """
-    Invokes the Aider AI assistant CLI tool with the given arguments.
-    All arguments are passed through to the `aider` command.
-    """
-    args = ctx.args
-    _check_ai_keys()
-    
-    # Build environment for subprocess
-    env = os.environ.copy()
-    cmd = ['aider'] + list(args)
-    try:
-        # We use subprocess.run and capture output for tests, but for live use,
-        # we don't want to capture, so Aider can be interactive.
-        # A simple way to detect a test run is to check if a specific env var is set.
-        if "PYTEST_CURRENT_TEST" in os.environ:
-             result = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding='utf-8')
-        else:
-             result = subprocess.run(cmd, env=env)
-        sys.exit(result.returncode)
-    except FileNotFoundError:
-        click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
-        sys.exit(1)
+def assistant(ctx, args):
+    """Invokes the Aider AI assistant CLI tool with the given arguments."""
+    if ctx.invoked_subcommand is None:
+        # Ensure AI keys are loaded in environment
+        if not os.getenv('OPENAI_API_KEY'):
+            click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+        if not os.getenv('GEMINI_API_KEY'):
+            click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+        # Build environment for subprocess
+        env = os.environ.copy()
+        cmd = ['aider'] + list(args)
+        try:
+            return_code = subprocess.call(cmd, env=env)
+            sys.exit(return_code)
+        except FileNotFoundError:
+            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+            sys.exit(1)
 
 
-@cli.command('process-issues', help='Process a list of issues sequentially with Aider.')
-@click.argument('issues_file', type=click.Path())
+@assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
+@click.argument('issues_file', type=click.Path(exists=True))
 @click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
 @click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
 def process_issues(issues_file, results_dir, timeout):
@@ -1988,12 +1972,6 @@ def process_issues(issues_file, results_dir, timeout):
     Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
     This implements the "atomic issue resolution" pattern.
     """
-    if not Path(issues_file).exists():
-        click.secho(f"Error: Invalid value for 'ISSUES_FILE': Path '{issues_file}' does not exist.", fg="red", err=True)
-        sys.exit(1)
-    
-    _check_ai_keys()
-    
     results_path = Path(results_dir)
     results_path.mkdir(exist_ok=True)
     
