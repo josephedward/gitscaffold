@@ -2002,6 +2002,9 @@ def process_issues(issues_file, results_dir, timeout):
     Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
     This implements the "atomic issue resolution" pattern.
     """
+    # Double-check existence, as the manual dispatcher might interfere with Click's validation
+    if not Path(issues_file).exists():
+        raise click.BadParameter(f"Path '{issues_file}' does not exist.", param_hint='ISSUES_FILE')
     results_path = Path(results_dir)
     results_path.mkdir(exist_ok=True)
     
