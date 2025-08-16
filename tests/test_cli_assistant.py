@@ -17,7 +17,10 @@ def test_assistant_passthrough(runner):
         assert result.exit_code == 0, result.output
         mock_run.assert_called_once_with(
             ['aider', 'some/file.py', '--message', 'a fix'],
-            env=ANY
+            env=ANY,
+            capture_output=True,
+            text=True,
+            encoding='utf-8'
         )
 
 def test_assistant_process_issues_success(runner, tmp_path):

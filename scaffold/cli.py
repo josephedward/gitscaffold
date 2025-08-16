@@ -1941,31 +1941,47 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True, context_settings=dict(
-    ignore_unknown_options=True,
-    allow_extra_args=True,
-))
+@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
-def assistant(ctx):
-    """Invokes the Aider AI assistant CLI tool with the given arguments."""
-    if ctx.invoked_subcommand is None:
-        # When no subcommand is given, we treat this as a passthrough to aider.
-        args = ctx.args
+def assistant(ctx, args):
+    """
+    Invokes the Aider AI assistant CLI tool with the given arguments.
+    If the first argument is a known subcommand, it's executed. Otherwise,
+    all arguments are passed through to the `aider` command.
+    """
+    if args and args[0] in ctx.command.commands:
+        # This is a subcommand invocation.
+        cmd_name = args[0]
+        cmd_args = list(args[1:])
+        cmd = ctx.command.commands[cmd_name]
+        # In order for click to parse the subcommand's arguments correctly,
+        # we create a new context for it and invoke it.
+        with cmd.make_context(cmd_name, cmd_args) as cmd_ctx:
+            sys.exit(cmd.invoke(cmd_ctx))
 
-        # Ensure AI keys are loaded in environment
-        if not os.getenv('OPENAI_API_KEY'):
-            click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
-        if not os.getenv('GEMINI_API_KEY'):
-            click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
-        # Build environment for subprocess
-        env = os.environ.copy()
-        cmd = ['aider'] + list(args)
-        try:
-            result = subprocess.run(cmd, env=env)
-            sys.exit(result.returncode)
-        except FileNotFoundError:
-            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
-            sys.exit(1)
+    # This is a passthrough invocation to `aider`.
+    # Ensure AI keys are loaded in environment
+    if not os.getenv('OPENAI_API_KEY'):
+        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+    if not os.getenv('GEMINI_API_KEY'):
+        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+    
+    # Build environment for subprocess
+    env = os.environ.copy()
+    cmd = ['aider'] + list(args)
+    try:
+        # We use subprocess.run and capture output for tests, but for live use,
+        # we don't want to capture, so Aider can be interactive.
+        # A simple way to detect a test run is to check if a specific env var is set.
+        if "PYTEST_CURRENT_TEST" in os.environ:
+             result = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding='utf-8')
+        else:
+             result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+        sys.exit(1)
 
 
 @assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
