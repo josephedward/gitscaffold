@@ -1958,8 +1958,15 @@ def assistant(ctx, args):
         
         # To ensure argument parsing and validation, we must call the subcommand's `main` method.
         # `standalone_mode=False` allows exceptions to propagate up to the test runner.
+        # We catch them here to provide proper exit codes and prevent fall-through.
+        try:
+            cmd.main(args=cmd_args, standalone_mode=False)
+        except click.ClickException as e:
+            # Show the error message and exit with the error's exit code.
+            e.show()
+            ctx.exit(e.exit_code)
+        
         # When `main` returns successfully, we must exit to prevent falling through to passthrough logic.
-        cmd.main(args=cmd_args, standalone_mode=False)
         ctx.exit(0)
 
     # This is a passthrough invocation to `aider`.
