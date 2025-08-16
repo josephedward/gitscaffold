@@ -1941,24 +1941,92 @@ def start_api():
         sys.exit(1)
 
 
-@cli.command(name='assistant', help='Invoke the Aider AI assistant.')
+@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
-def assistant(args):
+@click.pass_context
+def assistant(ctx, args):
     """Invokes the Aider AI assistant CLI tool with the given arguments."""
-    # Ensure AI keys are loaded in environment
-    if not os.getenv('OPENAI_API_KEY'):
-        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
-    if not os.getenv('GEMINI_API_KEY'):
-        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
-    # Build environment for subprocess
-    env = os.environ.copy()
-    cmd = ['aider'] + list(args)
-    try:
-        return_code = subprocess.call(cmd, env=env)
-        sys.exit(return_code)
-    except FileNotFoundError:
-        click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
-        sys.exit(1)
+    if ctx.invoked_subcommand is None:
+        # Ensure AI keys are loaded in environment
+        if not os.getenv('OPENAI_API_KEY'):
+            click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+        if not os.getenv('GEMINI_API_KEY'):
+            click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+        # Build environment for subprocess
+        env = os.environ.copy()
+        cmd = ['aider'] + list(args)
+        try:
+            return_code = subprocess.call(cmd, env=env)
+            sys.exit(return_code)
+        except FileNotFoundError:
+            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+            sys.exit(1)
+
+
+@assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
+@click.argument('issues_file', type=click.Path(exists=True))
+@click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
+@click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
+def process_issues(issues_file, results_dir, timeout):
+    """
+    Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
+    This implements the "atomic issue resolution" pattern.
+    """
+    results_path = Path(results_dir)
+    results_path.mkdir(exist_ok=True)
+    
+    with open(issues_file, 'r', encoding='utf-8') as f:
+        issues = [line.strip() for line in f if line.strip()]
+
+    click.secho(f"Found {len(issues)} issues to process.", fg='magenta')
+
+    for issue in issues:
+        click.secho(f"Processing: {issue}", fg='cyan')
+        
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        result_file = results_path / f"issue_{timestamp}.log"
+        
+        cmd = [
+            "aider",
+            "--message", issue,
+            "--yes",
+            "--no-stream",
+            "--auto-commits"
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout,
+                encoding='utf-8'
+            )
+            
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Exit status: {result.returncode}\n\n")
+                log_f.write("--- STDOUT ---\n")
+                log_f.write(result.stdout)
+                log_f.write("\n--- STDERR ---\n")
+                log_f.write(result.stderr)
+                
+            if result.returncode == 0:
+                click.secho(f"✅ SUCCESS: {issue}", fg='green')
+            else:
+                click.secho(f"❌ FAILED: {issue}", fg='red')
+                click.secho(f"  Exit status: {result.returncode}. Log: {result_file}", fg='red')
+        
+        except FileNotFoundError:
+            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+            sys.exit(1)
+        except subprocess.TimeoutExpired:
+            click.secho(f"❌ TIMEOUT: {issue}. Log: {result_file}", fg='red')
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Result: TIMEOUT after {timeout} seconds.\n")
+
+    click.secho("\nProcessing complete.", fg='green')
 
 @cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
