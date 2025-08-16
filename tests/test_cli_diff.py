@@ -58,7 +58,8 @@ def test_diff_no_differences(runner, sample_roadmap_file, mock_github_client_for
     mock_github_client_for_diff.get_all_issue_titles.assert_called_once()
 
 
-def test_diff_issues_missing_on_github(runner, sample_roadmap_file, mock_github_client_for_diff):
+@patch('click.confirm', return_value=False)
+def test_diff_issues_missing_on_github(mock_confirm, runner, sample_roadmap_file, mock_github_client_for_diff):
     """Test `diff` when some issues are missing from GitHub."""
     mock_github_client_for_diff.get_all_issue_titles.return_value = {
         "Feature A",
@@ -96,7 +97,8 @@ def test_diff_issues_on_github_not_in_roadmap(runner, sample_roadmap_file, mock_
     mock_github_client_for_diff.get_all_issue_titles.assert_called_once()
 
 
-def test_diff_shows_both_missing_and_extra(runner, sample_roadmap_file, mock_github_client_for_diff):
+@patch('click.confirm', return_value=False)
+def test_diff_shows_both_missing_and_extra(mock_confirm, runner, sample_roadmap_file, mock_github_client_for_diff):
     """Test `diff` when there are both missing and extra issues."""
     mock_github_client_for_diff.get_all_issue_titles.return_value = {
         "Feature A",

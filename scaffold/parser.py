@@ -96,44 +96,87 @@ def parse_markdown(md_file):
                 }
                 
                 rest_of_feature = '\n'.join(feature_lines)
-                
-                # Split feature content into metadata and tasks by the '**Tasks:**' heading
-                parts = re.split(r'\n\s*\*\*Tasks:\*\*\s*\n', rest_of_feature, maxsplit=1, flags=re.IGNORECASE)
-                meta_part_str = parts[0]
-                tasks_part_str = parts[1] if len(parts) > 1 else ''
 
-                # Parse metadata from the first part
+                # Split feature by H4 headings to separate tasks. The part before the first H4 is the feature body.
+                task_parts_h4 = re.split(r'\n^####\s+', rest_of_feature, flags=re.M)
+                feature_body_part = task_parts_h4.pop(0)
+
+                # Within the feature body, split again to separate metadata from a **Tasks:** list.
+                parts = re.split(r'\n\s*\*\*Tasks:\*\*\s*\n', feature_body_part, maxsplit=1, flags=re.IGNORECASE)
+                meta_part_str = parts[0]
+                tasks_list_str = parts[1] if len(parts) > 1 else ''
+
+                # Parse metadata for the feature.
                 desc_lines = []
                 for line in meta_part_str.strip().split('\n'):
                     stripped_line = line.strip()
-                    line_lower = stripped_line.lower()
+                    # General key-value parsing, handles "Labels: ..." and "- **Labels:** ..."
+                    if ':' in stripped_line:
+                        key, value = [s.strip() for s in stripped_line.split(':', 1)]
+                        key_lower = re.sub(r'[\*\- ]', '', key).lower()
 
-                    # Handle formats like '- **Description:** ...'
-                    if line_lower.startswith('- **description:**'):
-                        feature['description'] = stripped_line.split(':', 1)[1].strip()
-                    elif line_lower.startswith('- **milestone:**'):
-                        feature['milestone'] = stripped_line.split(':', 1)[1].strip()
-                    elif line_lower.startswith('- **labels:**'):
-                        feature['labels'] = [l.strip() for l in stripped_line.split(':', 1)[1].split(',') if l.strip()]
-                    elif line_lower.startswith('- **assignees:**'):
-                        feature['assignees'] = [a.strip() for a in stripped_line.split(':', 1)[1].split(',') if a.strip()]
+                        if key_lower == 'description':
+                            feature['description'] = value
+                        elif key_lower == 'milestone':
+                            feature['milestone'] = value
+                        elif key_lower == 'labels':
+                            feature['labels'] = [l.strip() for l in value.split(',') if l.strip()]
+                        elif key_lower == 'assignees':
+                            feature['assignees'] = [a.strip() for a in value.split(',') if a.strip()]
+                        else:
+                            desc_lines.append(line)
                     else:
                         desc_lines.append(line)
-                
-                # If description was not set via a specific field, use the collected lines
+
+                # If description wasn't an explicit field, use the collected lines.
                 if not feature['description'] and desc_lines:
                     feature['description'] = '\n'.join(desc_lines).strip()
-                
-                # Parse tasks from the second part
-                if tasks_part_str:
-                    for line in tasks_part_str.strip().split('\n'):
+
+                # Parse tasks from H4 sections
+                for task_part in task_parts_h4:
+                    task_lines = task_part.strip().split('\n')
+                    task_title = task_lines.pop(0).strip()
+                    if not task_title:
+                        continue
+                    
+                    task_body = '\n'.join(task_lines)
+                    task = {'title': task_title, 'description': '', 'labels': [], 'assignees': [], 'tests': []}
+                    
+                    tests_parts = re.split(r'\nTests:\s*\n', task_body, flags=re.IGNORECASE)
+                    meta_body = tests_parts[0]
+                    tests_body = tests_parts[1] if len(tests_parts) > 1 else ''
+
+                    task_desc_lines = []
+                    for line in meta_body.strip().split('\n'):
                         stripped_line = line.strip()
-                        # Any list item is considered a task, including indented ones.
+                        if ':' in stripped_line:
+                            key, value = [s.strip() for s in stripped_line.split(':', 1)]
+                            key_lower = key.lower()
+                            if key_lower == 'labels':
+                                task['labels'] = [l.strip() for l in value.split(',') if l.strip()]
+                            elif key_lower == 'assignees':
+                                task['assignees'] = [a.strip() for a in value.split(',') if a.strip()]
+                            else:
+                                task_desc_lines.append(line)
+                        else:
+                            task_desc_lines.append(line)
+
+                    if task_desc_lines:
+                        task['description'] = '\n'.join(task_desc_lines).strip()
+                    
+                    if tests_body:
+                        task['tests'] = [l.strip()[2:] for l in tests_body.strip().split('\n') if l.strip().startswith('- ')]
+
+                    feature['tasks'].append(task)
+                
+                # Parse tasks from **Tasks:** list
+                if tasks_list_str:
+                    for line in tasks_list_str.strip().split('\n'):
+                        stripped_line = line.strip()
                         if stripped_line.startswith('- '):
                             task_title = stripped_line[2:].strip()
                             if task_title:
-                                task = {'title': task_title, 'completed': False}
-                                feature['tasks'].append(task)
+                                feature['tasks'].append({'title': task_title, 'completed': False})
                 
                 data['features'].append(feature)
 

@@ -20,19 +20,19 @@ A tool to manage GitHub projects using declarative roadmap files, with AI-powere
 - **Milestone:** v0.1 Foundation (CLI & Basic Parsing)
 - **Labels:** core, cli
 
-**Tasks:**
-- Implement main CLI group using Click
-  - Establish entry point and command structure using Click (`scaffold/cli.py`, `gitscaffold.py`)
-  - Tests:
-    - Verify CLI invocation (`gitscaffold --help`)
-    - Test version option (`gitscaffold --version`)
-    - Ensure all top-level commands are listed in help output
-- Implement `init` command
-  - Develop command to generate a template roadmap file (`gitscaffold.py::init`)
-  - Tests:
-    - Confirm file creation
-    - Validate content against template
-    - Test behavior when file exists
+#### Implement main CLI group using Click
+Description: Establish entry point and command structure using Click (`scaffold/cli.py`, `gitscaffold.py`)
+Tests:
+ - Verify CLI invocation (`gitscaffold --help`)
+ - Test version option (`gitscaffold --version`)
+ - Ensure all top-level commands are listed in help output
+
+#### Implement `init` command
+Description: Develop command to generate a template roadmap file (`gitscaffold.py::init`)
+Tests:
+ - Confirm file creation
+ - Validate content against template
+ - Test behavior when file exists
 
 ### Roadmap Parsing and Validation
 - **Description:** Parse roadmap files (Markdown) and validate structure/content.

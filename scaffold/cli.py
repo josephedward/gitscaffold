@@ -6,6 +6,7 @@ import sys
 import subprocess
 import logging
 import shlex
+import shutil
 from pathlib import Path
 try:
     from dotenv import load_dotenv, set_key, unset_key
@@ -1109,8 +1110,8 @@ def diff(roadmap_file, repo, token, no_ai, openai_key):
 
 @cli.command(name='next', help='Show next action items')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
-@click.option('--token', help='GitHub API token (prompts if not set).')
-@click.option('--roadmap-file', '-f', 'roadmap_file', type=click.Path(exists=True), default='ROADMAP.md', show_default=True,
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (prompts if not set).')
+@click.option('--roadmap-file', '-f', 'roadmap_file', type=click.Path(), default='ROADMAP.md', show_default=True,
               help='Local roadmap file to use if no active milestones found on GitHub.')
 def next_command(repo, token, roadmap_file):
     """Shows open issues from the earliest active milestone."""
@@ -1160,6 +1161,9 @@ def next_command(repo, token, roadmap_file):
             "No open GitHub issues available. Falling back to local roadmap tasks...",
             fg='yellow'
         )
+        if not Path(roadmap_file).exists():
+            click.secho(f"No tasks found in local roadmap ('{roadmap_file}' not found).", fg='yellow')
+            return
         try:
             raw = parse_roadmap(roadmap_file)
             validated = validate_roadmap(raw)
@@ -1919,24 +1923,30 @@ def assistant(args):
         click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
         sys.exit(1)
 
-@cli.command(name='uninstall', help='Show uninstall instructions.')
+@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
-    """Provides instructions for uninstalling gitscaffold."""
-    click.secho("Since gitscaffold is a standard Python package, you can remove it the same way you’d remove any pip-installed package.", fg='yellow')
+    """Provides instructions for uninstalling and offers to clean up config data."""
+    click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
+    click.secho("\n1. Uninstall the package itself:", fg="cyan", bold=True)
+    click.secho("   Run: pip uninstall gitscaffold", fg="green")
 
-    click.secho("\n1. Uninstall the package:", fg="cyan", bold=True)
-    click.echo("\n   • If you installed in a virtualenv or system Python:")
-    click.secho("     pip uninstall gitscaffold", fg="green")
-    
-    click.echo("\n   • If you used pipx:")
-    click.secho("     pipx uninstall gitscaffold", fg="green")
+    click.secho("\n2. Clean up global configuration directory:", fg="cyan", bold=True)
+    config_path = get_global_config_path()
+    config_dir = config_path.parent
 
-    click.echo("\nThis will remove the `gitscaffold` console script and library files.")
-    
-    click.secho("\n2. (Optional) Clean up your global config directory:", fg="cyan", bold=True)
-    click.echo("   This directory stores your saved tokens.")
-    click.secho("   rm -rf ~/.gitscaffold", fg="green")
+    if not config_dir.exists():
+        click.secho("No global configuration directory found to remove.", fg="green")
+        return
 
-    click.secho("\nAfter that, everything that gitscaffold created will be gone.", fg='yellow')
+    click.echo(f"   Your global configuration is stored at: {config_dir}")
+    prompt = click.style(f"   Do you want to permanently delete this directory?", fg="yellow", bold=True)
+    if click.confirm(prompt, default=False):
+        try:
+            shutil.rmtree(config_dir)
+            click.secho(f"Successfully deleted {config_dir}", fg="green")
+        except OSError as e:
+            click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
+    else:
+        click.secho("Aborted directory deletion.", fg="yellow")
 
 
