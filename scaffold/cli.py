@@ -607,23 +607,30 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, ai_prov
             if click.confirm("Use AI to extract issues instead?", default=True):
                 use_ai = True
     
-    openai_api_key_for_ai = None
+    ai_api_key = None
     if use_ai:
-        openai_api_key_for_ai = get_openai_api_key()
-        if not openai_api_key_for_ai:
+        if ai_provider == 'openai':
+            ai_api_key = get_openai_api_key()
+        elif ai_provider == 'gemini':
+            ai_api_key = get_gemini_api_key()
+        
+        if not ai_api_key:
             sys.exit(1)
-        click.secho("Using AI to extract issues from unstructured roadmap...", fg="cyan")
+        click.secho(f"Using {ai_provider.capitalize()} to extract issues from unstructured roadmap...", fg="cyan")
         # Attempt extraction, retry once if API key invalid
         attempts = 0
         while True:
             try:
-                issues = extract_issues_from_markdown(md_file=roadmap_file, api_key=openai_api_key_for_ai)
+                issues = extract_issues_from_markdown(md_file=roadmap_file, provider=ai_provider, api_key=ai_api_key)
                 break
             except Exception as e:
                 err_msg = str(e)
-                if attempts == 0 and ("invalid_api_key" in err_msg or "401" in err_msg):
-                    click.secho("OpenAI API key appears invalid. Please enter a valid key.", fg="yellow")
-                    openai_api_key_for_ai = prompt_for_openai_key()
+                if attempts == 0 and ("invalid_api_key" in err_msg or "401" in err_msg or "API key is invalid" in err_msg):
+                    click.secho(f"{ai_provider.capitalize()} API key appears invalid. Please enter a valid key.", fg="yellow")
+                    if ai_provider == 'openai':
+                        ai_api_key = prompt_for_openai_key()
+                    else: # gemini
+                        ai_api_key = prompt_for_gemini_key()
                     attempts += 1
                     continue
                 click.secho(f"Error during AI extraction: {e}", fg="red", err=True)
