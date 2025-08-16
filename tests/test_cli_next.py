@@ -134,8 +134,9 @@ def test_next_fails_if_no_repo_provided_or_found(mock_get_repo, runner):
     assert "Could not determine repository from git config. Please use --repo." in result.output
     mock_get_repo.assert_called_once()
 
+@patch('scaffold.cli.load_dotenv')
 @patch('scaffold.cli.get_github_token', return_value=None)
-def test_next_fails_if_no_token(mock_get_token, runner, monkeypatch):
+def test_next_fails_if_no_token(mock_get_token, mock_load_dotenv, runner, monkeypatch):
     """Test `next` command fails if no token is provided."""
     # We must unset GITHUB_TOKEN env var, because the --token option uses it as a default.
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
@@ -149,3 +150,5 @@ def test_next_fails_if_no_token(mock_get_token, runner, monkeypatch):
     assert result.exit_code == 1
     assert "GitHub token is required." in result.output
     mock_get_token.assert_called_once()
+    # Ensure load_dotenv was patched and called.
+    mock_load_dotenv.assert_called()
