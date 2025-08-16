@@ -1,6 +1,6 @@
 # Aider One-Shot Issue Processing
 
-`gitscaffold` provides a powerful integration with the `aider` AI coding assistant to automate the resolution of GitHub issues. The `assistant process-issues` command allows you to process a list of issues in a disciplined, one-shot manner.
+`gitscaffold` provides a powerful integration with the `aider` AI coding assistant to automate the resolution of GitHub issues. The `process-issues` command allows you to process a list of issues in a disciplined, one-shot manner.
 
 ## How it Works
 

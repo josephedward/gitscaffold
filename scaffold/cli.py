@@ -1941,13 +1941,17 @@ def start_api():
         sys.exit(1)
 
 
-@cli.command(name='assistant', help='Invoke the Aider AI assistant with passthrough arguments.')
-@click.argument('args', nargs=-1, type=click.UNPROCESSED)
-def assistant(args):
+@cli.command(name='assistant', help='Invoke the Aider AI assistant with passthrough arguments.', context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True,
+))
+@click.pass_context
+def assistant(ctx):
     """
     Invokes the Aider AI assistant CLI tool with the given arguments.
     All arguments are passed through to the `aider` command.
     """
+    args = ctx.args
     # Ensure AI keys are loaded in environment
     if not os.getenv('OPENAI_API_KEY'):
         click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
@@ -1972,7 +1976,7 @@ def assistant(args):
 
 
 @cli.command('process-issues', help='Process a list of issues sequentially with Aider.')
-@click.argument('issues_file', type=click.Path(exists=True))
+@click.argument('issues_file', type=click.Path())
 @click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
 @click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
 def process_issues(issues_file, results_dir, timeout):
@@ -1980,6 +1984,10 @@ def process_issues(issues_file, results_dir, timeout):
     Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
     This implements the "atomic issue resolution" pattern.
     """
+    if not Path(issues_file).exists():
+        click.secho(f"Error: Invalid value for 'ISSUES_FILE': Path '{issues_file}' does not exist.", fg="red", err=True)
+        sys.exit(1)
+    
     results_path = Path(results_dir)
     results_path.mkdir(exist_ok=True)
     
