@@ -316,7 +316,8 @@ def test_sync_ai_extraction(runner, tmp_path, mock_github_client, monkeypatch):
     monkeypatch.setattr("click.confirm", lambda prompt, default: True)
     monkeypatch.setattr("scaffold.cli.get_openai_api_key", lambda: "fake-key")
 
-    def mock_extract(md_file, api_key, model_name=None, temperature=0.5):
+    def mock_extract(md_file, provider, api_key, model_name=None, temperature=0.5):
+        assert provider == 'openai'
         return [{'title': 'First task to create', 'description': 'A task from AI.'}]
     monkeypatch.setattr("scaffold.cli.extract_issues_from_markdown", mock_extract)
 
@@ -324,7 +325,7 @@ def test_sync_ai_extraction(runner, tmp_path, mock_github_client, monkeypatch):
         'sync', str(roadmap_file),
         '--repo', 'owner/repo',
         '--token', 'fake-token',
-        '--ai'
+        '--ai' # This implies --ai-provider=openai (default)
     ])
     
     assert result.exit_code == 0
@@ -338,6 +339,40 @@ def test_sync_ai_extraction(runner, tmp_path, mock_github_client, monkeypatch):
     
     task_issue = next(i for i in mock_github_client["mock_issues_created"] if i.title == "First task to create")
     assert "A task from AI." in task_issue.body
+    assert "Parent issue: #" in task_issue.body
+
+
+def test_sync_gemini_extraction(runner, tmp_path, mock_github_client, monkeypatch):
+    """Test sync with --ai-provider=gemini for an unstructured markdown file."""
+    unstructured_md = "# Gemini-powered sync\n- A cool Gemini task"
+    roadmap_file = tmp_path / "gemini_roadmap.md"
+    roadmap_file.write_text(unstructured_md)
+
+    monkeypatch.setattr("click.confirm", lambda prompt, default: True)
+    monkeypatch.setattr("scaffold.cli.get_gemini_api_key", lambda: "fake-gemini-key")
+
+    def mock_extract_gemini(md_file, provider, api_key, model_name=None, temperature=0.5):
+        assert provider == 'gemini'
+        return [{'title': 'A cool Gemini task', 'description': 'A task from Gemini.'}]
+    monkeypatch.setattr("scaffold.cli.extract_issues_from_markdown", mock_extract_gemini)
+
+    result = runner.invoke(cli, [
+        'sync', str(roadmap_file),
+        '--repo', 'owner/repo',
+        '--token', 'fake-token',
+        '--ai',
+        '--ai-provider', 'gemini'
+    ])
+    
+    assert result.exit_code == 0
+    
+    assert len(mock_github_client["mock_issues_created"]) == 2 # Feature + Task
+    created_titles = {issue.title for issue in mock_github_client["mock_issues_created"]}
+    assert f"AI-Extracted Issues from {roadmap_file.name}" in created_titles
+    assert "A cool Gemini task" in created_titles
+    
+    task_issue = next(i for i in mock_github_client["mock_issues_created"] if i.title == "A cool Gemini task")
+    assert "A task from Gemini." in task_issue.body
     assert "Parent issue: #" in task_issue.body
 
 

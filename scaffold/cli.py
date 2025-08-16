@@ -400,7 +400,8 @@ def _populate_repo_from_roadmap(
     roadmap_data,
     dry_run: bool,
     ai_enrich: bool,
-    openai_api_key: str, # Added openai_api_key
+    ai_provider: str,
+    ai_api_key: str,
     context_text: str,
     roadmap_file_path: Path # For context if needed, though context_text is passed
 ):
@@ -427,10 +428,10 @@ def _populate_repo_from_roadmap(
                 msg = f"Would AI-enrich feature: {feat.title}"
                 logging.info(f"[dry-run] {msg}")
                 click.secho(f"[dry-run] {msg}", fg="blue")
-            elif openai_api_key: # Only enrich if key is available
+            elif ai_api_key: # Only enrich if key is available
                 logging.info(f"AI-enriching feature: {feat.title}...")
                 click.secho(f"AI-enriching feature: {feat.title}...", fg="cyan")
-                body = enrich_issue_description(feat.title, body, openai_api_key, context_text)
+                body = enrich_issue_description(feat.title, body, ai_provider, ai_api_key, context_text)
         
         if dry_run:
             click.secho(f"[dry-run] Feature '{feat.title.strip()}' not found. Would prompt to create.", fg="blue")
@@ -456,10 +457,10 @@ def _populate_repo_from_roadmap(
                     msg = f"Would AI-enrich sub-task: {task.title}"
                     logging.info(f"[dry-run] {msg}")
                     click.secho(f"[dry-run] {msg}", fg="blue")
-                elif openai_api_key: # Only enrich if key is available
+                elif ai_api_key: # Only enrich if key is available
                     logging.info(f"AI-enriching sub-task: {task.title}...")
                     click.secho(f"AI-enriching sub-task: {task.title}...", fg="cyan")
-                    t_body = enrich_issue_description(task.title, t_body, openai_api_key, context_text)
+                    t_body = enrich_issue_description(task.title, t_body, ai_provider, ai_api_key, context_text)
             
             if dry_run:
                 click.secho(
@@ -547,17 +548,18 @@ def setup():
     click.secho("\nSetup complete! You can now run `git-scaffold sync ROADMAP.md` or `python3 -m scaffold.cli sync ROADMAP.md`", fg="bright_green", bold=True)
 
 
-@cli.command(name="sync", help='Sync a local roadmap with a GitHub repository (AI-first extraction for unstructured Markdown; disable with --no-ai; requires OPENAI_API_KEY)')
+@cli.command(name="sync", help='Sync a local roadmap with a GitHub repository (AI-first extraction for unstructured Markdown; disable with --no-ai; requires an AI API key)')
 @click.argument('roadmap_file', type=click.Path(), metavar='ROADMAP_FILE')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--dry-run', is_flag=True, help='Simulate and show what would be created, without making changes.')
-@click.option('--ai', 'force_ai', is_flag=True, help='Force AI extraction for unstructured Markdown without prompt (requires OPENAI_API_KEY).')
+@click.option('--ai', 'force_ai', is_flag=True, help='Force AI extraction for unstructured Markdown without prompt (requires an AI API key).')
 @click.option('--no-ai', 'no_ai', is_flag=True, help='Disable default AI fallback for unstructured Markdown.')
-@click.option('--ai-enrich', is_flag=True, help='Use AI to enrich descriptions of new issues (requires OPENAI_API_KEY).')
+@click.option('--ai-enrich', is_flag=True, help='Use AI to enrich descriptions of new issues (requires an AI API key).')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use for extraction and enrichment.')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation and apply changes when populating an empty repo.')
 @click.option('--update-local', is_flag=True, help='Update the local roadmap file with issues from GitHub.')
-def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, update_local):
+def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, ai_provider, yes, update_local):
     """Sync a Markdown roadmap with a GitHub repository.
 
     If the repository is empty, it populates it with issues from the roadmap.
@@ -753,7 +755,8 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
             roadmap_data=validated_roadmap,
             dry_run=True,
             ai_enrich=use_ai,
-            openai_api_key=openai_api_key_for_ai,
+            ai_provider=ai_provider,
+            ai_api_key=ai_api_key,
             context_text=context_text,
             roadmap_file_path=path
         )
@@ -777,7 +780,8 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
             roadmap_data=validated_roadmap,
             dry_run=False,
             ai_enrich=use_ai,
-            openai_api_key=openai_api_key_for_ai,
+            ai_provider=ai_provider,
+            ai_api_key=ai_api_key,
             context_text=context_text,
             roadmap_file_path=path
         )
@@ -860,9 +864,9 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
             click.secho(f"Creating feature issue: {feat.title.strip()}", fg="cyan")
             # Prepare issue body
             body = getattr(feat, 'description', '') or ''
-            if use_ai and openai_api_key_for_ai:
+            if use_ai and ai_api_key:
                 click.secho(f"  AI-enriching feature: {feat.title}...", fg="cyan")
-                body = enrich_issue_description(feat.title, body, openai_api_key_for_ai, context_text)
+                body = enrich_issue_description(feat.title, body, ai_provider, ai_api_key, context_text)
             try:
                 feat_issue_obj = gh_client.create_issue(
                     title=feat.title.strip(), body=body, assignees=feat.assignees,
@@ -895,9 +899,9 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
             for task in tasks:
                 click.secho(f"Creating task issue: {task.title.strip()} (under #{parent_issue_obj.number})", fg="cyan")
                 body = task.description or ''
-                if use_ai and openai_api_key_for_ai:
+                if use_ai and ai_api_key:
                     click.secho(f"  AI-enriching task: {task.title}...", fg="cyan")
-                    body = enrich_issue_description(task.title, body, openai_api_key_for_ai, context_text)
+                    body = enrich_issue_description(task.title, body, ai_provider, ai_api_key, context_text)
                 
                 content = f"{body}\n\nParent issue: #{parent_issue_obj.number}".strip()
                 try:
@@ -915,13 +919,14 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, yes, up
 
 
     
-@cli.command(name='diff', help='Diff a local roadmap with GitHub issues (AI-first extraction for unstructured Markdown; disable with --no-ai; requires OPENAI_API_KEY)')
+@cli.command(name='diff', help='Diff a local roadmap with GitHub issues (AI-first extraction for unstructured Markdown; disable with --no-ai; requires an AI API key)')
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--no-ai', 'no_ai', is_flag=True, help='Disable AI fallback for unstructured Markdown.')
-@click.option('--openai-key', help='OpenAI API key (reads from OPENAI_API_KEY or .env; required for AI extraction).')
-def diff(roadmap_file, repo, token, no_ai, openai_key):
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use for extraction.')
+@click.option('--ai-key', help='AI API key (reads from environment or config if not provided).')
+def diff(roadmap_file, repo, token, no_ai, ai_provider, ai_key):
     """Compare a local roadmap file with GitHub issues and list differences."""
     click.secho("\n=== Diff Roadmap vs GitHub Issues ===", fg="bright_blue", bold=True)
     actual_token = token if token else get_github_token()
@@ -959,10 +964,16 @@ def diff(roadmap_file, repo, token, no_ai, openai_key):
                 use_ai = True
 
     if use_ai:
-        click.secho("Using AI to extract issues from unstructured roadmap...", fg="cyan")
-        actual_openai_key = openai_key or get_openai_api_key()
-        if not actual_openai_key:
-            click.secho("Error: OpenAI API key is required for AI mode.", fg="red", err=True)
+        click.secho(f"Using {ai_provider.capitalize()} to extract issues from unstructured roadmap...", fg="cyan")
+        actual_ai_key = ai_key
+        if not actual_ai_key:
+            if ai_provider == 'openai':
+                actual_ai_key = get_openai_api_key()
+            else: # gemini
+                actual_ai_key = get_gemini_api_key()
+        
+        if not actual_ai_key:
+            click.secho(f"Error: {ai_provider.capitalize()} API key is required for AI mode.", fg="red", err=True)
             sys.exit(1)
         # Attempt extraction, retry once on invalid API key
         attempts = 0
@@ -970,15 +981,19 @@ def diff(roadmap_file, repo, token, no_ai, openai_key):
             try:
                 issues = extract_issues_from_markdown(
                     md_file=roadmap_file,
-                    api_key=actual_openai_key
+                    provider=ai_provider,
+                    api_key=actual_ai_key
                 )
                 roadmap_titles = {issue['title'] for issue in issues}
                 break
             except Exception as e:
                 err_msg = str(e)
-                if attempts == 0 and ("invalid_api_key" in err_msg or "401" in err_msg):
-                    click.secho("OpenAI API key appears invalid. Please enter a valid key.", fg="yellow")
-                    actual_openai_key = prompt_for_openai_key()
+                if attempts == 0 and ("invalid_api_key" in err_msg or "401" in err_msg or "API key is invalid" in err_msg):
+                    click.secho(f"{ai_provider.capitalize()} API key appears invalid. Please enter a valid key.", fg="yellow")
+                    if ai_provider == 'openai':
+                        actual_ai_key = prompt_for_openai_key()
+                    else: # gemini
+                        actual_ai_key = prompt_for_gemini_key()
                     attempts += 1
                     continue
                 click.secho(f"Error during AI extraction: {e}", fg="red", err=True)
@@ -1497,48 +1512,49 @@ def _enrich_get_context(title, roadmap):
         return roadmap[m], m
     return None, None
 
-def _enrich_call_llm(title, existing_body, ctx):
-    api_key = get_openai_api_key() # Re-use existing helper
+def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
     if not api_key:
-        sys.exit(1) # get_openai_api_key handles messaging
+        if provider == 'openai':
+            api_key = get_openai_api_key()
+        elif provider == 'gemini':
+            api_key = get_gemini_api_key()
     
-    client = OpenAI(api_key=api_key, timeout=20.0, max_retries=3)
-    
-    system = {"role": "system", "content": "You are an expert software engineer and technical writer."}
-    parts = [f"Title: {title}", f"Context: {ctx['context']}"]
+    if not api_key:
+        sys.exit(1)
+
+    # The actual call is now delegated to the unified `enrich_issue_description`
+    context_parts = [f"Context: {ctx['context']}"]
     if ctx.get('goal'):
-        parts.append("Goal:\n" + "\n".join(f"- {g}" for g in ctx['goal']))
+        context_parts.append("Goal:\n" + "\n".join(f"- {g}" for g in ctx['goal']))
     if ctx.get('tasks'):
-        parts.append("Tasks:\n" + "\n".join(f"- {t}" for t in ctx['tasks']))
+        context_parts.append("Tasks:\n" + "\n".join(f"- {t}" for t in ctx['tasks']))
     if ctx.get('deliverables'):
-        parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
-    parts.append(f"Existing description:\n{existing_body or ''}")
-    parts.append("Generate a detailed GitHub issue description with background, scope, acceptance criteria, implementation outline, code snippets, and a checklist.")
+        context_parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
     
-    try:
-        response = client.chat.completions.create(
-            model=os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo'),
-            messages=[system, {"role": "user", "content": "\n\n".join(parts)}],
-            temperature=float(os.getenv('OPENAI_TEMPERATURE', '0.7')),
-            max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '800'))
-        )
-        return response.choices[0].message.content.strip()
-    except OpenAIError as e:
-        logging.warning(f"OpenAI API call for enrichment failed: {e}. Returning existing body.")
-        click.secho(f"OpenAI API call failed: {e}", fg="red")
-        return existing_body or ''
+    full_context = "\n".join(context_parts)
+
+    return enrich_issue_description(
+        title=title,
+        existing_body=existing_body,
+        provider=provider,
+        api_key=api_key,
+        context=full_context
+    )
 
 @cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
-def enrich():
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.pass_context
+def enrich(ctx, ai_provider):
     """General-purpose CLI for GitHub issue enrichment via LLM using roadmap context."""
-    pass
+    ctx.obj = {'ai_provider': ai_provider}
 
 @enrich.command('issue', help='Enrich a single issue')
 @click.option('--repo', required=True, help='owner/repo')
 @click.option('--issue', 'issue_number', type=int, required=True, help='Issue number')
 @click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
 @click.option('--apply', 'apply_changes', is_flag=True, help='Apply the update')
-def enrich_issue_command(repo, issue_number, roadmap_path, apply_changes):
+@click.pass_context
+def enrich_issue_command(ctx, repo, issue_number, roadmap_path, apply_changes):
     """Enrich a single issue."""
     token = get_github_token()
     if not token: sys.exit(1)
@@ -1556,7 +1572,7 @@ def enrich_issue_command(repo, issue_number, roadmap_path, apply_changes):
     if not ctx:
         click.secho(f"No roadmap context for issue #{issue_number}", fg="red", err=True)
         sys.exit(1)
-    enriched = _enrich_call_llm(issue.title, issue.body, ctx)
+    enriched = _enrich_call_llm(issue.title, issue.body, ctx, ctx.obj['ai_provider'], None)
     click.echo(enriched)
     if apply_changes:
         issue.edit(body=enriched)
@@ -1569,7 +1585,8 @@ def enrich_issue_command(repo, issue_number, roadmap_path, apply_changes):
 @click.option('--csv', 'csv_path', help='Output CSV file')
 @click.option('--interactive', is_flag=True, help='Interactive approval')
 @click.option('--apply', 'apply_changes', is_flag=True, help='Apply all updates')
-def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_changes):
+@click.pass_context
+def enrich_batch_command(ctx, repo, roadmap_path, csv_path, interactive, apply_changes):
     """Batch enrich issues."""
     token = get_github_token()
     if not token: sys.exit(1)
@@ -1588,7 +1605,7 @@ def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_change
         ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
         if not ctx:
             continue
-        enriched = _enrich_call_llm(issue.title, issue.body, ctx)
+        enriched = _enrich_call_llm(issue.title, issue.body, ctx, ctx.obj['ai_provider'], None)
         records.append((issue.number, issue.title, ctx['context'], matched, enriched))
     
     if csv_path:
@@ -1627,15 +1644,14 @@ def enrich_batch_command(repo, roadmap_path, csv_path, interactive, apply_change
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
-@click.option('--openai-key', help='OpenAI API key (overrides OPENAI_API_KEY env var)')
-@click.option('--model', default=os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview'), show_default=True,
-              help='OpenAI model to use')
-@click.option('--temperature', type=float, default=float(os.getenv('OPENAI_TEMPERATURE', '0.5')), show_default=True,
-              help='OpenAI temperature')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.option('--ai-key', help='AI API key (overrides environment variables).')
+@click.option('--model', help='AI model to use (e.g., gpt-4-turbo-preview, gemini-pro).')
+@click.option('--temperature', type=float, help='AI temperature (e.g., 0.5).')
 @click.option('--dry-run', is_flag=True, help='List issues without creating them')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation and create all issues')
 @click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
-def import_md(repo, markdown_file, token, openai_key, model, temperature, dry_run, yes, verbose):
+def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperature, dry_run, yes, verbose):
     """Import issues from an unstructured markdown file using AI.
 
     This command parses a Markdown file, using an AI model to extract potential
@@ -1655,9 +1671,14 @@ def import_md(repo, markdown_file, token, openai_key, model, temperature, dry_ru
         click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
         sys.exit(1)
 
-    actual_openai_key = openai_key or get_openai_api_key()
-    if not actual_openai_key:
-        click.secho("OpenAI API key is required. Exiting.", fg="red", err=True)
+    actual_ai_key = ai_key
+    if not actual_ai_key:
+        if ai_provider == 'openai':
+            actual_ai_key = get_openai_api_key()
+        else: # gemini
+            actual_ai_key = get_gemini_api_key()
+    if not actual_ai_key:
+        click.secho(f"{ai_provider.capitalize()} API key is required. Exiting.", fg="red", err=True)
         sys.exit(1)
     
     if verbose:
@@ -1678,14 +1699,23 @@ def import_md(repo, markdown_file, token, openai_key, model, temperature, dry_ru
         sys.exit(1)
     
     if verbose:
-        click.secho(f"Extracting issues from '{markdown_file}' using AI (model: {model})...", fg='cyan')
+        click.secho(f"Extracting issues from '{markdown_file}' using {ai_provider.capitalize()} (model: {model or 'default'})...", fg='cyan')
     
+    # Set defaults for model and temperature if not provided
+    if ai_provider == 'openai':
+        final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
+        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+    else: # gemini
+        final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
+        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+
     try:
         issues = extract_issues_from_markdown(
             md_file=markdown_file,
-            api_key=actual_openai_key,
-            model_name=model,
-            temperature=temperature
+            provider=ai_provider,
+            api_key=actual_ai_key,
+            model_name=final_model,
+            temperature=final_temp
         )
     except Exception as e:
         click.secho(f"Error extracting issues from markdown: {e}", fg="red", err=True)
