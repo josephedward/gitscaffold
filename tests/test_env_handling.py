@@ -55,6 +55,23 @@ def test_get_openai_api_key_prompts_and_saves(temp_config_dir):
                 f"OPENAI_API_KEY='{fake_key}'" in content or
                 f"OPENAI_API_KEY={fake_key}" in content)
 
+def test_get_gemini_api_key_prompts_and_saves(temp_config_dir):
+    """Test get_gemini_api_key prompts for a key and saves it when not found."""
+    fake_key = "g_fake_api_key_for_test"
+    
+    with patch('os.getenv', return_value=None), \
+         patch('click.prompt', return_value=fake_key):
+        
+        from scaffold.cli import get_gemini_api_key
+        key = get_gemini_api_key()
+        
+        assert key == fake_key
+        assert temp_config_dir.exists()
+        content = temp_config_dir.read_text()
+        assert (f'GEMINI_API_KEY="{fake_key}"' in content or
+                f"GEMINI_API_KEY='{fake_key}'" in content or
+                f"GEMINI_API_KEY={fake_key}" in content)
+
 def test_get_github_token_loads_from_env(monkeypatch):
     """Test that get_github_token loads from environment and does not prompt."""
     fake_token = "ghp_token_from_environment"
