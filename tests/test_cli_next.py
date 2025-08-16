@@ -2,6 +2,7 @@ import pytest
 from click.testing import CliRunner
 from unittest.mock import MagicMock, patch
 from datetime import datetime
+from pathlib import Path
 
 from scaffold.cli import cli
 
@@ -28,6 +29,14 @@ class MockIssue:
 def runner():
     """Fixture for invoking command-line interfaces."""
     return CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def mock_global_config(monkeypatch, tmp_path):
+    """Isolates tests from the user's global config file."""
+    config_path = tmp_path / "config"
+    monkeypatch.setattr('scaffold.cli.get_global_config_path', lambda: config_path)
+
 
 @pytest.fixture
 def mock_github_client_for_next(monkeypatch):
