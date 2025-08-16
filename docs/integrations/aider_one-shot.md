@@ -1,9 +1,3 @@
-Designing a One-Shot Code Editing Agent for Sequential Issue Resolution
-
-`gitscaffold` provides a powerful integration with the `aider` AI coding assistant to automate the resolution of GitHub issues. The `process-issues` command allows you to process a list of issues in a disciplined, one-shot manner.
-
-
-
 # Aider One-Shot Issue Processing
 
 `gitscaffold` provides a powerful integration with the `aider` AI coding assistant to automate the resolution of GitHub issues. The `process-issues` command allows you to process a list of issues in a disciplined, one-shot manner.
@@ -86,12 +80,17 @@ Implementing this requires some effort, but it gives you full control. A few con
 	•	Other Potential Tools: There are other AI coding assistants (both open-source and commercial) – e.g. Sourcegraph Cody, AWS CodeWhisperer, GitHub Copilot CLI (in beta), etc. Most of these, however, are not designed for unattended automation. They excel at assisting a developer in real-time, rather than taking in a task and spitting out a commit. One interesting avenue is using GitHub’s own forthcoming capabilities: as noted in the GH Action example, the author suspects GitHub may launch an “Issues to PR” AI feature ￼. Until that becomes reality, using Aider via GitHub Actions (or your own scripts) is a solid alternative.
 There’s also research and emerging tools on AI-generated pull requests. For example, an open-source project “AutoPR” attempts to have LLMs generate PRs for given issues. Many of these are relatively early-stage. Since you already have experience with Aider and it’s reliable for you, leaning on it is wise. One more concept to mention: some have tried Auto-GPT or agent frameworks to fix code, but as you’ve seen, those tend to make grand plans and can wander off track. Your idea is explicitly not to have a single agent solve everything in one session, but rather to constrain it, which is a safer and more tractable approach. This plays to the strengths of current LLMs – they perform better on focused tasks with limited scope, versus trying to be an omniscient problem-solver over an entire project in one go ￼.
 
-Integration and Workflow Design
-
-<<<<<<< HEAD
-    ```bash
-    gitscaffold process-issues tasks.txt
-    ```
+You asked about integration, particularly with a tool like Aider, and how to actually implement this in practice. Let’s outline a possible workflow using Aider (since that seems the most straightforward given its feature set):
+	1.	Prepare Your Environment: Ensure your codebase is in a Git repository (it sounds like it is, since you mentioned commit logs). Install Aider (it’s a Python package, pip install aider-install as per docs). Make sure you have API access to a good LLM (Aider can use GPT-4 or other models via OpenAI, and also Anthropic Claude or local models). Also, configure any API keys or model preferences in Aider’s config. If your project is large, the repo map feature will scan it – that’s typically fine and helps the AI, but be aware on first run it might take a bit to index the project.
+	2.	Issue List: Have a list of the issues you want to tackle. This could be a simple text file with bullet points or a more structured format (JSON/YAML with details). For each issue, you ideally have a short description. For example:
+	•	Issue 1: “Fix crash when saving a file with no name (null filename handling in Save routine).”
+	•	Issue 2: “Implement retry logic in the network client for transient errors.”
+	•	Issue 3: “Refactor function X to reduce its complexity (no functional change, just cleanup).”
+You might already have such a list from your planning or bug tracker. The key is each item is relatively independent and well-scoped.
+	3.	Sequential Processing: Write a script or even use a simple loop in your shell to iterate over the issues. For each issue:
+	•	Optional – create a branch: If you want each fix on a separate branch (useful if you plan to PR them separately or if you want to test them in isolation), you can create a git branch named after the issue (e.g., issue-1-fix-null-filename). This is what the GH Action did: it committed on a new branch and then opened a PR ￼. If you’re just working locally, you might skip branching and commit on your main or a dev branch sequentially. Branches add safety (you won’t break main if something goes wrong), and you can always merge later.
+	•	Run Aider with one task: There are a few ways to do this. The simplest conceptual way: open Aider and literally feed it the instruction for the issue. But to automate it, you can invoke Aider via command line. For example, Aider’s documentation mentions you can run it with file paths and a prompt. You might do something like:
+>>>>>>> parent of 5185e93 (fix: Correct infinite test loop and update Aider integration)
 =======
 You asked about integration, particularly with a tool like Aider, and how to actually implement this in practice. Let’s outline a possible workflow using Aider (since that seems the most straightforward given its feature set):
 	1.	Prepare Your Environment: Ensure your codebase is in a Git repository (it sounds like it is, since you mentioned commit logs). Install Aider (it’s a Python package, pip install aider-install as per docs). Make sure you have API access to a good LLM (Aider can use GPT-4 or other models via OpenAI, and also Anthropic Claude or local models). Also, configure any API keys or model preferences in Aider’s config. If your project is large, the repo map feature will scan it – that’s typically fine and helps the AI, but be aware on first run it might take a bit to index the project.

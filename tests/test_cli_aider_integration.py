@@ -11,16 +11,13 @@ def runner():
 
 def test_assistant_passthrough(runner):
     """Test that `assistant` command passes arguments to aider."""
-    with patch('scaffold.cli.subprocess.run') as mock_run:
-        mock_run.return_value.returncode = 0
+    with patch('scaffold.cli.subprocess.call') as mock_call:
+        mock_call.return_value = 0
         result = runner.invoke(cli, ['assistant', 'some/file.py', '--message', 'a fix'])
         assert result.exit_code == 0, result.output
-        mock_run.assert_called_once_with(
+        mock_call.assert_called_once_with(
             ['aider', 'some/file.py', '--message', 'a fix'],
-            env=ANY,
-            capture_output=True,
-            text=True,
-            encoding='utf-8'
+            env=ANY
         )
 
 def test_process_issues_success(runner, tmp_path):
@@ -34,7 +31,7 @@ def test_process_issues_success(runner, tmp_path):
         mock_run.return_value.stdout = "stdout"
         mock_run.return_value.stderr = ""
 
-        result = runner.invoke(cli, ['process-issues', str(issues_file)])
+        result = runner.invoke(cli, ['assistant', 'process-issues', str(issues_file)])
         
         assert result.exit_code == 0, result.output
         assert "Processing: issue 1" in result.output
@@ -60,7 +57,7 @@ def test_process_issues_failure(runner, tmp_path):
         mock_run.return_value.stdout = "stdout"
         mock_run.return_value.stderr = "stderr"
 
-        result = runner.invoke(cli, ['process-issues', str(issues_file)])
+        result = runner.invoke(cli, ['assistant', 'process-issues', str(issues_file)])
         
         assert result.exit_code == 0, result.output
         assert "Processing: issue 1" in result.output
@@ -78,7 +75,7 @@ def test_process_issues_timeout(runner, tmp_path):
     issues_file.write_text("long running issue")
     
     with patch('scaffold.cli.subprocess.run', side_effect=subprocess.TimeoutExpired(cmd='aider', timeout=300)) as mock_run:
-        result = runner.invoke(cli, ['process-issues', str(issues_file)])
+        result = runner.invoke(cli, ['assistant', 'process-issues', str(issues_file)])
         assert result.exit_code == 0, result.output
         assert "Processing: long running issue" in result.output
         assert "❌ TIMEOUT: long running issue" in result.output
