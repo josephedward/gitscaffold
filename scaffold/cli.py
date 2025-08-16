@@ -395,6 +395,14 @@ def _sanitize_repo_string(repo_string: str) -> str:
     return repo_string
 
 
+def _check_ai_keys():
+    """Checks for AI API keys and warns if they are not set."""
+    if not os.getenv('OPENAI_API_KEY'):
+        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+    if not os.getenv('GEMINI_API_KEY'):
+        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+
+
 def _populate_repo_from_roadmap(
     gh_client: GitHubClient,
     roadmap_data,
@@ -1952,11 +1960,7 @@ def assistant(ctx):
     All arguments are passed through to the `aider` command.
     """
     args = ctx.args
-    # Ensure AI keys are loaded in environment
-    if not os.getenv('OPENAI_API_KEY'):
-        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
-    if not os.getenv('GEMINI_API_KEY'):
-        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+    _check_ai_keys()
     
     # Build environment for subprocess
     env = os.environ.copy()
@@ -1987,6 +1991,8 @@ def process_issues(issues_file, results_dir, timeout):
     if not Path(issues_file).exists():
         click.secho(f"Error: Invalid value for 'ISSUES_FILE': Path '{issues_file}' does not exist.", fg="red", err=True)
         sys.exit(1)
+    
+    _check_ai_keys()
     
     results_path = Path(results_dir)
     results_path.mkdir(exist_ok=True)
