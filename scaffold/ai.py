@@ -156,3 +156,51 @@ def enrich_issue_description(title, existing_body, provider: str, api_key: str, 
     if enriched_content is None:
         return existing_body or ''
     return enriched_content.strip()
+
+
+def generate_code_changes(issue_prompt, file_contents, provider: str, api_key: str, model_name=None, temperature=0.2):
+    """Use an AI provider to generate code changes based on an issue and file contexts."""
+    logging.info(f"Generating code for: '{issue_prompt}' using {provider}")
+    if not api_key:
+        raise ValueError(f"{provider.upper()} API key was not provided.")
+
+    prompt = f"""
+You are an expert software engineer. You have been asked to resolve the following issue:
+"{issue_prompt}"
+
+Here are the contents of the relevant files in the project:
+"""
+    for path, content in file_contents.items():
+        prompt += f"\n--- {path} ---\n{content}\n"
+
+    prompt += """
+
+Please provide the full, updated content for any files that need to be changed to resolve the issue.
+Your response should be in the following format, and nothing else. Do not add any commentary or explanation.
+For each file to be changed, use this format:
+
+--- START FILE: path/to/file.py ---
+(new content of file.py)
+--- END FILE: path/to/file.py ---
+
+If no files need to be changed, provide an empty response.
+"""
+
+    if provider == 'gemini':
+        if genai is None:
+            raise ImportError("google-generativeai is not installed. Please install it to use Gemini.")
+        genai.configure(api_key=api_key)
+        effective_model_name = model_name or os.getenv('GEMINI_MODEL', 'gemini-pro')
+        logging.info(f"Using Gemini model '{effective_model_name}' for code generation.")
+        model = genai.GenerativeModel(effective_model_name)
+        try:
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            logging.error(f"Gemini API call failed during code generation: {e}")
+            raise RuntimeError(f"Gemini API call failed: {e}") from e
+    elif provider == 'openai':
+        # Similar implementation for OpenAI if needed in the future
+        raise NotImplementedError("Code generation for OpenAI is not yet implemented.")
+    else:
+        raise ValueError(f"Unsupported AI provider: {provider}")
