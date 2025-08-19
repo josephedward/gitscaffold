@@ -1941,35 +1941,14 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
-@click.argument('args', nargs=-1, type=click.UNPROCESSED)
-@click.pass_context
-def assistant(ctx, args):
-    """Invokes the Aider AI assistant CLI tool with the given arguments."""
-    if ctx.invoked_subcommand is None:
-        # Ensure AI keys are loaded in environment
-        if not os.getenv('OPENAI_API_KEY'):
-            click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
-        if not os.getenv('GEMINI_API_KEY'):
-            click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
-        # Build environment for subprocess
-        env = os.environ.copy()
-        cmd = ['aider'] + list(args)
-        try:
-            return_code = subprocess.call(cmd, env=env)
-            sys.exit(return_code)
-        except FileNotFoundError:
-            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
-            sys.exit(1)
-
-
-@assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
+@cli.command('process-issues', help='Process a list of issues sequentially with an AI agent.')
 @click.argument('issues_file', type=click.Path(exists=True))
+@click.option('--agent', type=click.Choice(['aider', 'gemini']), default='aider', show_default=True, help='The AI agent to use for processing issues.')
 @click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
-@click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
-def process_issues(issues_file, results_dir, timeout):
+@click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each agent process.')
+def process_issues(issues_file, agent, results_dir, timeout):
     """
-    Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
+    Reads a list of issues from a file (one per line) and runs an AI agent on each one sequentially.
     This implements the "atomic issue resolution" pattern.
     """
     results_path = Path(results_dir)
@@ -1978,26 +1957,128 @@ def process_issues(issues_file, results_dir, timeout):
     with open(issues_file, 'r', encoding='utf-8') as f:
         issues = [line.strip() for line in f if line.strip()]
 
-    click.secho(f"Found {len(issues)} issues to process.", fg='magenta')
+    click.secho(f"Found {len(issues)} issues to process with the '{agent}' agent.", fg='magenta')
+    click.secho(f"Issues to process: {issues}", fg='magenta')
 
     for issue in issues:
         click.secho(f"Processing: {issue}", fg='cyan')
         
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        result_file = results_path / f"issue_{timestamp}.log"
         
-        cmd = [
-            "aider",
-            "--message", issue,
-            "--yes",
-            "--no-stream",
-            "--auto-commits"
-        ]
+        if agent == 'aider':
+            result_file = results_path / f"aider_issue_{timestamp}.log"
+            cmd = [
+                "aider",
+                "--message", issue,
+                "--yes",
+                "--no-stream",
+                "--auto-commits"
+            ]
+            try:
+                result = subprocess.run(
+                    cmd, 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=timeout,
+                    encoding='utf-8'
+                )
+                with open(result_file, 'w', encoding='utf-8') as log_f:
+                    log_f.write(f"Issue: {issue}\n")
+                    log_f.write(f"Exit status: {result.returncode}\n\n")
+                    log_f.write("---" + "STDOUT" + "---" + "\n")
+                    log_f.write(result.stdout)
+                    log_f.write("\n---" + "STDERR" + "---" + "\n")
+                    log_f.write(result.stderr)
+                
+                if result.returncode == 0:
+                    click.secho(f"✅ SUCCESS (Aider): {issue}", fg='green')
+                else:
+                    click.secho(f"❌ FAILED (Aider): {issue}", fg='red')
+                    click.secho(f"  Exit status: {result.returncode}. Log: {result_file}", fg='red')
+            
+            except FileNotFoundError:
+                click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+                sys.exit(1)
+            except subprocess.TimeoutExpired:
+                click.secho(f"❌ TIMEOUT (Aider): {issue}. Log: {result_file}", fg='red')
+                with open(result_file, 'w', encoding='utf-8') as log_f:
+                    log_f.write(f"Issue: {issue}\n")
+                    log_f.write(f"Result: TIMEOUT after {timeout} seconds.\n")
 
-        try:
-            result = subprocess.run(
-                cmd, 
-                capture_output=True, 
+        elif agent == 'gemini':
+            result_file = results_path / f"gemini_issue_{timestamp}.log"
+            try:
+                gemini_api_key = get_gemini_api_key()
+                if not gemini_api_key:
+                    click.secho("Gemini API key is required for the gemini agent.", fg="red")
+                    sys.exit(1)
+                click.secho(f"  -> Gemini API key obtained: {bool(gemini_api_key)}", fg='blue')
+
+                # Gather context from python files
+                files = list(Path.cwd().glob('**/*.py'))
+                file_contents = {}
+                for p in files:
+                    try:
+                        file_contents[str(p.relative_to(Path.cwd()))] = p.read_text(encoding='utf-8')
+                    except Exception as e:
+                        click.secho(f"    - Warning: Could not read file {p}: {e}", fg='magenta')
+                click.secho(f"  -> Sending {len(file_contents)} Python files as context to Gemini.", fg='blue')
+
+                # Call the Gemini API to get code changes
+                click.secho("  -> Asking Gemini for code changes...", fg='yellow')
+                changes_text = generate_code_changes(issue, file_contents, 'gemini', gemini_api_key)
+                click.secho(f"  -> Raw changes_text from Gemini: {changes_text[:200]}...", fg='blue')
+
+                if not changes_text or changes_text.strip() == "":
+                    click.secho("  -> Gemini returned no changes.", fg='green')
+                    continue
+
+                # Parse the response and apply changes
+                click.secho("  -> Applying changes...", fg='yellow')
+                changed_files = []
+                parts = changes_text.split('--- START FILE: ')
+                for part in parts:
+                    if not part.strip():
+                        continue
+                    try:
+                        file_path_str, content = part.split(' ---\n', 1)
+                        file_path = Path(file_path_str.strip())
+                        content, _ = content.rsplit('\n--- END FILE:', 1)
+                        
+                        # Ensure the file path is relative to the current working directory
+                        # and create parent directories if they don't exist
+                        full_file_path = Path.cwd() / file_path
+                        full_file_path.parent.mkdir(parents=True, exist_ok=True)
+                        full_file_path.write_text(content.strip(), encoding='utf-8')
+                        changed_files.append(str(full_file_path))
+                        click.secho(f"    - Modified {full_file_path}", fg='green')
+                    except Exception as e:
+                        click.secho(f"    - Error parsing or writing file change for part: {part[:100]}... Error: {e}", fg='red')
+
+                # Commit changes
+                if changed_files:
+                    click.secho("  -> Committing changes...", fg='yellow')
+                    try:
+                        subprocess.run(['git', 'add'] + changed_files, check=True, cwd=Path.cwd())
+                        commit_message = f"fix: {issue}"
+                        subprocess.run(['git', 'commit', '-m', commit_message], check=True, cwd=Path.cwd())
+                        click.secho(f"    - Committed with message: '{commit_message}'", fg='green')
+                        click.secho(f"✅ SUCCESS (Gemini): {issue}", fg='green')
+                    except subprocess.CalledProcessError as e:
+                        click.secho(f"  -> Git operation failed: {e}", fg='red')
+                        click.secho(f"❌ FAILED (Gemini): {issue}", fg='red')
+                else:
+                    click.secho("  -> No files were changed.", fg='yellow')
+
+            except Exception as e:
+                click.secho(f"❌ FAILED (Gemini): {issue}. Error: {e}", fg='red')
+                with open(result_file, 'w', encoding='utf-8') as log_f:
+                    log_f.write(f"Issue: {issue}\n")
+                    log_f.write(f"Error: {e}\n")
+
+        time.sleep(2) # Brief pause between issues
+
+    click.secho("\nGemini processing complete.", fg='green') 
                 text=True, 
                 timeout=timeout,
                 encoding='utf-8'
