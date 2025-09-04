@@ -34,7 +34,7 @@ jobs:
         run: python -m build --sdist --wheel --no-isolation
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.5.1
+        uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
           # Use the API token secret for authentication
           pypi_token: ${{ secrets.PYPI_API_TOKEN }}
