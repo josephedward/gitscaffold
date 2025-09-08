@@ -2078,35 +2078,6 @@ def process_issues(issues_file, agent, results_dir, timeout):
 
         time.sleep(2) # Brief pause between issues
 
-    click.secho("\nGemini processing complete.", fg='green') 
-                text=True, 
-                timeout=timeout,
-                encoding='utf-8'
-            )
-            
-            with open(result_file, 'w', encoding='utf-8') as log_f:
-                log_f.write(f"Issue: {issue}\n")
-                log_f.write(f"Exit status: {result.returncode}\n\n")
-                log_f.write("--- STDOUT ---\n")
-                log_f.write(result.stdout)
-                log_f.write("\n--- STDERR ---\n")
-                log_f.write(result.stderr)
-                
-            if result.returncode == 0:
-                click.secho(f"✅ SUCCESS: {issue}", fg='green')
-            else:
-                click.secho(f"❌ FAILED: {issue}", fg='red')
-                click.secho(f"  Exit status: {result.returncode}. Log: {result_file}", fg='red')
-        
-        except FileNotFoundError:
-            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
-            sys.exit(1)
-        except subprocess.TimeoutExpired:
-            click.secho(f"❌ TIMEOUT: {issue}. Log: {result_file}", fg='red')
-            with open(result_file, 'w', encoding='utf-8') as log_f:
-                log_f.write(f"Issue: {issue}\n")
-                log_f.write(f"Result: TIMEOUT after {timeout} seconds.\n")
-
     click.secho("\nProcessing complete.", fg='green')
 
 @cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
