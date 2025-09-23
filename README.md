@@ -25,6 +25,37 @@ Gitscaffold is a command-line tool and GitHub Action that converts Markdown-base
 pip install gitscaffold
 ```
 
+### GitHub CLI (gh)
+- The Docker image used by the GitHub Action bundles the GitHub CLI (`gh`). Workflows have `gh` available out of the box.
+- For local installs via `pip`, `gh` is not installed automatically. You have two options:
+  - Install via your OS package manager (e.g., `brew install gh`, `apt install gh`).
+  - Or bootstrap locally with: `gitscaffold gh install` (downloads to `~/.gitscaffold/bin/gh`).
+
+Basic gh helpers in gitscaffold:
+- `gitscaffold gh which` — shows which `gh` will be used.
+- `gitscaffold gh version` — prints the `gh` version.
+- `gitscaffold gh issue-list --repo owner/name [--state open|closed|all]` — lists issues.
+- `gitscaffold gh issue-create --repo owner/name --title "..." [--body "..."] [--label L]... [--assignee U]... [--milestone M]` — creates an issue.
+- `gitscaffold gh issue-close --repo owner/name NUMBER` — closes an issue.
+
+Global preference:
+- Add `--use-gh-cli` to prefer using `gh` where supported (more commands will honor this flag over time). For now, core features remain powered by the PyGithub backend, and the gh subcommands are available for direct use.
+
+### Built-in Script Primitives
+These maintenance scripts are part of gitscaffold and can be installed locally:
+
+- Install to a bin dir: `gitscaffold scripts install` (defaults to `~/.gitscaffold/bin`)
+- List bundled scripts: `gitscaffold scripts list`
+
+Included scripts:
+- `aggregate_repos.sh` — aggregate external repos as branches in current repo.
+- `archive_stale_repos.sh` — archive repos not updated since a given year.
+- `delete_repos.sh` — delete, archive, or unarchive repos in bulk.
+- `remove_from_git.sh` — remove a path from Git history and force-push main.
+- `delete_branches.sh` — delete oldest remote branches, with keep lists and dry-run.
+
+After install, add the directory to PATH, e.g. `export PATH="$HOME/.gitscaffold/bin:$PATH"`.
+
 ## Authentication and API Keys
 
 `gitscaffold` requires a GitHub Personal Access Token (PAT) for interacting with GitHub and an OpenAI API key for AI-driven features.
