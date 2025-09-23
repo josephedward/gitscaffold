@@ -35,3 +35,4 @@ nonexistent.txt
 process-issues
 results/issue_20250816_140517.log
 results/issue_20250816_140954.log
+*.log
