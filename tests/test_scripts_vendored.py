@@ -37,6 +37,17 @@ def test_vendored_import_md_dry_run(tmp_path, monkeypatch, essential_env):
     )
     monkeypatch.setattr(vendored, "openai", fake_openai)
 
+    class FakeRepo:
+        full_name = "owner/repo"
+
+    class FakeGithub:
+        def __init__(self, token):
+            pass
+        def get_repo(self, repo):
+            return FakeRepo()
+
+    monkeypatch.setattr(vendored, "Github", FakeGithub)
+
     runner = CliRunner()
     res = runner.invoke(vendored.main, [
         "owner/repo",
@@ -110,6 +121,17 @@ def test_vendored_import_md_no_headings(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(vendored, "openai", fake_openai)
 
+    class FakeRepo:
+        full_name = "owner/repo"
+
+    class FakeGithub:
+        def __init__(self, token):
+            pass
+        def get_repo(self, repo):
+            return FakeRepo()
+
+    monkeypatch.setattr(vendored, "Github", FakeGithub)
+
     runner = CliRunner()
     res = runner.invoke(vendored.main, [
         "owner/repo",
@@ -121,4 +143,3 @@ def test_vendored_import_md_no_headings(tmp_path, monkeypatch):
 
     assert res.exit_code != 0
     assert "No headings found; nothing to import." in res.output
-
