@@ -1,0 +1,97 @@
+name: Manual Release to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "SemVer version (e.g., 1.2.3 or 1.2.3-rc.1)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark GitHub release as pre-release"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Ensure PYPI_TOKEN is configured
+        run: |
+          if [ -z "${{ secrets.PYPI_TOKEN }}" ]; then
+            echo "ERROR: Missing secret PYPI_TOKEN. Set it in Settings → Secrets and variables → Actions." >&2
+            exit 1
+          fi
+
+      - name: Validate version input (SemVer)
+        run: |
+          VERSION="${{ inputs.version }}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid version: $VERSION. Use SemVer like 1.2.3 or 1.2.3-rc.1" >&2
+            exit 1
+          fi
+
+      - name: Bump version in scaffold/__init__.py
+        run: |
+          VERSION="${{ inputs.version }}"
+          FILE="scaffold/__init__.py"
+          echo "Setting version to $VERSION in $FILE"
+          sed -i -E "s|^__version__ = \".*\"|__version__ = \"$VERSION\"|" "$FILE"
+          echo "Resulting line:" && grep -n "__version__" "$FILE"
+
+      - name: Commit and tag version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git add scaffold/__init__.py
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore(release): v${VERSION}"
+          fi
+          git tag "v${VERSION}"
+          # Push commit and tag to default branch
+          git push origin HEAD:main
+          git push origin "v${VERSION}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tooling
+        run: pip install --upgrade build
+
+      - name: Build distributions
+        run: python -m build --sdist --wheel --no-isolation
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.5.1
+        with:
+          pypi_token: ${{ secrets.PYPI_TOKEN }}
+          skip-existing: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          body: "Release v${{ inputs.version }}"
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            dist/*.tar.gz
+            dist/*.whl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
