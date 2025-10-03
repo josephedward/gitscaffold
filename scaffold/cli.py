@@ -39,12 +39,6 @@ except ImportError:
 from .parser import parse_markdown, parse_roadmap, write_roadmap
 from .validator import validate_roadmap, Feature, Task
 from .github import GitHubClient
-from .github_cli import GitHubCLI, find_gh_executable, install_gh
-from .scripts_installer import install_scripts, list_scripts, default_install_dir
-try:
-    from importlib.resources import files as pkg_files
-except ImportError:
-    from importlib_resources import files as pkg_files  # type: ignore
 from .vibe_kanban import VibeKanbanClient
 from .ai import enrich_issue_description, extract_issues_from_markdown
 from datetime import date
@@ -71,42 +65,6 @@ def _print_logo():
     )
     console = Console()
     console.print(logo, style="orange1 bold")
-
-
-def _print_entry_basic_commands():
-    """Print a concise list of basic commands available at entry (gh helpers and shell scripts)."""
-    click.secho("\nBasic Commands", fg="cyan", bold=True)
-    click.echo("- gitscaffold gh install [--version latest]")
-    click.echo("- gitscaffold gh which")
-    click.echo("- gitscaffold gh version")
-    click.echo("- gitscaffold gh issue-list [--repo owner/name] [--state open|closed|all] [--limit N]")
-    click.echo("- gitscaffold gh issue-create --repo owner/name --title ... [--body ...] [--label L]* [--assignee U]* [--milestone M]")
-    click.echo("- gitscaffold gh issue-close --repo owner/name NUMBER")
-    click.echo("- gitscaffold gh pr-feedback --repo owner/name --pr N [--summarize] [--label-on-changes L]* [--comment] [--dry-run]")
-
-    # Built-in scripts (run via 'ops ...' or install locally)
-    click.secho("\nBuilt-in Script Primitives", fg="magenta", bold=True)
-    bin_dir = default_install_dir()
-    click.echo(f"- Run via CLI: gitscaffold ops <command> [flags]")
-    click.echo(f"- Or install locally: gitscaffold scripts install  # -> {bin_dir}")
-    click.echo("- Included scripts:")
-    click.echo("  - aggregate_repos.sh [options] <repo-url>... | -p|--prefix, -n|--no-overwrite, -d|--depth <n>, --dry-run")
-    click.echo("  - archive_stale_repos.sh -o|--owner OWNER [--year Y] [--include-forks] [--no-private] [--match REGEX] [--exclude REGEX] [--limit N] [--apply] [--yes]")
-    click.echo("  - delete_repos.sh [options] <repo>... | -y|--yes, --archive, --unarchive, --dry-run")
-    click.echo("  - remove_from_git.sh <path>  # Remove files from Git history (force-push main)")
-    click.echo("  - delete_branches.sh [-n COUNT] [-r REMOTE] [--dry-run] [--keep BRANCH ...]")
-
-
-def _run_packaged_script(rel_path: str, args: list[str]) -> int:
-    script = pkg_files('scaffold').joinpath(rel_path)
-    if not script.exists():
-        raise click.ClickException(f"Script not found in package: {rel_path}")
-    cmd = ['bash', str(script)] + list(args)
-    try:
-        result = subprocess.run(cmd)
-        return result.returncode
-    except FileNotFoundError:
-        raise click.ClickException("'bash' not found on PATH; required to run script.")
 
 
 def run_repl(ctx):
@@ -169,9 +127,8 @@ def run_repl(ctx):
 @click.group(invoke_without_command=True)
 @click.version_option(version=__version__, prog_name="gitscaffold")
 @click.option('--interactive', is_flag=True, help='Enter an interactive REPL to run multiple commands.')
-@click.option('--use-gh-cli', is_flag=True, envvar='GITSCAFFOLD_USE_GH', help='Prefer GitHub CLI (gh) for GitHub operations when available.')
 @click.pass_context
-def cli(ctx, interactive, use_gh_cli):
+def cli(ctx, interactive):
     """Scaffold – Convert roadmaps to GitHub issues (AI-first extraction for Markdown by default; disable with --no-ai)."""
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     # Load env files. Precedence is: shell env -> local .env -> global config.
@@ -181,9 +138,6 @@ def cli(ctx, interactive, use_gh_cli):
         # Load global config, which will not override vars from shell or local .env
         load_dotenv(dotenv_path=global_config_path)
     logging.info("CLI execution started.")
-    # Stash preference for gh usage in Click context
-    ctx.ensure_object(dict)
-    ctx.obj['use_gh_cli'] = bool(use_gh_cli)
 
     # If --interactive is passed, we want to enter the REPL.
     # We should not proceed to execute any subcommand that might have been passed.
@@ -192,11 +146,10 @@ def cli(ctx, interactive, use_gh_cli):
         # Prevent further execution of a subcommand if one was passed, e.g., `gitscaffold --interactive init`
         ctx.exit()
 
-    # If no subcommand is invoked and not in interactive mode, show help.
+    # If no subcommand is invoked and not in interactive mode, show logo and help.
     if ctx.invoked_subcommand is None:
         _print_logo()
         click.echo(ctx.get_help())
-        _print_entry_basic_commands()
 
 
 @cli.group(name='config', help='Manage global configuration and secrets.')
@@ -284,322 +237,6 @@ def config_remove(key):
     except Exception as e:
         click.secho(f"Error removing key '{key.upper()}': {e}", fg="red", err=True)
 
-
-@cli.group(name='gh', help='Manage and use the bundled GitHub CLI (gh).')
-def gh_group():
-    """Commands that help manage/local-install GitHub CLI and perform basic issue actions."""
-    pass
-
-
-@gh_group.command('install', help='Download and install gh into ~/.gitscaffold/bin')
-@click.option('--version', default='latest', show_default=True, help='gh version to install (e.g., 2.45.0 or latest)')
-def gh_install(version):
-    try:
-        path = install_gh(version)
-        click.secho(f"Installed gh to: {path}", fg='green')
-        bin_dir = str(Path(path).parent)
-        click.secho("Add this directory to your PATH for convenience:", fg='yellow')
-        click.echo(f"  export PATH=\"{bin_dir}:$PATH\"")
-    except Exception as e:
-        click.secho(f"Failed to install gh: {e}", fg='red', err=True)
-        raise SystemExit(1)
-
-
-@gh_group.command('which', help='Show which gh binary will be used')
-def gh_which():
-    path = find_gh_executable()
-    if path:
-        click.echo(path)
-    else:
-        click.secho("gh not found. Run 'gitscaffold gh install' to bootstrap it.", fg='yellow')
-
-
-@gh_group.command('version', help='Print gh version')
-def gh_version():
-    try:
-        gh = GitHubCLI()
-        click.echo(gh.version())
-    except FileNotFoundError as e:
-        click.secho(str(e), fg='yellow')
-
-
-@gh_group.command('issue-list', help='List issues via gh')
-@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
-@click.option('--state', type=click.Choice(['open','closed','all']), default='open', show_default=True)
-@click.option('--limit', default=50, show_default=True)
-def gh_issue_list(repo, state, limit):
-    if not repo:
-        repo = get_repo_from_git_config()
-        if not repo:
-            click.secho('Could not detect repository. Use --repo.', fg='red')
-            raise SystemExit(1)
-    try:
-        gh = GitHubCLI()
-        items = gh.list_issues(repo, state=state, limit=limit)
-        if not items:
-            click.echo("No issues found.")
-            return
-        for it in items:
-            click.echo(f"#{it['number']} [{it['state']}] {it['title']}")
-    except FileNotFoundError as e:
-        click.secho(str(e), fg='yellow')
-
-
-@gh_group.command('issue-create', help='Create an issue via gh')
-@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
-@click.option('--title', required=True)
-@click.option('--body', default='')
-@click.option('--label', 'labels', multiple=True, help='Repeat for multiple labels')
-@click.option('--assignee', 'assignees', multiple=True, help='Repeat for multiple assignees')
-@click.option('--milestone', default=None)
-def gh_issue_create(repo, title, body, labels, assignees, milestone):
-    if not repo:
-        repo = get_repo_from_git_config()
-        if not repo:
-            click.secho('Could not detect repository. Use --repo.', fg='red')
-            raise SystemExit(1)
-    try:
-        gh = GitHubCLI()
-        created = gh.create_issue(repo, title=title, body=body or None, labels=list(labels) or None, assignees=list(assignees) or None, milestone=milestone)
-        click.secho(f"Created issue #{created.get('number')} – {created.get('title')}", fg='green')
-        if created.get('url'):
-            click.echo(created['url'])
-    except FileNotFoundError as e:
-        click.secho(str(e), fg='yellow')
-    except subprocess.CalledProcessError as e:
-        click.secho(f"gh error: {e}", fg='red')
-
-
-@gh_group.command('pr-feedback', help='Fetch feedback for a pull request and optionally act on it')
-@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
-@click.option('--pr', 'pr_number', type=int, required=True, help='Pull request number')
-@click.option('--summarize', is_flag=True, help='Print a human-readable summary of feedback')
-@click.option('--label-on-changes', 'labels_on_changes', multiple=True, help='Add label(s) if any review requests changes (repeatable)')
-@click.option('--comment', 'post_comment', is_flag=True, help='Post a summary comment on the PR')
-@click.option('--dry-run', is_flag=True, help='Simulate actions without making changes')
-def gh_pr_feedback(repo, pr_number, summarize, labels_on_changes, post_comment, dry_run):
-    """Retrieves PR feedback (reviews, review comments) and performs optional actions."""
-    if not repo:
-        repo = get_repo_from_git_config()
-        if not repo:
-            click.secho('Could not detect repository. Use --repo.', fg='red')
-            raise SystemExit(1)
-    try:
-        gh = GitHubCLI()
-        pr = gh.pr_view(repo, pr_number)
-    except FileNotFoundError as e:
-        click.secho(str(e), fg='yellow')
-        return
-    except subprocess.CalledProcessError as e:
-        click.secho(f"gh error: {e}", fg='red')
-        return
-
-    title = pr.get('title') or ''
-    url = pr.get('url') or ''
-    reviews = pr.get('reviews') or []
-    review_threads = pr.get('reviewThreads') or []
-    comments = pr.get('comments') or []
-
-    # Compute basic stats
-    approvals = sum(1 for r in reviews if (r or {}).get('state') == 'APPROVED')
-    changes_requested = sum(1 for r in reviews if (r or {}).get('state') == 'CHANGES_REQUESTED')
-    commented = sum(1 for r in reviews if (r or {}).get('state') == 'COMMENTED')
-    total_reviews = len(reviews)
-    total_review_comments = 0
-    for th in review_threads or []:
-        # reviewThreads often contain nodes or comments arrays depending on schema; handle a few shapes
-        if isinstance(th, dict):
-            if 'comments' in th and isinstance(th['comments'], list):
-                total_review_comments += len(th['comments'])
-            elif 'nodes' in th and isinstance(th['nodes'], list):
-                total_review_comments += len(th['nodes'])
-            else:
-                # fall back to counting as one thread
-                total_review_comments += 1
-        else:
-            total_review_comments += 1
-    total_issue_comments = len(comments)
-
-    summary_lines = [
-        f"PR #{pr_number}: {title}",
-        f"URL: {url}",
-        f"Reviews: {total_reviews} (approved={approvals}, changes_requested={changes_requested}, commented={commented})",
-        f"Review comments: {total_review_comments}",
-        f"Issue comments: {total_issue_comments}",
-    ]
-
-    if summarize or post_comment or not labels_on_changes:
-        # Print summary unless only labels are requested silently
-        click.secho("\n".join(summary_lines))
-
-    # Apply labels if any changes requested and labels provided
-    if labels_on_changes and changes_requested > 0:
-        labels = list(labels_on_changes)
-        if dry_run:
-            click.secho(
-                f"[dry-run] Would add labels {labels} to PR #{pr_number} (changes requested detected)",
-                fg='blue'
-            )
-        else:
-            try:
-                gh.pr_add_labels(repo, pr_number, labels)
-                click.secho(
-                    f"Added labels {labels} to PR #{pr_number} (changes requested detected)",
-                    fg='green'
-                )
-            except subprocess.CalledProcessError as e:
-                click.secho(f"gh error adding labels: {e}", fg='red')
-
-    # Optionally post comment with summary
-    if post_comment:
-        body = (
-            "PR feedback summary:\n\n" +
-            "\n".join(
-                [
-                    f"- Reviews: {total_reviews} (approved={approvals}, changes_requested={changes_requested}, commented={commented})",
-                    f"- Review comments: {total_review_comments}",
-                    f"- Issue comments: {total_issue_comments}",
-                ]
-            )
-        )
-        if dry_run:
-            click.secho(f"[dry-run] Would post summary comment to PR #{pr_number}", fg='blue')
-        else:
-            try:
-                gh.pr_comment(repo, pr_number, body)
-                click.secho(f"Posted summary comment to PR #{pr_number}", fg='green')
-            except subprocess.CalledProcessError as e:
-                click.secho(f"gh error posting comment: {e}", fg='red')
-
-
-@gh_group.command('issue-close', help='Close an issue via gh')
-@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
-@click.argument('number', type=int)
-def gh_issue_close(repo, number):
-    if not repo:
-        repo = get_repo_from_git_config()
-        if not repo:
-            click.secho('Could not detect repository. Use --repo.', fg='red')
-            raise SystemExit(1)
-    try:
-        gh = GitHubCLI()
-        gh.close_issue(repo, number)
-        click.secho(f"Closed issue #{number}", fg='green')
-    except FileNotFoundError as e:
-        click.secho(str(e), fg='yellow')
-    except subprocess.CalledProcessError as e:
-        click.secho(f"gh error: {e}", fg='red')
-
-
-@gh_group.command('auto-label', help='Automatically label an issue using AI')
-@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
-@click.argument('number', type=int)
-@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use for extraction and enrichment.')
-def gh_auto_label(repo, number, ai_provider):
-    if not repo:
-        repo = get_repo_from_git_config()
-        if not repo:
-            click.secho('Could not detect repository. Use --repo.', fg='red')
-            raise SystemExit(1)
-    try:
-        token = get_github_token()
-        if not token:
-            click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
-            sys.exit(1)
-        
-        if ai_provider == 'openai':
-            ai_api_key = get_openai_api_key()
-        elif ai_provider == 'gemini':
-            ai_api_key = get_gemini_api_key()
-
-        if not ai_api_key:
-            sys.exit(1)
-
-        gh_client = GitHubClient(token, repo)
-        gh_client.auto_label_issue(number, ai_provider, ai_api_key)
-        click.secho(f"Successfully processed labels for issue #{number}", fg='green')
-    except (FileNotFoundError, GithubException) as e:
-        click.secho(str(e), fg='yellow')
-
-
-@cli.group(name='scripts', help='Manage bundled shell script primitives.')
-def scripts_group():
-    pass
-
-
-@scripts_group.command('install', help='Copy bundled scripts to ~/.gitscaffold/bin (or --dest)')
-@click.option('--dest', type=click.Path(file_okay=False, dir_okay=True, path_type=Path), help='Destination directory')
-@click.option('--no-overwrite', is_flag=True, help='Skip existing files')
-def scripts_install(dest, no_overwrite):
-    dest_dir = dest if dest else default_install_dir()
-    out = install_scripts(dest=dest_dir, overwrite=not no_overwrite)
-    click.secho(f"Installed scripts to: {out}", fg='green')
-    click.secho("Add to PATH:", fg='yellow')
-    click.echo(f"  export PATH=\"{out}:$PATH\"")
-
-
-@scripts_group.command('list', help='List bundled scripts')
-def scripts_list_cmd():
-    for name in list_scripts():
-        click.echo(name)
-
-
-@cli.group(name='ops', help='Run built-in maintenance scripts (exact flags passthrough).')
-def ops_group():
-    pass
-
-
-def _passthrough_command(rel_script_path: str):
-    def _cmd(args):
-        rc = _run_packaged_script(rel_script_path, list(args))
-        if rc != 0:
-            sys.exit(rc)
-    return _cmd
-
-
-@ops_group.command('aggregate-repos', context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
-@click.argument('args', nargs=-1, type=click.UNPROCESSED)
-def ops_aggregate_repos(args):
-    """Aggregate external repos as branches (aggregate_repos.sh)."""
-    rc = _run_packaged_script('scripts/gh/aggregate_repos.sh', list(args))
-    if rc != 0:
-        sys.exit(rc)
-
-
-@ops_group.command('archive-stale-repos', context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
-@click.argument('args', nargs=-1, type=click.UNPROCESSED)
-def ops_archive_stale_repos(args):
-    """Archive stale repos (archive_stale_repos.sh)."""
-    rc = _run_packaged_script('scripts/gh/archive_stale_repos.sh', list(args))
-    if rc != 0:
-        sys.exit(rc)
-
-
-@ops_group.command('delete-repos', context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
-@click.argument('args', nargs=-1, type=click.UNPROCESSED)
-def ops_delete_repos(args):
-    """Delete/archive/unarchive repos (delete_repos.sh)."""
-    rc = _run_packaged_script('scripts/gh/delete_repos.sh', list(args))
-    if rc != 0:
-        sys.exit(rc)
-
-
-@ops_group.command('remove-from-git', context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
-@click.argument('args', nargs=-1, type=click.UNPROCESSED)
-def ops_remove_from_git(args):
-    """Remove a path from git history (remove_from_git.sh)."""
-    rc = _run_packaged_script('scripts/git/remove_from_git.sh', list(args))
-    if rc != 0:
-        sys.exit(rc)
-
-
-@ops_group.command('delete-branches', context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
-@click.argument('args', nargs=-1, type=click.UNPROCESSED)
-def ops_delete_branches(args):
-    """Delete oldest remote branches (delete_branches.sh)."""
-    rc = _run_packaged_script('scripts/git/delete_branches.sh', list(args))
-    if rc != 0:
-        sys.exit(rc)
 
 def prompt_for_github_token():
     """
@@ -2204,12 +1841,21 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
         click.secho(f"Extracting issues from '{markdown_file}' using {ai_provider.capitalize()} (model: {model or 'default'})...", fg='cyan')
     
     # Set defaults for model and temperature if not provided
+    def _env_float(name: str, default: float) -> float:
+        val = os.getenv(name)
+        if val is None or val == "":
+            return default
+        try:
+            return float(val)
+        except ValueError:
+            return default
+
     if ai_provider == 'openai':
         final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
-        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('OPENAI_TEMPERATURE', 0.5)
     else: # gemini
         final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
-        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('GEMINI_TEMPERATURE', 0.5)
 
     try:
         issues = extract_issues_from_markdown(
@@ -2354,7 +2000,7 @@ def push(repo, board_name, milestone, labels, state, kanban_api, token):
     ]
     
     # Initialize Vibe Kanban client
-    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN') or None
     kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
     click.echo(f"Pushing {len(issues_data)} issues to board '{board_name}'...")
     try:
@@ -2380,7 +2026,7 @@ def pull(repo, board_name, kanban_api, bidirectional, token):
     gh_client = GitHubClient(actual_token, repo)
 
     # Initialize Vibe Kanban client
-    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN') or None
     kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
     click.echo(f"Pulling board status from '{board_name}'...")
     try:
@@ -2569,3 +2215,24 @@ def uninstall():
             click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
     else:
         click.secho("Aborted directory deletion.", fg="yellow")
+
+
+@cli.command(name='run-action-locally', help='Run a GitHub Action locally using nektos/act')
+@click.option('--workflow-file', '-W', required=True, help='Path to the workflow file (e.g., .github/workflows/ci.yml).')
+@click.option('--event', '-e', default='workflow_dispatch', show_default=True, help='Event to simulate (e.g., push, pull_request).')
+@click.option('--job', '-j', help='Run a specific job within the workflow.')
+@click.option('--dry-run', is_flag=True, help='Perform a dry run without executing the action.')
+def run_action_locally(workflow_file, event, job, dry_run):
+    """Thin wrapper that invokes the bundled run_action_locally.py script."""
+    script_path = Path(__file__).parent / 'scripts' / 'run_action_locally.py'
+    cmd = [sys.executable, str(script_path), '--workflow-file', workflow_file, '--event', event]
+    if job:
+        cmd.extend(['--job', job])
+    if dry_run:
+        cmd.append('--dry-run')
+
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"Error running local action: {e}", fg='red', err=True)
+        sys.exit(1)

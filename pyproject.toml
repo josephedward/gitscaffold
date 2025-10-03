@@ -67,3 +67,6 @@ scaffold = [
 
 [tool.setuptools.dynamic]
 version = {attr = "scaffold.__version__"}
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-cov"]

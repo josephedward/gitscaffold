@@ -23,9 +23,9 @@ load_dotenv(find_dotenv())
 @click.option('--openai-key', help='OpenAI API key (overrides OPENAI_API_KEY env var)')
 @click.option('--model', default=os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo'), show_default=True,
               help='OpenAI model to use')
-@click.option('--temperature', type=float, default=float(os.getenv('OPENAI_TEMPERATURE', '0.7')), show_default=True,
+@click.option('--temperature', type=float, default=0.7, show_default=True,
               help='OpenAI temperature')
-@click.option('--max-tokens', 'max_tokens', type=int, default=int(os.getenv('OPENAI_MAX_TOKENS', '800')), show_default=True,
+@click.option('--max-tokens', 'max_tokens', type=int, default=800, show_default=True,
               help='OpenAI max tokens')
 @click.option('--dry-run', is_flag=True, help='List issues without creating them')
 @click.option('--verbose', '-v', is_flag=True, help='Show progress logs')

@@ -2,7 +2,6 @@ import pytest
 from click.testing import CliRunner
 from unittest.mock import MagicMock, patch
 from datetime import datetime
-from pathlib import Path
 
 from scaffold.cli import cli
 

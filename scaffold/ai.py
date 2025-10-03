@@ -9,6 +9,26 @@ except ImportError:
     genai = None
 
 
+def _env_float(name: str, default: float) -> float:
+    val = os.getenv(name)
+    if val is None or val == "":
+        return default
+    try:
+        return float(val)
+    except ValueError:
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    val = os.getenv(name)
+    if val is None or val == "":
+        return default
+    try:
+        return int(val)
+    except ValueError:
+        return default
+
+
 def extract_issues_from_markdown(md_file, provider: str, api_key: str, model_name=None, temperature=0.5):
     """Use an AI provider to extract a list of issues from unstructured Markdown."""
     logging.info(f"Extracting issues from markdown file: {md_file} using {provider}")
@@ -39,8 +59,8 @@ def extract_issues_from_markdown(md_file, provider: str, api_key: str, model_nam
                     {'role': 'system', 'content': 'You are an expert software project planner.'},
                     {'role': 'user', 'content': prompt}
                 ],
-                temperature=float(os.getenv('OPENAI_TEMPERATURE', temperature)),
-                max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '4096'))
+                temperature=_env_float('OPENAI_TEMPERATURE', float(temperature)),
+                max_tokens=_env_int('OPENAI_MAX_TOKENS', 4096)
             )
             text = response.choices[0].message.content
         except OpenAIError as e:
@@ -127,8 +147,8 @@ def enrich_issue_description(title, existing_body, provider: str, api_key: str, 
             response = client.chat.completions.create(
                 model=effective_model_name,
                 messages=messages,
-                temperature=float(os.getenv('OPENAI_TEMPERATURE', temperature)),
-                max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '1500'))
+                temperature=_env_float('OPENAI_TEMPERATURE', float(temperature)),
+                max_tokens=_env_int('OPENAI_MAX_TOKENS', 1500)
             )
             enriched_content = response.choices[0].message.content
         except OpenAIError as e:
@@ -156,3 +176,62 @@ def enrich_issue_description(title, existing_body, provider: str, api_key: str, 
     if enriched_content is None:
         return existing_body or ''
     return enriched_content.strip()
+
+
+def suggest_labels_for_issue(title: str, body: str, provider: str, api_key: str, available_labels: list[str], model_name: str = None, temperature: float = 0.5) -> list[str]:
+    """Use an AI provider to suggest labels for a GitHub issue."""
+    logging.info(f"Suggesting labels for issue: '{title}' using {provider}")
+    if not api_key:
+        logging.error(f"{provider.upper()} API key was not provided.")
+        raise ValueError(f"{provider.upper()} API key was not provided.")
+
+    system_prompt = (
+        "You are an expert GitHub issue labeler. "
+        "Your task is to suggest relevant labels for a given GitHub issue based on its title and description. "
+        f"Only suggest labels from the following list: {', '.join(available_labels)}. "
+        "Respond with a comma-separated list of labels."
+    )
+    user_message = f"Issue Title: \"{title}\"\nIssue Body: \"{body}\"\nLabels:"
+
+    if provider == 'openai':
+        client = OpenAI(api_key=api_key, timeout=20.0, max_retries=3)
+        effective_model_name = model_name or os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+        logging.info(f"Using OpenAI model '{effective_model_name}' for label suggestion.")
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_message}
+        ]
+        try:
+            response = client.chat.completions.create(
+                model=effective_model_name,
+                messages=messages,
+                temperature=_env_float('OPENAI_TEMPERATURE', float(temperature)),
+                max_tokens=100
+            )
+            suggested_labels_str = response.choices[0].message.content
+        except OpenAIError as e:
+            logging.warning(f"OpenAI API call for label suggestion failed: {e}. Returning empty list.")
+            return []
+
+    elif provider == 'gemini':
+        if genai is None:
+            raise ImportError("google-generativeai is not installed. Please install it to use Gemini.")
+        genai.configure(api_key=api_key)
+        effective_model_name = model_name or os.getenv('GEMINI_MODEL', 'gemini-pro')
+        logging.info(f"Using Gemini model '{effective_model_name}' for label suggestion.")
+        model = genai.GenerativeModel(effective_model_name)
+        full_prompt = f"{system_prompt}\n\n{user_message}"
+        try:
+            response = model.generate_content(full_prompt)
+            suggested_labels_str = response.text
+        except Exception as e:
+            logging.warning(f"Gemini API call for label suggestion failed: {e}. Returning empty list.")
+            return []
+    else:
+        raise ValueError(f"Unsupported AI provider: {provider}")
+
+    if suggested_labels_str is None:
+        return []
+
+    suggested_labels = [label.strip() for label in suggested_labels_str.split(',') if label.strip() in available_labels]
+    return suggested_labels

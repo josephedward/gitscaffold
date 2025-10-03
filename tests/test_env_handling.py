@@ -1,7 +1,6 @@
 import pytest
 from click.testing import CliRunner
 from unittest.mock import patch
-from pathlib import Path
 
 from scaffold.cli import get_github_token, get_openai_api_key, cli
 

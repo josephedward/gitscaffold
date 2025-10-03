@@ -1,9 +1,8 @@
 import pytest
 from click.testing import CliRunner
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
 from scaffold.cli import cli
-from scaffold.github import GitHubClient # To mock its methods
 
 class MockIssue:
     def __init__(self, number, title):

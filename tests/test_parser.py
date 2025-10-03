@@ -1,4 +1,3 @@
-import pytest
 
 from scaffold.parser import parse_roadmap
   

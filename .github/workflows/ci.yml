@@ -9,6 +9,11 @@ on:
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      # Use workflow name + normalized ref to avoid cross-workflow blocking
+      group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+      cancel-in-progress: true
 
     steps:
     - name: Checkout repository
@@ -19,14 +24,34 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: Cache Python dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
     - name: Install Python dependencies
       run: |
         pip install --upgrade pip
-        pip install .
-        pip install pytest pytest-mock
+        pip install .[test]
+        pip install pytest-xdist
+
 
     - name: Set up Rust toolchain
       uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          rust/mdparser/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('rust/mdparser/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
 
     - name: Build mdparser
       run: cargo build --release --manifest-path rust/mdparser/Cargo.toml
@@ -35,4 +60,4 @@ jobs:
       run: echo "$(pwd)/rust/mdparser/target/release" >> $GITHUB_PATH
 
     - name: Run tests
-      run: pytest
+      run: pytest -v -s --disable-warnings -n auto
