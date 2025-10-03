@@ -48,6 +48,37 @@ SAMPLE_ROADMAP_DATA = {
     ]
 }
 
+# Sample roadmap data for testing update and close functionality
+SAMPLE_ROADMAP_DATA_FOR_UPDATE = {
+    "name": "Test Project Sync",
+    "description": "A test project for sync functionality.",
+    "milestones": [
+        {"name": "M1: Setup", "due_date": "2025-01-01"}
+    ],
+    "features": [
+        {
+            "title": "Feature A: Core Logic",
+            "description": "Implement the core logic.",
+            "milestone": "M1: Setup",
+            "labels": ["enhancement", "core"],
+            "tasks": [
+                {
+                    "title": "Task A.1: Design",
+                    "description": "Design the core logic - updated.",
+                    "labels": ["design"]
+                },
+                {
+                    "title": "Task A.2: Implement",
+                    "description": "Implement the core logic.",
+                    "labels": ["implementation"],
+                    "completed": True
+                }
+            ]
+        }
+    ]
+}
+
+
 @pytest.fixture
 def runner():
     return CliRunner()
@@ -56,13 +87,32 @@ from unittest.mock import MagicMock
 
 # Helper classes at module level
 class MockIssue:
-    def __init__(self, number, title, body="", milestone=None, labels=None, assignees=None):
+    def __init__(self, number, title, body="", milestone=None, labels=None, assignees=None, state="open", mock_issues_updated_list=None):
         self.number = number
         self.title = title
         self.body = body
         self.milestone = milestone # Should be a MockMilestone object or None
         self.labels = labels or []
         self.assignees = assignees or []
+        self.state = state
+        self.mock_issues_updated_list = mock_issues_updated_list
+
+    def edit(self, title=None, body=None, state=None, milestone=None, labels=None, assignees=None):
+        if title:
+            self.title = title
+        if body:
+            self.body = body
+        if state:
+            self.state = state
+        if milestone:
+            self.milestone = milestone
+        if labels:
+            self.labels = labels
+        if assignees:
+            self.assignees = assignees
+
+        if self.mock_issues_updated_list is not None and state != "closed":
+            self.mock_issues_updated_list.append(self)
 
 class MockMilestone:
     def __init__(self, title, number=1, due_on=None):
@@ -78,6 +128,8 @@ def mock_github_client(monkeypatch):
     # Shared state for the mock client methods
     mock_issues_created_list = []
     mock_milestones_created_list = []
+    mock_issues_updated_list = []
+    mock_issues_closed_list = []
     existing_issue_titles_set = set()
     existing_milestones_map = {}  # title -> MockMilestone object
     pre_existing_issues_map = {} # title -> MockIssue object (for issues that exist "remotely")
@@ -123,6 +175,15 @@ def mock_github_client(monkeypatch):
             # Then check "pre-existing" issues (simulating those already on GitHub)
             return pre_existing_issues_map.get(title)
 
+        def get_issue(self, number: int):
+            for issue in pre_existing_issues_map.values():
+                if issue.number == number:
+                    return issue
+            for issue in mock_issues_created_list:
+                if issue.number == number:
+                    return issue
+            return None
+
         def create_issue(self, title: str, body: str = None, assignees: list = None, labels: list = None, milestone: str = None):
             # Real client's create_issue calls _find_issue first.
             # Our sync logic checks `title in existing_issue_titles` then calls create_issue if not found and confirmed.
@@ -150,13 +211,29 @@ def mock_github_client(monkeypatch):
             existing_issue_titles_set.add(title) # Ensure it's now "existing"
             return new_issue
 
+        def update_issue(self, number: int, title: str = None, body: str = None, state: str = None, milestone: str = None, labels: list = None, assignees: list = None):
+            issue = self.get_issue(number)
+            if issue:
+                issue.edit(title=title, body=body, state=state, milestone=milestone, labels=labels, assignees=assignees)
+                mock_issues_updated_list.append(issue)
+            return issue
+
+        def close_issue(self, number: int):
+            issue = self.get_issue(number)
+            if issue:
+                issue.edit(state="closed")
+                mock_issues_closed_list.append(issue)
+            return issue
+
     # This is what the tests will use to set up pre-existing state and check results.
     fixture_data_access = {
         "existing_issue_titles_set": existing_issue_titles_set,
         "existing_milestones_map": existing_milestones_map,
         "pre_existing_issues_map": pre_existing_issues_map,
         "mock_issues_created": mock_issues_created_list, # Renamed for clarity
-        "mock_milestones_created": mock_milestones_created_list # Renamed for clarity
+        "mock_milestones_created": mock_milestones_created_list, # Renamed for clarity
+        "mock_issues_updated": mock_issues_updated_list,
+        "mock_issues_closed": mock_issues_closed_list
     }
 
     # Patch the GitHubClient class in the context of scaffold.cli module
@@ -174,6 +251,15 @@ def sample_roadmap_file(tmp_path):
     with open(roadmap_file, 'w') as f:
         json.dump(SAMPLE_ROADMAP_DATA, f, indent=2)
     return roadmap_file
+
+@pytest.fixture
+def sample_roadmap_file_for_update(tmp_path):
+    """Creates a temporary roadmap JSON file for update tests."""
+    roadmap_file = tmp_path / "roadmap_update.json"
+    with open(roadmap_file, 'w') as f:
+        json.dump(SAMPLE_ROADMAP_DATA_FOR_UPDATE, f, indent=2)
+    return roadmap_file
+
 
 def test_sync_dry_run_empty_repo(runner, sample_roadmap_file, mock_github_client, monkeypatch):
     """Test sync command with --dry-run on an empty repository."""
@@ -305,6 +391,48 @@ def test_sync_some_items_exist(runner, sample_roadmap_file, mock_github_client, 
     assert "Feature A: Core Logic" not in created_titles_in_run # Because it pre-existed by title
     assert "Task A.1: Design" not in created_titles_in_run # Because it pre-existed by title
     assert len(created_titles_in_run) == 3
+
+def test_sync_update_and_close_issues(runner, sample_roadmap_file_for_update, mock_github_client, monkeypatch):
+    """Test sync updates and closes issues based on the roadmap."""
+    # Pre-populate existing items
+    pre_existing_m1_obj = MockMilestone(title='M1: Setup', number=1, due_on="2025-01-01")
+    mock_github_client["existing_milestones_map"]["M1: Setup"] = pre_existing_m1_obj
+
+    pre_existing_feature_a_obj = MockIssue(title="Feature A: Core Logic", number=90, milestone=pre_existing_m1_obj)
+    mock_github_client["pre_existing_issues_map"]["Feature A: Core Logic"] = pre_existing_feature_a_obj
+    mock_github_client["existing_issue_titles_set"].add("Feature A: Core Logic")
+
+    task_a1_to_update = MockIssue(title="Task A.1: Design", number=91, body="Old description", milestone=pre_existing_m1_obj)
+    mock_github_client["pre_existing_issues_map"]["Task A.1: Design"] = task_a1_to_update
+    mock_github_client["existing_issue_titles_set"].add("Task A.1: Design")
+
+    task_a2_to_close = MockIssue(title="Task A.2: Implement", number=92, milestone=pre_existing_m1_obj)
+    mock_github_client["pre_existing_issues_map"]["Task A.2: Implement"] = task_a2_to_close
+    mock_github_client["existing_issue_titles_set"].add("Task A.2: Implement")
+
+    monkeypatch.setattr("click.confirm", lambda prompt, default: True)
+
+    result = runner.invoke(cli, [
+        'sync', str(sample_roadmap_file_for_update),
+        '--repo', 'owner/repo',
+        '--token', 'fake-token'
+    ])
+
+    assert result.exit_code == 0
+
+    # Check for update
+    assert "Updating issue #91: Task A.1: Design" in result.output
+    assert len(mock_github_client["mock_issues_updated"]) == 1
+    updated_issue = mock_github_client["mock_issues_updated"][0]
+    assert updated_issue.number == 91
+    assert updated_issue.body == "Design the core logic - updated."
+
+    # Check for close
+    assert "Closing issue #92: Task A.2: Implement" in result.output
+    assert len(mock_github_client["mock_issues_closed"]) == 1
+    closed_issue = mock_github_client["mock_issues_closed"][0]
+    assert closed_issue.number == 92
+    assert closed_issue.state == "closed"
 
 
 def test_sync_ai_extraction(runner, tmp_path, mock_github_client, monkeypatch):

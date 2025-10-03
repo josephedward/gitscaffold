@@ -78,7 +78,7 @@ jobs:
         run: python -m build --sdist --wheel --no-isolation
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.5.1
+        uses: pypa/gh-action-pypi-publish@v1.13.0
         with:
           pypi_token: ${{ secrets.PYPI_TOKEN }}
           skip-existing: true
