@@ -39,4 +39,4 @@ jobs:
       run: echo "$(pwd)/rust/mdparser/target/release" >> $GITHUB_PATH
 
     - name: Run tests
-      run: pytest
+      run: pytest -v -s --disable-warnings --workers=1 --max-worker-restart=0
