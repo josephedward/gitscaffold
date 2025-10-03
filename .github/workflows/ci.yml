@@ -36,8 +36,7 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install .[test]
-        pip install pytest-xdist
-        pip install ruff black
+        pip install ruff black pytest-xdist
 
     - name: Run Linting and Formatting checks
       run: |
