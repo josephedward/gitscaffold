@@ -46,7 +46,7 @@ try:
 except ImportError:
     from importlib_resources import files as pkg_files  # type: ignore
 from .vibe_kanban import VibeKanbanClient
-from .ai import enrich_issue_description, extract_issues_from_markdown, suggest_labels_for_issue
+from .ai import enrich_issue_description, extract_issues_from_markdown
 from datetime import date
 import re
 import random
@@ -82,6 +82,7 @@ def _print_entry_basic_commands():
     click.echo("- gitscaffold gh issue-list [--repo owner/name] [--state open|closed|all] [--limit N]")
     click.echo("- gitscaffold gh issue-create --repo owner/name --title ... [--body ...] [--label L]* [--assignee U]* [--milestone M]")
     click.echo("- gitscaffold gh issue-close --repo owner/name NUMBER")
+    click.echo("- gitscaffold gh pr-feedback --repo owner/name --pr N [--summarize] [--label-on-changes L]* [--comment] [--dry-run]")
 
     # Built-in scripts (run via 'ops ...' or install locally)
     click.secho("\nBuilt-in Script Primitives", fg="magenta", bold=True)
