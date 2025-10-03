@@ -15,10 +15,10 @@ def _home_bin_dir() -> Path:
 def find_gh_executable() -> Optional[str]:
     """Find a usable gh executable (PATH or ~/.gitscaffold/bin/gh)."""
     gh_path = shutil.which("gh")
-    if gh_path:
+    if gh_path and os.access(gh_path, os.X_OK):
         return gh_path
     candidate = _home_bin_dir() / "gh"
-    if candidate.exists():
+    if candidate.exists() and os.access(candidate, os.X_OK):
         return str(candidate)
     # Windows fallback
     candidate_exe = _home_bin_dir() / "gh.exe"
@@ -57,13 +57,23 @@ def _download(url: str, dest: Path):
         shutil.copyfileobj(resp, f)
 
 
+def _safe_tar_extract(tar: tarfile.TarFile, path: Path):
+    """Safely extract a tar archive to path (mitigate path traversal)."""
+    path = path.resolve()
+    for member in tar.getmembers():
+        member_path = (path / member.name).resolve()
+        if not str(member_path).startswith(str(path)):
+            raise RuntimeError(f"Unsafe path in archive: {member.name}")
+    tar.extractall(path)
+
+
 def _extract_archive(archive: Path, target_dir: Path) -> Path:
     """Extract archive and return path to contained gh binary."""
     target_dir.mkdir(parents=True, exist_ok=True)
     gh_bin_path: Optional[Path] = None
     if archive.suffixes[-2:] == [".tar", ".gz"] or archive.suffix == ".tgz":
         with tarfile.open(archive, "r:gz") as tf:
-            tf.extractall(target_dir)
+            _safe_tar_extract(tf, target_dir)
             # Find gh binary in extracted folder
             for p in target_dir.rglob("gh"):
                 if p.is_file() and os.access(p, os.X_OK):
@@ -84,35 +94,67 @@ def _extract_archive(archive: Path, target_dir: Path) -> Path:
     return gh_bin_path
 
 
+def _resolve_latest_version() -> str:
+    """Resolve the latest gh version via HTTP redirect to the tag page."""
+    import urllib.request
+    with urllib.request.urlopen("https://github.com/cli/cli/releases/latest") as resp:
+        final_url = resp.geturl()  # follows redirect to .../tag/vX.Y.Z
+    tag = final_url.rstrip("/").split("/")[-1]
+    return tag.lstrip("v")
+
+
+def _download_checksums(version: str, dest: Path):
+    base = "https://github.com/cli/cli/releases"
+    url = f"{base}/download/v{version}/gh_{version}_checksums.txt"
+    _download(url, dest)
+
+
+def _verify_checksum(archive: Path, checksums_file: Path, artifact_name: str) -> None:
+    import hashlib
+    content = checksums_file.read_text(encoding="utf-8")
+    expected = None
+    for line in content.splitlines():
+        if line.strip().endswith(artifact_name):
+            expected = line.split()[0]
+            break
+    if not expected:
+        raise RuntimeError(f"Checksum for {artifact_name} not found")
+    sha256 = hashlib.sha256()
+    with open(archive, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            sha256.update(chunk)
+    actual = sha256.hexdigest()
+    if actual.lower() != expected.lower():
+        raise RuntimeError("Checksum verification failed for downloaded archive")
+
+
 def install_gh(version: str = "latest") -> str:
     """
     Install GitHub CLI into ~/.gitscaffold/bin and return path to installed binary.
     Uses official release artifacts from https://github.com/cli/cli/releases.
+    - Resolves the concrete version when 'latest' is requested.
+    - Verifies SHA256 checksum using the published checksums file.
+    - Performs safe archive extraction.
     """
     os_id, arch = _detect_os_arch()
-    base = "https://github.com/cli/cli/releases"
     if version == "latest":
-        # Redirect-safe latest download URLs
-        # e.g., .../latest/download/gh_2.45.0_linux_amd64.tar.gz
-        if os_id == "windows":
-            artifact = f"gh_{version}_windows_{arch}.zip"  # latest resolves to concrete version
-        else:
-            artifact = f"gh_{version}_{os_id}_{arch}.tar.gz"
-        url = f"{base}/latest/download/{artifact}"
+        version = _resolve_latest_version()
+    base = "https://github.com/cli/cli/releases/download"
+    if os_id == "windows":
+        artifact = f"gh_{version}_windows_{arch}.zip"
     else:
-        tag = f"v{version.lstrip('v')}"
-        if os_id == "windows":
-            artifact = f"gh_{version}_windows_{arch}.zip"
-        else:
-            artifact = f"gh_{version}_{os_id}_{arch}.tar.gz"
-        url = f"{base}/download/{tag}/{artifact}"
+        artifact = f"gh_{version}_{os_id}_{arch}.tar.gz"
+    url = f"{base}/v{version}/{artifact}"
 
     bin_dir = _home_bin_dir()
     tmp_dir = bin_dir / "tmp"
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
-    archive_path = tmp_dir / (artifact if 'artifact' in locals() else "gh_download")
+    archive_path = tmp_dir / artifact
+    checksums_path = tmp_dir / f"gh_{version}_checksums.txt"
     _download(url, archive_path)
+    _download_checksums(version, checksums_path)
+    _verify_checksum(archive_path, checksums_path, artifact)
 
     extracted_root = tmp_dir / "extracted"
     gh_bin = _extract_archive(archive_path, extracted_root)
@@ -140,11 +182,11 @@ class GitHubCLI:
                 "gh not found. Run 'gitscaffold gh install' to bootstrap it."
             )
 
-    def _run(self, args: List[str], check: bool = True, capture: bool = True) -> subprocess.CompletedProcess:
+    def _run(self, args: List[str], check: bool = True, capture: bool = True, timeout: int = 60) -> subprocess.CompletedProcess:
         cmd = [self.gh] + args
         if capture:
-            return subprocess.run(cmd, check=check, capture_output=True, text=True)
-        return subprocess.run(cmd, check=check)
+            return subprocess.run(cmd, check=check, capture_output=True, text=True, timeout=timeout)
+        return subprocess.run(cmd, check=check, timeout=timeout)
 
     def version(self) -> str:
         cp = self._run(["--version"])  # type: ignore[arg-type]
@@ -185,3 +227,11 @@ class GitHubCLI:
     def close_issue(self, repo: str, number: int) -> None:
         self._run(["issue", "close", str(number), "--repo", repo], capture=False)
 
+    def auth_status(self) -> bool:
+        try:
+            self._run(["auth", "status"], capture=False, timeout=10)
+            return True
+        except subprocess.CalledProcessError:
+            return False
+        except subprocess.TimeoutExpired:
+            return False
