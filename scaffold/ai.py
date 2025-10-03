@@ -9,6 +9,26 @@ except ImportError:
     genai = None
 
 
+def _env_float(name: str, default: float) -> float:
+    val = os.getenv(name)
+    if val is None or val == "":
+        return default
+    try:
+        return float(val)
+    except ValueError:
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    val = os.getenv(name)
+    if val is None or val == "":
+        return default
+    try:
+        return int(val)
+    except ValueError:
+        return default
+
+
 def extract_issues_from_markdown(md_file, provider: str, api_key: str, model_name=None, temperature=0.5):
     """Use an AI provider to extract a list of issues from unstructured Markdown."""
     logging.info(f"Extracting issues from markdown file: {md_file} using {provider}")
@@ -39,8 +59,8 @@ def extract_issues_from_markdown(md_file, provider: str, api_key: str, model_nam
                     {'role': 'system', 'content': 'You are an expert software project planner.'},
                     {'role': 'user', 'content': prompt}
                 ],
-                temperature=float(os.getenv('OPENAI_TEMPERATURE', temperature)),
-                max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '4096'))
+                temperature=_env_float('OPENAI_TEMPERATURE', float(temperature)),
+                max_tokens=_env_int('OPENAI_MAX_TOKENS', 4096)
             )
             text = response.choices[0].message.content
         except OpenAIError as e:
@@ -127,8 +147,8 @@ def enrich_issue_description(title, existing_body, provider: str, api_key: str, 
             response = client.chat.completions.create(
                 model=effective_model_name,
                 messages=messages,
-                temperature=float(os.getenv('OPENAI_TEMPERATURE', temperature)),
-                max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '1500'))
+                temperature=_env_float('OPENAI_TEMPERATURE', float(temperature)),
+                max_tokens=_env_int('OPENAI_MAX_TOKENS', 1500)
             )
             enriched_content = response.choices[0].message.content
         except OpenAIError as e:
@@ -185,7 +205,7 @@ def suggest_labels_for_issue(title: str, body: str, provider: str, api_key: str,
             response = client.chat.completions.create(
                 model=effective_model_name,
                 messages=messages,
-                temperature=float(os.getenv('OPENAI_TEMPERATURE', temperature)),
+                temperature=_env_float('OPENAI_TEMPERATURE', float(temperature)),
                 max_tokens=100
             )
             suggested_labels_str = response.choices[0].message.content
