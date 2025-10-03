@@ -202,7 +202,7 @@ def parse_roadmap(roadmap_file):
             logging.info("Parsed markdown file as a structured roadmap.")
             return data
         if isinstance(data, list):
-            raise ValueError(f"Roadmap file must contain a mapping at the top level, got list")
+            raise ValueError("Roadmap file must contain a mapping at the top level, got list")
         # Fallback to heading-based markdown parser
         logging.info("Using markdown parser for non-structured markdown file.")
         return parse_markdown(roadmap_file)
