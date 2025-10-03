@@ -4,6 +4,7 @@ from datetime import date, datetime
 import logging
 from github import Github
 from github.GithubException import GithubException
+from .ai import suggest_labels_for_issue
 
 class GitHubClient:
     """Wrapper for GitHub API interactions via PyGitHub."""
@@ -239,3 +240,33 @@ class GitHubClient:
             return [issue for issue in open_issues if issue.milestone and issue.milestone.title == milestone_name]
         except GithubException:
             return []
+
+    def auto_label_issue(self, issue_number: int, provider: str, api_key: str, model_name: str = None, temperature: float = 0.5):
+        """Automatically label an issue using an AI provider."""
+        logging.info(f"Auto-labeling issue #{issue_number} using {provider}")
+        try:
+            issue = self.repo.get_issue(number=issue_number)
+        except GithubException as e:
+            logging.error(f"Error fetching issue #{issue_number}: {e}")
+            raise
+
+        available_labels = [label.name for label in self.repo.get_labels()]
+        if not available_labels:
+            logging.warning("No labels found in the repository. Cannot suggest labels.")
+            return
+
+        suggested_labels = suggest_labels_for_issue(
+            title=issue.title,
+            body=issue.body,
+            provider=provider,
+            api_key=api_key,
+            available_labels=available_labels,
+            model_name=model_name,
+            temperature=temperature
+        )
+
+        if suggested_labels:
+            logging.info(f"Suggested labels for issue #{issue_number}: {suggested_labels}")
+            issue.set_labels(*suggested_labels)
+        else:
+            logging.info(f"No labels suggested for issue #{issue_number}.")
