@@ -11,7 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
-      group: ci-${{ github.ref }}
+      # Use workflow name + normalized ref to avoid cross-workflow blocking
+      group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
       cancel-in-progress: true
 
     steps:
@@ -23,6 +24,14 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: Cache Python dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
     - name: Install Python dependencies
       run: |
         pip install --upgrade pip
@@ -31,6 +40,17 @@ jobs:
 
     - name: Set up Rust toolchain
       uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          rust/mdparser/target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('rust/mdparser/Cargo.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
 
     - name: Build mdparser
       run: cargo build --release --manifest-path rust/mdparser/Cargo.toml
