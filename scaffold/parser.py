@@ -17,12 +17,14 @@ def parse_markdown(md_file):
     # If an external Rust parser is available, use it
     try:
         if shutil.which('mdparser'):
-            out = subprocess.check_output(['mdparser', md_file], text=True)
+            # Guard against a hanging external binary by using a short timeout
+            out = subprocess.check_output(['mdparser', md_file], text=True, timeout=5)
             data = json.loads(out)
             logging.info("Used external mdparser for parsing Markdown.")
             return data
-    except Exception:
-        logging.debug("External mdparser invocation failed; falling back to Python parser.")
+    except (subprocess.TimeoutExpired, Exception):
+        # On any error or timeout, fall back to the built-in parser
+        logging.debug("External mdparser unavailable/failed or timed out; falling back to Python parser.")
     path = Path(md_file)
     with open(md_file, 'r', encoding='utf-8') as f:
         content = f.read()
