@@ -1831,7 +1831,7 @@ def _enrich_parse_roadmap(path="ROADMAP.md"):
                     data[current][section].append(t.strip()[2:].strip())
                     continue
                 if section == 'tasks':
-                    mnum = re.match(r'\s*\d+\.\s+(.*)
+                    mnum = re.match(r'\s*\d+\.\s+(.*)')
     for ctx, obj in data.items():
         for key in ('goal', 'tasks', 'deliverables'):
             for itm in obj[key]:
