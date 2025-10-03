@@ -105,13 +105,12 @@ def test_run_action_locally_act_installed(runner, capsys):
                 check=True, text=True, cwd=ANY
             )
 
-def test_run_action_locally_act_command_fails(runner, capsys):
+def test_run_action_locally_act_command_fails(capsys):
     """Test run_action_locally when the act command itself fails."""
     with patch('scaffold.scripts.run_action_locally.check_act_installed', return_value=True):
         with patch('subprocess.run') as mock_subprocess_run:
             mock_subprocess_run.side_effect = subprocess.CalledProcessError(1, "act")
-            with patch('sys.exit') as mock_sys_exit:
-                run_action_locally(workflow_file=".github/workflows/ci.yml")
-                captured = capsys.readouterr()
-                assert "Error running 'act': Command 'act' returned non-zero exit status 1." in captured.err
-                mock_sys_exit.assert_called_once_with(1)
+            exit_code = run_action_locally(workflow_file=".github/workflows/ci.yml")
+            captured = capsys.readouterr()
+            assert "Error running 'act': Command 'act' returned non-zero exit status 1." in captured.err
+            assert exit_code == 1
