@@ -1799,11 +1799,19 @@ def _enrich_parse_roadmap(path="ROADMAP.md"):
                     data[current][section].append(t.strip()[2:].strip())
                     continue
                 if section == 'tasks':
-                    mnum = re.match(r'\s*\d+\.\s+(.*)')
+                    # Numbered task like "1. Do something" or dash list
+                    mnum = re.match(r"\s*\d+\.\s+(.*)$", t)
+                    if mnum:
+                        data[current]['tasks'].append(mnum.group(1).strip())
+                        continue
+                    if t.strip().startswith('- '):
+                        data[current]['tasks'].append(t.strip()[2:].strip())
+                        continue
     except Exception as e:
         print(f"Error parsing roadmap: {e}")
         return {}
 
+    mapping = {}
     for ctx, obj in data.items():
         for key in ('goal', 'tasks', 'deliverables'):
             for itm in obj[key]:
@@ -2374,23 +2382,6 @@ def uninstall():
             click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
     else:
         click.secho("Aborted directory deletion.", fg="yellow")
-, t)
-                    if mnum:
-                        data[current]['tasks'].append(mnum.group(1).strip())
-                        continue
-                    if t.strip().startswith('- '):
-                        data[current]['tasks'].append(t.strip()[2:].strip())
-                        continue
-    except FileNotFoundError:
-        click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
-        sys.exit(1)
-    # Flatten mapping for lookups
-    mapping = {}
-    for ctx, obj in data.items():
-        for key in ('goal', 'tasks', 'deliverables'):
-            for itm in obj[key]:
-                mapping[itm] = {'context': ctx, **obj}
-    return mapping
 
 def _enrich_get_context(title, roadmap):
     if title in roadmap:
