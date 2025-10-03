@@ -35,8 +35,13 @@ jobs:
     - name: Install Python dependencies
       run: |
         pip install --upgrade pip
-        pip install .
-        pip install pytest pytest-mock
+        pip install .[test]
+        pip install ruff black
+
+    - name: Run Linting and Formatting checks
+      run: |
+        ruff check .
+        black --check .
 
     - name: Set up Rust toolchain
       uses: dtolnay/rust-toolchain@stable
