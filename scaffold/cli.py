@@ -369,6 +369,108 @@ def gh_issue_create(repo, title, body, labels, assignees, milestone):
         click.secho(f"gh error: {e}", fg='red')
 
 
+@gh_group.command('pr-feedback', help='Fetch feedback for a pull request and optionally act on it')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
+@click.option('--pr', 'pr_number', type=int, required=True, help='Pull request number')
+@click.option('--summarize', is_flag=True, help='Print a human-readable summary of feedback')
+@click.option('--label-on-changes', 'labels_on_changes', multiple=True, help='Add label(s) if any review requests changes (repeatable)')
+@click.option('--comment', 'post_comment', is_flag=True, help='Post a summary comment on the PR')
+@click.option('--dry-run', is_flag=True, help='Simulate actions without making changes')
+def gh_pr_feedback(repo, pr_number, summarize, labels_on_changes, post_comment, dry_run):
+    """Retrieves PR feedback (reviews, review comments) and performs optional actions."""
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.secho('Could not detect repository. Use --repo.', fg='red')
+            raise SystemExit(1)
+    try:
+        gh = GitHubCLI()
+        pr = gh.pr_view(repo, pr_number)
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+        return
+    except subprocess.CalledProcessError as e:
+        click.secho(f"gh error: {e}", fg='red')
+        return
+
+    title = pr.get('title') or ''
+    url = pr.get('url') or ''
+    reviews = pr.get('reviews') or []
+    review_threads = pr.get('reviewThreads') or []
+    comments = pr.get('comments') or []
+
+    # Compute basic stats
+    approvals = sum(1 for r in reviews if (r or {}).get('state') == 'APPROVED')
+    changes_requested = sum(1 for r in reviews if (r or {}).get('state') == 'CHANGES_REQUESTED')
+    commented = sum(1 for r in reviews if (r or {}).get('state') == 'COMMENTED')
+    total_reviews = len(reviews)
+    total_review_comments = 0
+    for th in review_threads or []:
+        # reviewThreads often contain nodes or comments arrays depending on schema; handle a few shapes
+        if isinstance(th, dict):
+            if 'comments' in th and isinstance(th['comments'], list):
+                total_review_comments += len(th['comments'])
+            elif 'nodes' in th and isinstance(th['nodes'], list):
+                total_review_comments += len(th['nodes'])
+            else:
+                # fall back to counting as one thread
+                total_review_comments += 1
+        else:
+            total_review_comments += 1
+    total_issue_comments = len(comments)
+
+    summary_lines = [
+        f"PR #{pr_number}: {title}",
+        f"URL: {url}",
+        f"Reviews: {total_reviews} (approved={approvals}, changes_requested={changes_requested}, commented={commented})",
+        f"Review comments: {total_review_comments}",
+        f"Issue comments: {total_issue_comments}",
+    ]
+
+    if summarize or post_comment or not labels_on_changes:
+        # Print summary unless only labels are requested silently
+        click.secho("\n".join(summary_lines))
+
+    # Apply labels if any changes requested and labels provided
+    if labels_on_changes and changes_requested > 0:
+        labels = list(labels_on_changes)
+        if dry_run:
+            click.secho(
+                f"[dry-run] Would add labels {labels} to PR #{pr_number} (changes requested detected)",
+                fg='blue'
+            )
+        else:
+            try:
+                gh.pr_add_labels(repo, pr_number, labels)
+                click.secho(
+                    f"Added labels {labels} to PR #{pr_number} (changes requested detected)",
+                    fg='green'
+                )
+            except subprocess.CalledProcessError as e:
+                click.secho(f"gh error adding labels: {e}", fg='red')
+
+    # Optionally post comment with summary
+    if post_comment:
+        body = (
+            "PR feedback summary:\n\n" +
+            "\n".join(
+                [
+                    f"- Reviews: {total_reviews} (approved={approvals}, changes_requested={changes_requested}, commented={commented})",
+                    f"- Review comments: {total_review_comments}",
+                    f"- Issue comments: {total_issue_comments}",
+                ]
+            )
+        )
+        if dry_run:
+            click.secho(f"[dry-run] Would post summary comment to PR #{pr_number}", fg='blue')
+        else:
+            try:
+                gh.pr_comment(repo, pr_number, body)
+                click.secho(f"Posted summary comment to PR #{pr_number}", fg='green')
+            except subprocess.CalledProcessError as e:
+                click.secho(f"gh error posting comment: {e}", fg='red')
+
+
 @gh_group.command('issue-close', help='Close an issue via gh')
 @click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
 @click.argument('number', type=int)
