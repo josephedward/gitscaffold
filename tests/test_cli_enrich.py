@@ -1,6 +1,5 @@
 import pytest
 from click.testing import CliRunner
-from unittest.mock import patch, MagicMock
 from github import GithubException
 
 from scaffold.cli import cli

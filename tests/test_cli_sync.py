@@ -1,10 +1,8 @@
 import pytest
 from click.testing import CliRunner
-from pathlib import Path
 import json
 
 from scaffold.cli import cli # Main CLI entry point
-from scaffold.github import GitHubClient # To mock its methods
 
 # Sample roadmap data for testing
 SAMPLE_ROADMAP_DATA = {

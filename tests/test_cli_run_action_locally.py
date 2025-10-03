@@ -1,6 +1,6 @@
 import pytest
 from click.testing import CliRunner
-from unittest.mock import patch, call, ANY
+from unittest.mock import patch, ANY
 import subprocess
 import sys
 from pathlib import Path
