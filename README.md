@@ -4,6 +4,14 @@
 <!-- CI Badge -->
 [![CI](https://github.com/josephedward/gitscaffold/actions/workflows/test-and-update-coverage.yml/badge.svg)](https://github.com/josephedward/gitscaffold/actions)
 
+<!-- COVERAGE_START -->
+
+```text
+Coverage report will be inserted by CI.
+```
+
+<!-- COVERAGE_END -->
+
 Gitscaffold is a command-line tool and GitHub Action that converts Markdown-based roadmaps into GitHub issues and milestones using AI-driven extraction and enrichment.
 
 ## Key Features

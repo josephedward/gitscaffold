@@ -32,7 +32,9 @@ dependencies = [
     "streamlit>=1.20.0",
     "uvicorn[standard]>=0.20.0",
     "google-generativeai>=0.4.0,<1.0.0",
-    "importlib_resources>=5.0; python_version < '3.9'"
+    "importlib_resources>=5.0; python_version < '3.9'",
+    "thefuzz>=0.20.0",
+    "python-levenshtein>=0.25.0"
 ]
 
 [project.urls]
@@ -41,6 +43,19 @@ Repository = "https://github.com/josephedward/gitscaffold"
 
 [project.scripts]
 gitscaffold = "scaffold.cli:cli"
+
+[project.optional-dependencies]
+test = [
+  "pytest>=7.0",
+  "pytest-mock>=3.10",
+  "pytest-cov>=4.0",
+  "coverage>=7.0",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-ra"
 
 [tool.setuptools]
 packages = ["scaffold", "scaffold.scripts", "scaffold.templates"]
