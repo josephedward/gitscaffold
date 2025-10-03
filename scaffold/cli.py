@@ -385,6 +385,68 @@ def gh_issue_close(repo, number):
     except subprocess.CalledProcessError as e:
         click.secho(f"gh error: {e}", fg='red')
 
+@gh_group.command('auto-label', help='Automatically label a GitHub issue using AI')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
+@click.option('--issue-number', type=int, required=True, help='The number of the issue to label.')
+@click.option('--provider', type=click.Choice(['openai', 'gemini']), default='gemini', show_default=True, help='AI provider to use for label suggestion.')
+@click.option('--api-key', help='AI API key (overrides environment variables).')
+@click.option('--model', help='AI model to use (e.g., gpt-4-turbo-preview, gemini-pro).')
+@click.option('--temperature', type=float, default=0.5, show_default=True, help='AI temperature for label suggestion.')
+def gh_auto_label(repo, issue_number, provider, api_key, model, temperature):
+    click.secho(f"Starting auto-label for issue #{issue_number}...", fg='cyan', bold=True)
+
+    actual_gh_token = get_github_token()
+    if not actual_gh_token:
+        click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.secho("Could not determine repository from git config. Please use --repo.", fg="red", err=True)
+            sys.exit(1)
+        click.secho(f"Using repository from current git config: {repo}", fg='magenta')
+    else:
+        click.secho(f"Using repository provided via --repo flag: {repo}", fg='magenta')
+
+    repo = _sanitize_repo_string(repo)
+
+    actual_ai_key = api_key
+    if not actual_ai_key:
+        if provider == 'openai':
+            actual_ai_key = get_openai_api_key()
+        elif provider == 'gemini':
+            actual_ai_key = get_gemini_api_key()
+    
+    if not actual_ai_key:
+        click.secho(f"{provider.capitalize()} API key is required. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    try:
+        gh_client = GitHubClient(actual_gh_token, repo)
+        click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+    except GithubException as e:
+        if e.status == 404:
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+        elif e.status == 401:
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+        else:
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    try:
+        gh_client.auto_label_issue(
+            issue_number=issue_number,
+            provider=provider,
+            api_key=actual_ai_key,
+            model_name=model,
+            temperature=temperature
+        )
+        click.secho(f"Auto-labeling process completed for issue #{issue_number}.", fg='green', bold=True)
+    except Exception as e:
+        click.secho(f"Error during auto-labeling: {e}", fg="red", err=True)
+        sys.exit(1)
+
 
 @cli.group(name='scripts', help='Manage bundled shell script primitives.')
 def scripts_group():
