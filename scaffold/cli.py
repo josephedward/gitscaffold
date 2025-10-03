@@ -46,7 +46,7 @@ try:
 except ImportError:
     from importlib_resources import files as pkg_files  # type: ignore
 from .vibe_kanban import VibeKanbanClient
-from .ai import enrich_issue_description, extract_issues_from_markdown, suggest_labels_for_issue
+from .ai import enrich_issue_description, extract_issues_from_markdown
 from datetime import date
 import re
 import random
@@ -82,6 +82,7 @@ def _print_entry_basic_commands():
     click.echo("- gitscaffold gh issue-list [--repo owner/name] [--state open|closed|all] [--limit N]")
     click.echo("- gitscaffold gh issue-create --repo owner/name --title ... [--body ...] [--label L]* [--assignee U]* [--milestone M]")
     click.echo("- gitscaffold gh issue-close --repo owner/name NUMBER")
+    click.echo("- gitscaffold gh pr-feedback --repo owner/name --pr N [--summarize] [--label-on-changes L]* [--comment] [--dry-run]")
 
     # Built-in scripts (run via 'ops ...' or install locally)
     click.secho("\nBuilt-in Script Primitives", fg="magenta", bold=True)
@@ -367,6 +368,108 @@ def gh_issue_create(repo, title, body, labels, assignees, milestone):
         click.secho(str(e), fg='yellow')
     except subprocess.CalledProcessError as e:
         click.secho(f"gh error: {e}", fg='red')
+
+
+@gh_group.command('pr-feedback', help='Fetch feedback for a pull request and optionally act on it')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
+@click.option('--pr', 'pr_number', type=int, required=True, help='Pull request number')
+@click.option('--summarize', is_flag=True, help='Print a human-readable summary of feedback')
+@click.option('--label-on-changes', 'labels_on_changes', multiple=True, help='Add label(s) if any review requests changes (repeatable)')
+@click.option('--comment', 'post_comment', is_flag=True, help='Post a summary comment on the PR')
+@click.option('--dry-run', is_flag=True, help='Simulate actions without making changes')
+def gh_pr_feedback(repo, pr_number, summarize, labels_on_changes, post_comment, dry_run):
+    """Retrieves PR feedback (reviews, review comments) and performs optional actions."""
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.secho('Could not detect repository. Use --repo.', fg='red')
+            raise SystemExit(1)
+    try:
+        gh = GitHubCLI()
+        pr = gh.pr_view(repo, pr_number)
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+        return
+    except subprocess.CalledProcessError as e:
+        click.secho(f"gh error: {e}", fg='red')
+        return
+
+    title = pr.get('title') or ''
+    url = pr.get('url') or ''
+    reviews = pr.get('reviews') or []
+    review_threads = pr.get('reviewThreads') or []
+    comments = pr.get('comments') or []
+
+    # Compute basic stats
+    approvals = sum(1 for r in reviews if (r or {}).get('state') == 'APPROVED')
+    changes_requested = sum(1 for r in reviews if (r or {}).get('state') == 'CHANGES_REQUESTED')
+    commented = sum(1 for r in reviews if (r or {}).get('state') == 'COMMENTED')
+    total_reviews = len(reviews)
+    total_review_comments = 0
+    for th in review_threads or []:
+        # reviewThreads often contain nodes or comments arrays depending on schema; handle a few shapes
+        if isinstance(th, dict):
+            if 'comments' in th and isinstance(th['comments'], list):
+                total_review_comments += len(th['comments'])
+            elif 'nodes' in th and isinstance(th['nodes'], list):
+                total_review_comments += len(th['nodes'])
+            else:
+                # fall back to counting as one thread
+                total_review_comments += 1
+        else:
+            total_review_comments += 1
+    total_issue_comments = len(comments)
+
+    summary_lines = [
+        f"PR #{pr_number}: {title}",
+        f"URL: {url}",
+        f"Reviews: {total_reviews} (approved={approvals}, changes_requested={changes_requested}, commented={commented})",
+        f"Review comments: {total_review_comments}",
+        f"Issue comments: {total_issue_comments}",
+    ]
+
+    if summarize or post_comment or not labels_on_changes:
+        # Print summary unless only labels are requested silently
+        click.secho("\n".join(summary_lines))
+
+    # Apply labels if any changes requested and labels provided
+    if labels_on_changes and changes_requested > 0:
+        labels = list(labels_on_changes)
+        if dry_run:
+            click.secho(
+                f"[dry-run] Would add labels {labels} to PR #{pr_number} (changes requested detected)",
+                fg='blue'
+            )
+        else:
+            try:
+                gh.pr_add_labels(repo, pr_number, labels)
+                click.secho(
+                    f"Added labels {labels} to PR #{pr_number} (changes requested detected)",
+                    fg='green'
+                )
+            except subprocess.CalledProcessError as e:
+                click.secho(f"gh error adding labels: {e}", fg='red')
+
+    # Optionally post comment with summary
+    if post_comment:
+        body = (
+            "PR feedback summary:\n\n" +
+            "\n".join(
+                [
+                    f"- Reviews: {total_reviews} (approved={approvals}, changes_requested={changes_requested}, commented={commented})",
+                    f"- Review comments: {total_review_comments}",
+                    f"- Issue comments: {total_issue_comments}",
+                ]
+            )
+        )
+        if dry_run:
+            click.secho(f"[dry-run] Would post summary comment to PR #{pr_number}", fg='blue')
+        else:
+            try:
+                gh.pr_comment(repo, pr_number, body)
+                click.secho(f"Posted summary comment to PR #{pr_number}", fg='green')
+            except subprocess.CalledProcessError as e:
+                click.secho(f"gh error posting comment: {e}", fg='red')
 
 
 @gh_group.command('issue-close', help='Close an issue via gh')
@@ -1078,27 +1181,50 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, ai_prov
 
         features_to_create = []
         tasks_to_create = defaultdict(list)
+        tasks_to_update = []
+        tasks_to_close = []
+
         for feat in validated_roadmap.features:
             if feat.title in existing_issue_titles:
                 click.secho(f"Feature '{feat.title}' already exists in GitHub issues. Checking its tasks...", fg="green")
+                # Potentially update the feature issue here if needed
             else:
                 features_to_create.append(feat)
 
             for task in feat.tasks:
                 if task.title in existing_issue_titles:
                     click.secho(f"Task '{task.title}' (for feature '{feat.title}') already exists in GitHub issues.", fg="green")
+                    issue = gh_client._find_issue(task.title)
+                    if issue:
+                        # Determine if this task should be closed
+                        should_close = bool(task.completed) and issue.state != 'closed'
+                        if should_close:
+                            tasks_to_close.append(issue)
+                        elif not task.completed and issue.state == 'closed':
+                            # Logic to reopen can be added here if desired
+                            pass
+
+                        # Only consider updating description if we're not closing this issue
+                        if not should_close:
+                            current_body = (issue.body or '').strip()
+                            new_body = (task.description or '').strip()
+                            if new_body and new_body != current_body:
+                                tasks_to_update.append((issue, task.description))
+
                 else:
                     tasks_to_create[feat.title].append(task)
         
         total_tasks = sum(len(ts) for ts in tasks_to_create.values())
         total_new_items = len(milestones_to_create) + len(features_to_create) + total_tasks
+        total_updates = len(tasks_to_update)
+        total_closes = len(tasks_to_close)
 
-        if total_new_items == 0:
-            click.secho("No new items to create. Repository is up-to-date with the roadmap.", fg="green", bold=True)
+        if total_new_items == 0 and total_updates == 0 and total_closes == 0:
+            click.secho("No new items to create, update, or close. Repository is up-to-date with the roadmap.", fg="green", bold=True)
             return
 
-        # 2. Display summary of what will be created
-        click.secho(f"\nFound {total_new_items} new items to create:", fg="yellow", bold=True)
+        # 2. Display summary of what will be done
+        click.secho(f"\nFound {total_new_items} new items, {total_updates} updates, and {total_closes} closures to perform:", fg="yellow", bold=True)
         if milestones_to_create:
             click.secho("\nMilestones to be created:", fg="cyan")
             for m in milestones_to_create:
@@ -1117,6 +1243,16 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, ai_prov
                 click.secho(f"  Under {label} feature '{feat_title}':", fg="cyan")
                 for task in tasks:
                     click.secho(f"    - {task.title}", fg="magenta")
+        
+        if tasks_to_update:
+            click.secho("\nIssues to be updated:", fg="cyan")
+            for issue, new_body in tasks_to_update:
+                click.secho(f"  - #{issue.number}: {issue.title}", fg="magenta")
+
+        if tasks_to_close:
+            click.secho("\nIssues to be closed:", fg="cyan")
+            for issue in tasks_to_close:
+                click.secho(f"  - #{issue.number}: {issue.title}", fg="magenta")
 
         # 3. Handle dry run
         if dry_run:
@@ -1125,7 +1261,7 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, ai_prov
 
         # 4. Confirm before proceeding
         if not yes:
-            prompt = click.style(f"\nProceed with creating {total_new_items} new items in '{repo}'?", fg="yellow", bold=True)
+            prompt = click.style(f"\nProceed with these changes in '{repo}'?", fg="yellow", bold=True)
             if not click.confirm(prompt, default=True):
                 click.secho("Aborting.", fg="red")
                 return
@@ -1195,6 +1331,18 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, ai_prov
                         sys.exit(1)
                     raise
                 click.secho(f"  -> Task issue created: #{task_issue.number}", fg="green")
+
+        # Update issues
+        for issue, new_body in tasks_to_update:
+            click.secho(f"Updating issue #{issue.number}: {issue.title}", fg="cyan")
+            gh_client.update_issue(issue.number, body=new_body)
+            click.secho(f"  -> Issue #{issue.number} updated.", fg="green")
+
+        # Close issues
+        for issue in tasks_to_close:
+            click.secho(f"Closing issue #{issue.number}: {issue.title}", fg="cyan")
+            gh_client.close_issue(issue.number)
+            click.secho(f"  -> Issue #{issue.number} closed.", fg="green")
 
 
 
