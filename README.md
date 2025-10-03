@@ -7,7 +7,25 @@
 <!-- COVERAGE_START -->
 
 ```text
-Coverage report will be inserted by CI.
+Name                             Stmts   Miss  Cover
+----------------------------------------------------
+scaffold/__init__.py                 1      1     0%
+scaffold/__main__.py                 3      3     0%
+scaffold/ai.py                     103    103     0%
+scaffold/cli.py                   1816   1816     0%
+scaffold/github.py                 155    155     0%
+scaffold/github_cli.py             150    150     0%
+scaffold/main.py                     0      0   100%
+scaffold/matcher.py                 13     13     0%
+scaffold/parser.py                 210    210     0%
+scaffold/scripts/__init__.py         1      1     0%
+scaffold/scripts/import_md.py       88     88     0%
+scaffold/scripts_installer.py       32     32     0%
+scaffold/templates/__init__.py       0      0   100%
+scaffold/validator.py               37     37     0%
+scaffold/vibe_kanban.py             29     29     0%
+----------------------------------------------------
+TOTAL                             2638   2638     0%
 ```
 
 <!-- COVERAGE_END -->
