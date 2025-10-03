@@ -213,3 +213,21 @@ If you have successfully installed `gitscaffold` but your shell cannot find the 
     ```
 
     Restart your shell or run `source ~/.zshrc` (or equivalent) for the changes to take effect.
+
+## PR Feedback Utilities
+
+Use the bundled GitHub CLI to fetch feedback for a specific pull request and optionally act on it:
+
+```bash
+# Print a summary of reviews and comments
+gitscaffold gh pr-feedback --repo owner/repo --pr 123 --summarize
+
+# If any review has requested changes, add a label
+gitscaffold gh pr-feedback --repo owner/repo --pr 123 \
+  --label-on-changes needs-changes
+
+# Post a summary comment (dry run shown)
+gitscaffold gh pr-feedback --repo owner/repo --pr 123 --comment --dry-run
+```
+
+Multiple labels can be supplied by repeating `--label-on-changes`. Add `--dry-run` to preview actions without applying changes.
