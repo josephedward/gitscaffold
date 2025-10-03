@@ -1809,11 +1809,6 @@ def _enrich_parse_roadmap(path="ROADMAP.md"):
             for itm in obj[key]:
                 mapping[itm] = {'context': ctx, **obj}
     return mapping
-        for ctx, obj in data.items():
-            for key in ('goal', 'tasks', 'deliverables'):
-                for itm in obj[key]:
-                    mapping[itm] = {'context': ctx, **obj}
-    return mapping
 
 def _enrich_get_context(title, roadmap):
     if title in roadmap:
