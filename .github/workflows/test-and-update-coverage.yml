@@ -1,12 +1,7 @@
 name: Test and Update Coverage
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+
 
 jobs:
   test-and-update-coverage:
