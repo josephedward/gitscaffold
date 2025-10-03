@@ -1720,12 +1720,21 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
         click.secho(f"Extracting issues from '{markdown_file}' using {ai_provider.capitalize()} (model: {model or 'default'})...", fg='cyan')
     
     # Set defaults for model and temperature if not provided
+    def _env_float(name: str, default: float) -> float:
+        val = os.getenv(name)
+        if val is None or val == "":
+            return default
+        try:
+            return float(val)
+        except ValueError:
+            return default
+
     if ai_provider == 'openai':
         final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
-        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('OPENAI_TEMPERATURE', 0.5)
     else: # gemini
         final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
-        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('GEMINI_TEMPERATURE', 0.5)
 
     try:
         issues = extract_issues_from_markdown(
@@ -1870,7 +1879,7 @@ def push(repo, board_name, milestone, labels, state, kanban_api, token):
     ]
     
     # Initialize Vibe Kanban client
-    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN') or None
     kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
     click.echo(f"Pushing {len(issues_data)} issues to board '{board_name}'...")
     try:
@@ -1896,7 +1905,7 @@ def pull(repo, board_name, kanban_api, bidirectional, token):
     gh_client = GitHubClient(actual_token, repo)
 
     # Initialize Vibe Kanban client
-    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN') or None
     kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
     click.echo(f"Pulling board status from '{board_name}'...")
     try:
