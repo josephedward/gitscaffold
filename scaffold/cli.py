@@ -39,6 +39,35 @@ except ImportError:
 from .parser import parse_markdown, parse_roadmap, write_roadmap
 from .validator import validate_roadmap, Feature, Task
 from .github import GitHubClient
+from .github_cli import GitHubCLI
+@click.group()
+def scaffold_group():
+    """Main gitscaffold CLI group."""
+    pass
+
+# Simple command for single issue creation
+@scaffold_group.command('create-issue', help='Create a single GitHub issue easily')
+@click.argument('title')
+@click.argument('body')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
+def create_issue(title, body, repo):
+    """Create a single GitHub issue with a title and body."""
+    if not repo:
+        from .github_cli import get_repo_from_git_config
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.secho('Could not detect repository. Use --repo.', fg='red')
+            raise SystemExit(1)
+    try:
+        gh = GitHubCLI()
+        created = gh.create_issue(repo, title=title, body=body)
+        click.secho(f"Created issue #{created.get('number')} – {created.get('title')}", fg='green')
+        if created.get('url'):
+            click.echo(created['url'])
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+    except Exception as e:
+        click.secho(f"Error: {e}", fg='red')
 from .github_cli import GitHubCLI, find_gh_executable, install_gh
 from .scripts_installer import install_scripts, list_scripts, default_install_dir
 try:
