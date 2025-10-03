@@ -1753,38 +1753,6 @@ def deduplicate_command(repo, token, dry_run, yes):
         click.secho(f"Failed to close: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='run-action-locally', help='Run a GitHub Action locally using nektos/act')
-@click.option('--workflow-file', '-W', help='Path to the workflow file (e.g., .github/workflows/ci.yml).')
-@click.option('--event', '-e', default='workflow_dispatch', show_default=True,
-              help='The event that triggered the workflow (e.g., push, pull_request, workflow_dispatch).')
-@click.option('--job', '-j', help='Run a specific job within the workflow.')
-@click.option('--dry-run', is_flag=True, help='Perform a dry run, showing the command that would be executed without actually running it.')
-def run_action_locally_command(workflow_file, event, job, dry_run):
-    """
-    Runs a GitHub Action locally using nektos/act.
-    Requires 'act' to be installed and available in your PATH.
-    """
-    script_path = Path(__file__).parent / "scripts" / "run_action_locally.py"
-    command = [sys.executable, str(script_path)]
-    if workflow_file:
-        command.extend(["--workflow-file", workflow_file])
-    if event:
-        command.extend(["--event", event])
-    if job:
-        command.extend(["--job", job])
-    if dry_run:
-        command.append("--dry-run")
-
-    try:
-        subprocess.run(command, check=True)
-    except subprocess.CalledProcessError as e:
-        click.secho(f"Error running local action: {e}", fg="red", err=True)
-        sys.exit(e.returncode)
-    except FileNotFoundError:
-        click.secho(f"Error: Python interpreter not found or script path is incorrect: {script_path}", fg="red", err=True)
-        sys.exit(1)
-
-
 # --- Enrichment Commands (from scripts/enrich.py) ---
 
 def _enrich_parse_roadmap(path="ROADMAP.md"):
@@ -1832,8 +1800,8 @@ def _enrich_parse_roadmap(path="ROADMAP.md"):
                     continue
                 if section == 'tasks':
                     mnum = re.match(r'\s*\d+\.\s+(.*)')
-    for ctx, obj in data.items():
-        for key in ('goal', 'tasks', 'deliverables'):
+        for ctx, obj in data.items():
+            for key in ('goal', 'tasks', 'deliverables'):
             for itm in obj[key]:
                 mapping[itm] = {'context': ctx, **obj}
     return mapping
