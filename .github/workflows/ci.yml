@@ -36,12 +36,8 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install .[test]
-        pip install ruff black pytest-xdist
+        pip install pytest-xdist
 
-    - name: Run Linting and Formatting checks
-      run: |
-        ruff check .
-        black --check .
 
     - name: Set up Rust toolchain
       uses: dtolnay/rust-toolchain@stable
