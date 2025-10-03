@@ -36,18 +36,15 @@ except ImportError:
     class GithubException(Exception):
         pass
 
-from .parser import parse_markdown, parse_roadmap, write_roadmap
+from .parser import parse_roadmap, write_roadmap
 from .validator import validate_roadmap, Feature, Task
 from .github import GitHubClient
 from .vibe_kanban import VibeKanbanClient
 from .ai import enrich_issue_description, extract_issues_from_markdown
-from datetime import date
 import re
 import random
-import webbrowser
 import time
 import difflib
-from openai import OpenAI, OpenAIError
 from collections import defaultdict
 import csv
 
@@ -65,6 +62,41 @@ def _print_logo():
     )
     console = Console()
     console.print(logo, style="orange1 bold")
+
+
+def _print_entry_basic_commands():
+    """Print a concise list of basic commands available at entry (gh helpers and shell scripts)."""
+    click.secho("\nBasic Commands", fg="cyan", bold=True)
+    click.echo("- gitscaffold gh install [--version latest]")
+    click.echo("- gitscaffold gh which")
+    click.echo("- gitscaffold gh version")
+    click.echo("- gitscaffold gh issue-list [--repo owner/name] [--state open|closed|all] [--limit N]")
+    click.echo("- gitscaffold gh issue-create --repo owner/name --title ... [--body ...] [--label L]* [--assignee U]* [--milestone M]")
+    click.echo("- gitscaffold gh issue-close --repo owner/name NUMBER")
+
+    # Built-in scripts (run via 'ops ...' or install locally)
+    click.secho("\nBuilt-in Script Primitives", fg="magenta", bold=True)
+    bin_dir = default_install_dir()
+    click.echo("- Run via CLI: gitscaffold ops <command> [flags]")
+    click.echo(f"- Or install locally: gitscaffold scripts install  # -> {bin_dir}")
+    click.echo("- Included scripts:")
+    click.echo("  - aggregate_repos.sh [options] <repo-url>... | -p|--prefix, -n|--no-overwrite, -d|--depth <n>, --dry-run")
+    click.echo("  - archive_stale_repos.sh -o|--owner OWNER [--year Y] [--include-forks] [--no-private] [--match REGEX] [--exclude REGEX] [--limit N] [--apply] [--yes]")
+    click.echo("  - delete_repos.sh [options] <repo>... | -y|--yes, --archive, --unarchive, --dry-run")
+    click.echo("  - remove_from_git.sh <path>  # Remove files from Git history (force-push main)")
+    click.echo("  - delete_branches.sh [-n COUNT] [-r REMOTE] [--dry-run] [--keep BRANCH ...]")
+
+
+def _run_packaged_script(rel_path: str, args: list[str]) -> int:
+    script = pkg_files('scaffold').joinpath(rel_path)
+    if not script.exists():
+        raise click.ClickException(f"Script not found in package: {rel_path}")
+    cmd = ['bash', str(script)] + list(args)
+    try:
+        result = subprocess.run(cmd)
+        return result.returncode
+    except FileNotFoundError:
+        raise click.ClickException("'bash' not found on PATH; required to run script.")
 
 
 def run_repl(ctx):
@@ -237,6 +269,251 @@ def config_remove(key):
     except Exception as e:
         click.secho(f"Error removing key '{key.upper()}': {e}", fg="red", err=True)
 
+
+@cli.group(name='gh', help='Manage and use the bundled GitHub CLI (gh).')
+def gh_group():
+    """Commands that help manage/local-install GitHub CLI and perform basic issue actions."""
+    pass
+
+
+@gh_group.command('install', help='Download and install gh into ~/.gitscaffold/bin')
+@click.option('--version', default='latest', show_default=True, help='gh version to install (e.g., 2.45.0 or latest)')
+def gh_install(version):
+    try:
+        path = install_gh(version)
+        click.secho(f"Installed gh to: {path}", fg='green')
+        bin_dir = str(Path(path).parent)
+        click.secho("Add this directory to your PATH for convenience:", fg='yellow')
+        click.echo(f"  export PATH=\"{bin_dir}:$PATH\"")
+    except Exception as e:
+        click.secho(f"Failed to install gh: {e}", fg='red', err=True)
+        raise SystemExit(1)
+
+
+@gh_group.command('which', help='Show which gh binary will be used')
+def gh_which():
+    path = find_gh_executable()
+    if path:
+        click.echo(path)
+    else:
+        click.secho("gh not found. Run 'gitscaffold gh install' to bootstrap it.", fg='yellow')
+
+
+@gh_group.command('version', help='Print gh version')
+def gh_version():
+    try:
+        gh = GitHubCLI()
+        click.echo(gh.version())
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+
+
+@gh_group.command('issue-list', help='List issues via gh')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
+@click.option('--state', type=click.Choice(['open','closed','all']), default='open', show_default=True)
+@click.option('--limit', default=50, show_default=True)
+def gh_issue_list(repo, state, limit):
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.secho('Could not detect repository. Use --repo.', fg='red')
+            raise SystemExit(1)
+    try:
+        gh = GitHubCLI()
+        items = gh.list_issues(repo, state=state, limit=limit)
+        if not items:
+            click.echo("No issues found.")
+            return
+        for it in items:
+            click.echo(f"#{it['number']} [{it['state']}] {it['title']}")
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+
+
+@gh_group.command('issue-create', help='Create an issue via gh')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
+@click.option('--title', required=True)
+@click.option('--body', default='')
+@click.option('--label', 'labels', multiple=True, help='Repeat for multiple labels')
+@click.option('--assignee', 'assignees', multiple=True, help='Repeat for multiple assignees')
+@click.option('--milestone', default=None)
+def gh_issue_create(repo, title, body, labels, assignees, milestone):
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.secho('Could not detect repository. Use --repo.', fg='red')
+            raise SystemExit(1)
+    try:
+        gh = GitHubCLI()
+        created = gh.create_issue(repo, title=title, body=body or None, labels=list(labels) or None, assignees=list(assignees) or None, milestone=milestone)
+        click.secho(f"Created issue #{created.get('number')} – {created.get('title')}", fg='green')
+        if created.get('url'):
+            click.echo(created['url'])
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+    except subprocess.CalledProcessError as e:
+        click.secho(f"gh error: {e}", fg='red')
+
+
+@gh_group.command('issue-close', help='Close an issue via gh')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
+@click.argument('number', type=int)
+def gh_issue_close(repo, number):
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.secho('Could not detect repository. Use --repo.', fg='red')
+            raise SystemExit(1)
+    try:
+        gh = GitHubCLI()
+        gh.close_issue(repo, number)
+        click.secho(f"Closed issue #{number}", fg='green')
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+    except subprocess.CalledProcessError as e:
+        click.secho(f"gh error: {e}", fg='red')
+
+@gh_group.command('auto-label', help='Automatically label a GitHub issue using AI')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
+@click.option('--issue-number', type=int, required=True, help='The number of the issue to label.')
+@click.option('--provider', type=click.Choice(['openai', 'gemini']), default='gemini', show_default=True, help='AI provider to use for label suggestion.')
+@click.option('--api-key', help='AI API key (overrides environment variables).')
+@click.option('--model', help='AI model to use (e.g., gpt-4-turbo-preview, gemini-pro).')
+@click.option('--temperature', type=float, default=0.5, show_default=True, help='AI temperature for label suggestion.')
+def gh_auto_label(repo, issue_number, provider, api_key, model, temperature):
+    click.secho(f"Starting auto-label for issue #{issue_number}...", fg='cyan', bold=True)
+
+    actual_gh_token = get_github_token()
+    if not actual_gh_token:
+        click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.secho("Could not determine repository from git config. Please use --repo.", fg="red", err=True)
+            sys.exit(1)
+        click.secho(f"Using repository from current git config: {repo}", fg='magenta')
+    else:
+        click.secho(f"Using repository provided via --repo flag: {repo}", fg='magenta')
+
+    repo = _sanitize_repo_string(repo)
+
+    actual_ai_key = api_key
+    if not actual_ai_key:
+        if provider == 'openai':
+            actual_ai_key = get_openai_api_key()
+        elif provider == 'gemini':
+            actual_ai_key = get_gemini_api_key()
+    
+    if not actual_ai_key:
+        click.secho(f"{provider.capitalize()} API key is required. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    try:
+        gh_client = GitHubClient(actual_gh_token, repo)
+        click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+    except GithubException as e:
+        if e.status == 404:
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+        elif e.status == 401:
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+        else:
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    try:
+        gh_client.auto_label_issue(
+            issue_number=issue_number,
+            provider=provider,
+            api_key=actual_ai_key,
+            model_name=model,
+            temperature=temperature
+        )
+        click.secho(f"Auto-labeling process completed for issue #{issue_number}.", fg='green', bold=True)
+    except Exception as e:
+        click.secho(f"Error during auto-labeling: {e}", fg="red", err=True)
+        sys.exit(1)
+
+
+@cli.group(name='scripts', help='Manage bundled shell script primitives.')
+def scripts_group():
+    pass
+
+
+@scripts_group.command('install', help='Copy bundled scripts to ~/.gitscaffold/bin (or --dest)')
+@click.option('--dest', type=click.Path(file_okay=False, dir_okay=True, path_type=Path), help='Destination directory')
+@click.option('--no-overwrite', is_flag=True, help='Skip existing files')
+def scripts_install(dest, no_overwrite):
+    dest_dir = dest if dest else default_install_dir()
+    out = install_scripts(dest=dest_dir, overwrite=not no_overwrite)
+    click.secho(f"Installed scripts to: {out}", fg='green')
+    click.secho("Add to PATH:", fg='yellow')
+    click.echo(f"  export PATH=\"{out}:$PATH\"")
+
+
+@scripts_group.command('list', help='List bundled scripts')
+def scripts_list_cmd():
+    for name in list_scripts():
+        click.echo(name)
+
+
+@cli.group(name='ops', help='Run built-in maintenance scripts (exact flags passthrough).')
+def ops_group():
+    pass
+
+
+def _passthrough_command(rel_script_path: str):
+    def _cmd(args):
+        rc = _run_packaged_script(rel_script_path, list(args))
+        if rc != 0:
+            sys.exit(rc)
+    return _cmd
+
+
+@ops_group.command('aggregate-repos', context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+def ops_aggregate_repos(args):
+    """Aggregate external repos as branches (aggregate_repos.sh)."""
+    rc = _run_packaged_script('scripts/gh/aggregate_repos.sh', list(args))
+    if rc != 0:
+        sys.exit(rc)
+
+
+@ops_group.command('archive-stale-repos', context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+def ops_archive_stale_repos(args):
+    """Archive stale repos (archive_stale_repos.sh)."""
+    rc = _run_packaged_script('scripts/gh/archive_stale_repos.sh', list(args))
+    if rc != 0:
+        sys.exit(rc)
+
+
+@ops_group.command('delete-repos', context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+def ops_delete_repos(args):
+    """Delete/archive/unarchive repos (delete_repos.sh)."""
+    rc = _run_packaged_script('scripts/gh/delete_repos.sh', list(args))
+    if rc != 0:
+        sys.exit(rc)
+
+
+@ops_group.command('remove-from-git', context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+def ops_remove_from_git(args):
+    """Remove a path from git history (remove_from_git.sh)."""
+    rc = _run_packaged_script('scripts/git/remove_from_git.sh', list(args))
+    if rc != 0:
+        sys.exit(rc)
+
+
+@ops_group.command('delete-branches', context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+def ops_delete_branches(args):
+    """Delete oldest remote branches (delete_branches.sh)."""
+    rc = _run_packaged_script('scripts/git/delete_branches.sh', list(args))
+    if rc != 0:
+        sys.exit(rc)
 
 def prompt_for_github_token():
     """
@@ -460,7 +737,6 @@ def _populate_repo_from_roadmap(
                 milestone=feat.milestone
             )
             click.secho(f"Feature issue created: #{feat_issue.number} {feat.title.strip()}", fg="green")
-            feat_issue_number = feat_issue.number
             feat_issue_obj = feat_issue
 
         for task in feat.tasks:
@@ -1106,7 +1382,7 @@ def diff(roadmap_file, repo, token, no_ai, ai_provider, ai_key):
                 continue
             sys.exit(1)
 
-    click.secho(f"Fetching existing GitHub issue titles...", fg="cyan")
+    click.secho("Fetching existing GitHub issue titles...", fg="cyan")
     gh_titles = gh_client.get_all_issue_titles()
     click.secho(f"Fetched {len(gh_titles)} issues; roadmap has {len(roadmap_titles)} items.", fg="magenta")
     
@@ -1546,17 +1822,1174 @@ def _enrich_parse_roadmap(path="ROADMAP.md"):
                     continue
                 if current is None:
                     continue
-                if goal_re.match(t): section = 'goal'; continue
-                if tasks_re.match(t): section = 'tasks'; continue
-                if deliv_re.match(t): section = 'deliverables'; continue
+                if goal_re.match(t): 
+                    section = 'goal'
+                    continue
+                if tasks_re.match(t): 
+                    section = 'tasks'
+                    continue
+                if deliv_re.match(t): 
+                    section = 'deliverables'
+                    continue
                 if section in ('goal', 'deliverables') and t.strip().startswith('- '):
-                    data[current][section].append(t.strip()[2:].strip()); continue
+                    data[current][section].append(t.strip()[2:].strip())
+                    continue
                 if section == 'tasks':
-                    mnum = re.match(r'\s*\d+\.\s+(.*)$', t)
+                    # Numbered task like "1. Do something" or dash list
+                    mnum = re.match(r"\s*\d+\.\s+(.*)$", t)
                     if mnum:
-                        data[current]['tasks'].append(mnum.group(1).strip()); continue
+                        data[current]['tasks'].append(mnum.group(1).strip())
+                        continue
                     if t.strip().startswith('- '):
-                        data[current]['tasks'].append(t.strip()[2:].strip()); continue
+                        data[current]['tasks'].append(t.strip()[2:].strip())
+                        continue
+    except Exception as e:
+        print(f"Error parsing roadmap: {e}")
+        return {}
+
+    mapping = {}
+    for ctx, obj in data.items():
+        for key in ('goal', 'tasks', 'deliverables'):
+            for itm in obj[key]:
+                mapping[itm] = {'context': ctx, **obj}
+    return mapping
+
+def _enrich_get_context(title, roadmap):
+    if title in roadmap:
+        return roadmap[title], title
+    candidates = difflib.get_close_matches(title, roadmap.keys(), n=1, cutoff=0.5)
+    if candidates:
+        m = candidates[0]
+        return roadmap[m], m
+    return None, None
+
+def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
+    if not api_key:
+        if provider == 'openai':
+            api_key = get_openai_api_key()
+        elif provider == 'gemini':
+            api_key = get_gemini_api_key()
+    
+    if not api_key:
+        sys.exit(1)
+
+    # The actual call is now delegated to the unified `enrich_issue_description`
+    context_parts = [f"Context: {ctx['context']}"]
+    if ctx.get('goal'):
+        context_parts.append("Goal:\n" + "\n".join(f"- {g}" for g in ctx['goal']))
+    if ctx.get('tasks'):
+        context_parts.append("Tasks:\n" + "\n".join(f"- {t}" for t in ctx['tasks']))
+    if ctx.get('deliverables'):
+        context_parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
+    
+    full_context = "\n".join(context_parts)
+
+    return enrich_issue_description(
+        title=title,
+        existing_body=existing_body,
+        provider=provider,
+        api_key=api_key,
+        context=full_context
+    )
+
+@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.pass_context
+def enrich(ctx, ai_provider):
+    """General-purpose CLI for GitHub issue enrichment via LLM using roadmap context."""
+    ctx.obj = {'ai_provider': ai_provider}
+
+@enrich.command('issue', help='Enrich a single issue')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--issue', 'issue_number', type=int, required=True, help='Issue number')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply the update')
+@click.pass_context
+def enrich_issue_command(click_ctx, repo, issue_number, roadmap_path, apply_changes):
+    """Enrich a single issue."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issue = repo_obj.get_issue(number=issue_number)
+    roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+    if not roadmap_ctx:
+        click.secho(f"No roadmap context for issue #{issue_number}", fg="red", err=True)
+        sys.exit(1)
+    enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+    click.echo(enriched)
+    if apply_changes:
+        issue.edit(body=enriched)
+        click.secho(f"Issue #{issue_number} updated.", fg="green")
+
+
+@enrich.command('batch', help='Batch enrich issues')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--csv', 'csv_path', help='Output CSV file')
+@click.option('--interactive', is_flag=True, help='Interactive approval')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply all updates')
+@click.pass_context
+def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, apply_changes):
+    """Batch enrich issues."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issues = list(repo_obj.get_issues(state='open'))
+    records = []
+    for issue in issues:
+        roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+        if not roadmap_ctx:
+            continue
+        enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+        records.append((issue.number, issue.title, roadmap_ctx['context'], matched, enriched))
+    
+    if csv_path:
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['issue', 'title', 'context', 'matched', 'enriched_body'])
+            writer.writerows(records)
+        click.secho(f"Wrote {len(records)} records to {csv_path}", fg="green")
+        return
+    
+    if interactive:
+        for num, title, ctx_name, matched, body in records:
+            click.secho(f"\n--- Issue #{num}: {title} ({ctx_name}) matched '{matched}' ---", bold=True)
+            click.echo(body)
+            ans = click.prompt("Apply this update? [y/N/q]", default='n', show_default=False).strip().lower()
+            if ans == 'y':
+                repo_obj.get_issue(num).edit(body=body)
+                click.secho(f"Updated issue #{num}", fg="green")
+            if ans == 'q':
+                break
+        return
+
+    if apply_changes:
+        for num, _, _, _, body in records:
+            repo_obj.get_issue(num).edit(body=body)
+            click.secho(f"Updated issue #{num}", fg="green")
+        return
+        
+    for num, title, ctx_name, matched, _ in records:
+        click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
+
+
+
+
+@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@click.argument('repo', metavar='REPO')
+@click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
+@click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.option('--ai-key', help='AI API key (overrides environment variables).')
+@click.option('--model', help='AI model to use (e.g., gpt-4-turbo-preview, gemini-pro).')
+@click.option('--temperature', type=float, help='AI temperature (e.g., 0.5).')
+@click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation and create all issues')
+@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
+def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperature, dry_run, yes, verbose):
+    """Import issues from an unstructured markdown file using AI.
+
+    This command parses a Markdown file, using an AI model to extract potential
+    GitHub issues from the text. This is useful for quickly converting documents like
+    meeting notes or brainstorming sessions into actionable GitHub issues.
+    """
+    if not Path(markdown_file).exists():
+        click.secho(f"Error: The file '{markdown_file}' does not exist.", fg="red", err=True)
+        sys.exit(1)
+
+    if verbose:
+        click.secho("Starting 'import-md' command...", fg="cyan", bold=True)
+    
+    # Get tokens
+    actual_token = token or get_github_token()
+    if not actual_token:
+        click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    actual_ai_key = ai_key
+    if not actual_ai_key:
+        if ai_provider == 'openai':
+            actual_ai_key = get_openai_api_key()
+        else: # gemini
+            actual_ai_key = get_gemini_api_key()
+    if not actual_ai_key:
+        click.secho(f"{ai_provider.capitalize()} API key is required. Exiting.", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Using repository: {repo}", fg='magenta')
+
+    repo = _sanitize_repo_string(repo)
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        if verbose:
+            click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+    except GithubException as e:
+        if e.status == 404:
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+        elif e.status == 401:
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+        else:
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Extracting issues from '{markdown_file}' using {ai_provider.capitalize()} (model: {model or 'default'})...", fg='cyan')
+    
+    # Set defaults for model and temperature if not provided
+    if ai_provider == 'openai':
+        final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
+        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+    else: # gemini
+        final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
+        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+
+    try:
+        issues = extract_issues_from_markdown(
+            md_file=markdown_file,
+            provider=ai_provider,
+            api_key=actual_ai_key,
+            model_name=final_model,
+            temperature=final_temp
+        )
+    except Exception as e:
+        click.secho(f"Error extracting issues from markdown: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    if not issues:
+        click.secho("No issues extracted from the markdown file.", fg="yellow")
+        return
+
+    click.secho(f"Extracted {len(issues)} potential issues:", fg="green", bold=True)
+    for issue in issues:
+        click.secho(f"  - Title: {issue['title']}", fg="white")
+
+    if dry_run:
+        click.secho("\n[dry-run] No issues will be created. The following issues would be created:", fg="blue")
+        for issue in issues:
+            click.secho(f"\n--- [dry-run] Issue: {issue['title']} ---", fg="blue", bold=True)
+            click.echo(issue.get('description', ''))
+        return
+
+    if not yes:
+        prompt = click.style(
+            f"\nProceed with creating {len(issues)} issues in '{repo}'?", fg="yellow", bold=True
+        )
+        if not click.confirm(prompt, default=True):
+            click.secho("Aborting.", fg="red")
+            return
+
+    click.secho("\nCreating issues on GitHub...", fg="cyan")
+    created_count = 0
+    failed_count = 0
+    for issue in issues:
+        title = issue['title']
+        body = issue.get('description', '')
+        if verbose:
+            click.secho(f"Creating issue: '{title}'", fg="yellow")
+        try:
+            created_issue = gh_client.create_issue(title=title, body=body)
+            click.secho(f"  -> Successfully created issue #{created_issue.number}.", fg="green")
+            created_count += 1
+        except Exception as e:
+            click.secho(f"  -> Failed to create issue '{title}': {e}", fg="red", err=True)
+            failed_count += 1
+    
+    click.secho("\n'import-md' command finished.", fg="green", bold=True)
+    click.secho(f"Successfully created: {created_count} issues.", fg="green")
+    if failed_count > 0:
+        click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
+
+
+@cli.command(name='start-demo', help='Run the Streamlit demo')
+def start_demo():
+    """Starts the Streamlit demo app if it exists."""
+    demo_app_path = Path('demo/app.py')
+    if not demo_app_path.exists():
+        click.secho(f"Demo application not found at '{demo_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with a demo using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+
+    cmd = [sys.executable, "-m", "streamlit", "run", str(demo_app_path)]
+    click.secho(f"Starting Streamlit demo: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `streamlit` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install streamlit")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"Demo server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+# Vibe Kanban integration commands
+@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+def vibe():
+    """Vibe Kanban integration subcommands."""
+    pass
+
+
+@vibe.command('push', help='Push GitHub issues to a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
+@click.option('--milestone', help='Only include issues in this milestone')
+@click.option('--label', 'labels', multiple=True, help='Only include issues with these labels')
+@click.option('--state', default='open', show_default=True, help='Only include issues with this state')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def push(repo, board_name, milestone, labels, state, kanban_api, token):
+    """Push GitHub issues into a Vibe Kanban board."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Build query parameters for fetching issues
+    params = {'state': state}
+    if labels:
+        try:
+            # PyGithub expects Label objects, not strings
+            params['labels'] = [gh_client.repo.get_label(l) for l in labels]
+        except GithubException as e:
+            click.secho(f"Error: Could not find one or more labels: {labels}. Details: {e}", fg="red", err=True)
+            sys.exit(1)
+
+    if milestone:
+        milestone_obj = gh_client._find_milestone(milestone)
+        if not milestone_obj:
+            click.secho(f"Error: Milestone '{milestone}' not found.", fg="red", err=True)
+            sys.exit(1)
+        params['milestone'] = milestone_obj
+    
+    click.secho(f"Fetching issues from '{repo}'...", fg="cyan")
+    try:
+        issues = list(gh_client.repo.get_issues(**params))
+    except GithubException as e:
+        click.secho(f"Error fetching issues from GitHub: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    click.echo(f"Found {len(issues)} issues to push.")
+    if not issues:
+        click.secho("No issues match the criteria. Nothing to push.", fg="yellow")
+        return
+
+    # Serialize PyGithub issue objects into a simple format for the client
+    issues_data = [
+        {
+            "number": issue.number,
+            "title": issue.title,
+            "body": issue.body or "",
+            "url": issue.html_url,
+            "state": issue.state,
+            "labels": [label.name for label in issue.labels],
+        }
+        for issue in issues
+    ]
+    
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pushing {len(issues_data)} issues to board '{board_name}'...")
+    try:
+        kanban_client.push_issues_to_board(board_name=board_name, issues=issues_data)
+        click.secho("Push completed.", fg="green")
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+    except Exception as e:
+        click.secho(f"An error occurred while pushing to Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+
+
+@vibe.command('pull', help='Pull task status from a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', required=True, help='Vibe Kanban board name or ID.')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', required=True, help='Vibe Kanban API base URL.')
+@click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def pull(repo, board_name, kanban_api, bidirectional, token):
+    """Pull task status from a Vibe Kanban board into GitHub."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pulling board status from '{board_name}'...")
+    try:
+        statuses = kanban_client.pull_board_status(board_name=board_name, bidirectional=bidirectional)
+        click.echo(f"Pulled {len(statuses)} updates from board '{board_name}'.")
+
+        # Process updates and sync to GitHub
+        for status in statuses:
+            issue_number = status.get("issue_number")
+            new_state = status.get("state")
+            if issue_number and new_state:
+                click.echo(f"Updating issue #{issue_number} to state '{new_state}'...")
+                try:
+                    issue = gh_client.repo.get_issue(number=issue_number)
+                    issue.edit(state=new_state)
+                    click.secho(f"  -> Successfully updated issue #{issue_number}.", fg="green")
+                except GithubException as e:
+                    click.secho(f"  -> Failed to update issue #{issue_number}: {e}", fg="red")
+
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+        return
+    except Exception as e:
+        click.secho(f"An error occurred while pulling from Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+    click.secho("Pull completed.", fg="green")
+
+
+@cli.command(name='start-api', help='Run the FastAPI server')
+def start_api():
+    """Starts the FastAPI application using Uvicorn."""
+    # Based on the template, the api app is at src/api/app.py
+    api_app_path = Path('src/api/app.py')
+    if not api_app_path.exists():
+        click.secho(f"API application not found at '{api_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with an API using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+        
+    # The import string for uvicorn is based on file path relative to project root
+    # src/api/app.py with variable `app` becomes `src.api.app:app`
+    app_import_string = "src.api.app:app"
+
+    cmd = [sys.executable, "-m", "uvicorn", app_import_string, "--reload"]
+    click.secho(f"Starting FastAPI server with Uvicorn: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `uvicorn` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install uvicorn[standard]")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"API server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+@click.pass_context
+def assistant(ctx, args):
+    """
+    Invokes the Aider AI assistant CLI tool with the given arguments.
+    If the first argument is a known subcommand, it's executed. Otherwise,
+    all arguments are passed through to the `aider` command.
+    """
+    if args and args[0] in ctx.command.commands:
+        # This is a subcommand invocation.
+        cmd_name = args[0]
+        cmd_args = list(args[1:])
+        cmd = ctx.command.commands[cmd_name]
+        # In order for click to parse the subcommand's arguments correctly,
+        # we create a new context for it and invoke it.
+        with cmd.make_context(cmd_name, cmd_args) as cmd_ctx:
+            sys.exit(cmd.invoke(cmd_ctx))
+
+    # This is a passthrough invocation to `aider`.
+    # Ensure AI keys are loaded in environment
+    if not os.getenv('OPENAI_API_KEY'):
+        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+    if not os.getenv('GEMINI_API_KEY'):
+        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+    
+    # Build environment for subprocess
+    env = os.environ.copy()
+    cmd = ['aider'] + list(args)
+    try:
+        # We use subprocess.run and capture output for tests, but for live use,
+        # we don't want to capture, so Aider can be interactive.
+        # A simple way to detect a test run is to check if a specific env var is set.
+        if "PYTEST_CURRENT_TEST" in os.environ:
+             result = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding='utf-8')
+        else:
+             result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+        sys.exit(1)
+
+
+@assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
+@click.argument('issues_file', type=click.Path(exists=True))
+@click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
+@click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
+def process_issues(issues_file, results_dir, timeout):
+    """
+    Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
+    This implements the "atomic issue resolution" pattern.
+    """
+    results_path = Path(results_dir)
+    results_path.mkdir(exist_ok=True)
+    
+    with open(issues_file, 'r', encoding='utf-8') as f:
+        issues = [line.strip() for line in f if line.strip()]
+
+    click.secho(f"Found {len(issues)} issues to process.", fg='magenta')
+
+    for issue in issues:
+        click.secho(f"Processing: {issue}", fg='cyan')
+        
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        result_file = results_path / f"issue_{timestamp}.log"
+        
+        cmd = [
+            "aider",
+            "--message", issue,
+            "--yes",
+            "--no-stream",
+            "--auto-commits"
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout,
+                encoding='utf-8'
+            )
+            
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Exit status: {result.returncode}\n\n")
+                log_f.write("--- STDOUT ---\n")
+                log_f.write(result.stdout)
+                log_f.write("\n--- STDERR ---\n")
+                log_f.write(result.stderr)
+                
+            if result.returncode == 0:
+                click.secho(f"✅ SUCCESS: {issue}", fg='green')
+            else:
+                click.secho(f"❌ FAILED: {issue}", fg='red')
+                click.secho(f"  Exit status: {result.returncode}. Log: {result_file}", fg='red')
+        
+        except FileNotFoundError:
+            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+            sys.exit(1)
+        except subprocess.TimeoutExpired:
+            click.secho(f"❌ TIMEOUT: {issue}. Log: {result_file}", fg='red')
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Result: TIMEOUT after {timeout} seconds.\n")
+
+    click.secho("\nProcessing complete.", fg='green')
+
+@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+def uninstall():
+    """Provides instructions for uninstalling and offers to clean up config data."""
+    click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
+    click.secho("\n1. Uninstall the package itself:", fg="cyan", bold=True)
+    click.secho("   Run: pip uninstall gitscaffold", fg="green")
+
+    click.secho("\n2. Clean up global configuration directory:", fg="cyan", bold=True)
+    config_path = get_global_config_path()
+    config_dir = config_path.parent
+
+    if not config_dir.exists():
+        click.secho("No global configuration directory found to remove.", fg="green")
+        return
+
+    click.echo(f"   Your global configuration is stored at: {config_dir}")
+    prompt = click.style("   Do you want to permanently delete this directory?", fg="yellow", bold=True)
+    if click.confirm(prompt, default=False):
+        try:
+            shutil.rmtree(config_dir)
+            click.secho(f"Successfully deleted {config_dir}", fg="green")
+        except OSError as e:
+            click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
+    else:
+        click.secho("Aborted directory deletion.", fg="yellow")
+
+def _enrich_get_context(title, roadmap):
+    if title in roadmap:
+        return roadmap[title], title
+    candidates = difflib.get_close_matches(title, roadmap.keys(), n=1, cutoff=0.5)
+    if candidates:
+        m = candidates[0]
+        return roadmap[m], m
+    return None, None
+
+def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
+    if not api_key:
+        if provider == 'openai':
+            api_key = get_openai_api_key()
+        elif provider == 'gemini':
+            api_key = get_gemini_api_key()
+    
+    if not api_key:
+        sys.exit(1)
+
+    # The actual call is now delegated to the unified `enrich_issue_description`
+    context_parts = [f"Context: {ctx['context']}"]
+    if ctx.get('goal'):
+        context_parts.append("Goal:\n" + "\n".join(f"- {g}" for g in ctx['goal']))
+    if ctx.get('tasks'):
+        context_parts.append("Tasks:\n" + "\n".join(f"- {t}" for t in ctx['tasks']))
+    if ctx.get('deliverables'):
+        context_parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
+    
+    full_context = "\n".join(context_parts)
+
+    return enrich_issue_description(
+        title=title,
+        existing_body=existing_body,
+        provider=provider,
+        api_key=api_key,
+        context=full_context
+    )
+
+@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.pass_context
+def enrich(ctx, ai_provider):
+    """General-purpose CLI for GitHub issue enrichment via LLM using roadmap context."""
+    ctx.obj = {'ai_provider': ai_provider}
+
+@enrich.command('issue', help='Enrich a single issue')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--issue', 'issue_number', type=int, required=True, help='Issue number')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply the update')
+@click.pass_context
+def enrich_issue_command(click_ctx, repo, issue_number, roadmap_path, apply_changes):
+    """Enrich a single issue."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issue = repo_obj.get_issue(number=issue_number)
+    roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+    if not roadmap_ctx:
+        click.secho(f"No roadmap context for issue #{issue_number}", fg="red", err=True)
+        sys.exit(1)
+    enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+    click.echo(enriched)
+    if apply_changes:
+        issue.edit(body=enriched)
+        click.secho(f"Issue #{issue_number} updated.", fg="green")
+
+
+@enrich.command('batch', help='Batch enrich issues')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--csv', 'csv_path', help='Output CSV file')
+@click.option('--interactive', is_flag=True, help='Interactive approval')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply all updates')
+@click.pass_context
+def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, apply_changes):
+    """Batch enrich issues."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issues = list(repo_obj.get_issues(state='open'))
+    records = []
+    for issue in issues:
+        roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+        if not roadmap_ctx:
+            continue
+        enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+        records.append((issue.number, issue.title, roadmap_ctx['context'], matched, enriched))
+    
+    if csv_path:
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['issue', 'title', 'context', 'matched', 'enriched_body'])
+            writer.writerows(records)
+        click.secho(f"Wrote {len(records)} records to {csv_path}", fg="green")
+        return
+    
+    if interactive:
+        for num, title, ctx_name, matched, body in records:
+            click.secho(f"\n--- Issue #{num}: {title} ({ctx_name}) matched '{matched}' ---", bold=True)
+            click.echo(body)
+            ans = click.prompt("Apply this update? [y/N/q]", default='n', show_default=False).strip().lower()
+            if ans == 'y':
+                repo_obj.get_issue(num).edit(body=body)
+                click.secho(f"Updated issue #{num}", fg="green")
+            if ans == 'q':
+                break
+        return
+
+    if apply_changes:
+        for num, _, _, _, body in records:
+            repo_obj.get_issue(num).edit(body=body)
+            click.secho(f"Updated issue #{num}", fg="green")
+        return
+        
+    for num, title, ctx_name, matched, _ in records:
+        click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
+
+
+
+
+@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@click.argument('repo', metavar='REPO')
+@click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
+@click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.option('--ai-key', help='AI API key (overrides environment variables).')
+@click.option('--model', help='AI model to use (e.g., gpt-4-turbo-preview, gemini-pro).')
+@click.option('--temperature', type=float, help='AI temperature (e.g., 0.5).')
+@click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation and create all issues')
+@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
+def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperature, dry_run, yes, verbose):
+    """Import issues from an unstructured markdown file using AI.
+
+    This command parses a Markdown file, using an AI model to extract potential
+    GitHub issues from the text. This is useful for quickly converting documents like
+    meeting notes or brainstorming sessions into actionable GitHub issues.
+    """
+    if not Path(markdown_file).exists():
+        click.secho(f"Error: The file '{markdown_file}' does not exist.", fg="red", err=True)
+        sys.exit(1)
+
+    if verbose:
+        click.secho("Starting 'import-md' command...", fg="cyan", bold=True)
+    
+    # Get tokens
+    actual_token = token or get_github_token()
+    if not actual_token:
+        click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    actual_ai_key = ai_key
+    if not actual_ai_key:
+        if ai_provider == 'openai':
+            actual_ai_key = get_openai_api_key()
+        else: # gemini
+            actual_ai_key = get_gemini_api_key()
+    if not actual_ai_key:
+        click.secho(f"{ai_provider.capitalize()} API key is required. Exiting.", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Using repository: {repo}", fg='magenta')
+
+    repo = _sanitize_repo_string(repo)
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        if verbose:
+            click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+    except GithubException as e:
+        if e.status == 404:
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+        elif e.status == 401:
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+        else:
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Extracting issues from '{markdown_file}' using {ai_provider.capitalize()} (model: {model or 'default'})...", fg='cyan')
+    
+    # Set defaults for model and temperature if not provided
+    if ai_provider == 'openai':
+        final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
+        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+    else: # gemini
+        final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
+        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+
+    try:
+        issues = extract_issues_from_markdown(
+            md_file=markdown_file,
+            provider=ai_provider,
+            api_key=actual_ai_key,
+            model_name=final_model,
+            temperature=final_temp
+        )
+    except Exception as e:
+        click.secho(f"Error extracting issues from markdown: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    if not issues:
+        click.secho("No issues extracted from the markdown file.", fg="yellow")
+        return
+
+    click.secho(f"Extracted {len(issues)} potential issues:", fg="green", bold=True)
+    for issue in issues:
+        click.secho(f"  - Title: {issue['title']}", fg="white")
+
+    if dry_run:
+        click.secho("\n[dry-run] No issues will be created. The following issues would be created:", fg="blue")
+        for issue in issues:
+            click.secho(f"\n--- [dry-run] Issue: {issue['title']} ---", fg="blue", bold=True)
+            click.echo(issue.get('description', ''))
+        return
+
+    if not yes:
+        prompt = click.style(
+            f"\nProceed with creating {len(issues)} issues in '{repo}'?", fg="yellow", bold=True
+        )
+        if not click.confirm(prompt, default=True):
+            click.secho("Aborting.", fg="red")
+            return
+
+    click.secho("\nCreating issues on GitHub...", fg="cyan")
+    created_count = 0
+    failed_count = 0
+    for issue in issues:
+        title = issue['title']
+        body = issue.get('description', '')
+        if verbose:
+            click.secho(f"Creating issue: '{title}'", fg="yellow")
+        try:
+            created_issue = gh_client.create_issue(title=title, body=body)
+            click.secho(f"  -> Successfully created issue #{created_issue.number}.", fg="green")
+            created_count += 1
+        except Exception as e:
+            click.secho(f"  -> Failed to create issue '{title}': {e}", fg="red", err=True)
+            failed_count += 1
+    
+    click.secho("\n'import-md' command finished.", fg="green", bold=True)
+    click.secho(f"Successfully created: {created_count} issues.", fg="green")
+    if failed_count > 0:
+        click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
+
+
+@cli.command(name='start-demo', help='Run the Streamlit demo')
+def start_demo():
+    """Starts the Streamlit demo app if it exists."""
+    demo_app_path = Path('demo/app.py')
+    if not demo_app_path.exists():
+        click.secho(f"Demo application not found at '{demo_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with a demo using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+
+    cmd = [sys.executable, "-m", "streamlit", "run", str(demo_app_path)]
+    click.secho(f"Starting Streamlit demo: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `streamlit` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install streamlit")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"Demo server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+# Vibe Kanban integration commands
+@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+def vibe():
+    """Vibe Kanban integration subcommands."""
+    pass
+
+
+@vibe.command('push', help='Push GitHub issues to a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
+@click.option('--milestone', help='Only include issues in this milestone')
+@click.option('--label', 'labels', multiple=True, help='Only include issues with these labels')
+@click.option('--state', default='open', show_default=True, help='Only include issues with this state')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def push(repo, board_name, milestone, labels, state, kanban_api, token):
+    """Push GitHub issues into a Vibe Kanban board."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Build query parameters for fetching issues
+    params = {'state': state}
+    if labels:
+        try:
+            # PyGithub expects Label objects, not strings
+            params['labels'] = [gh_client.repo.get_label(l) for l in labels]
+        except GithubException as e:
+            click.secho(f"Error: Could not find one or more labels: {labels}. Details: {e}", fg="red", err=True)
+            sys.exit(1)
+
+    if milestone:
+        milestone_obj = gh_client._find_milestone(milestone)
+        if not milestone_obj:
+            click.secho(f"Error: Milestone '{milestone}' not found.", fg="red", err=True)
+            sys.exit(1)
+        params['milestone'] = milestone_obj
+    
+    click.secho(f"Fetching issues from '{repo}'...", fg="cyan")
+    try:
+        issues = list(gh_client.repo.get_issues(**params))
+    except GithubException as e:
+        click.secho(f"Error fetching issues from GitHub: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    click.echo(f"Found {len(issues)} issues to push.")
+    if not issues:
+        click.secho("No issues match the criteria. Nothing to push.", fg="yellow")
+        return
+
+    # Serialize PyGithub issue objects into a simple format for the client
+    issues_data = [
+        {
+            "number": issue.number,
+            "title": issue.title,
+            "body": issue.body or "",
+            "url": issue.html_url,
+            "state": issue.state,
+            "labels": [label.name for label in issue.labels],
+        }
+        for issue in issues
+    ]
+    
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pushing {len(issues_data)} issues to board '{board_name}'...")
+    try:
+        kanban_client.push_issues_to_board(board_name=board_name, issues=issues_data)
+        click.secho("Push completed.", fg="green")
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+    except Exception as e:
+        click.secho(f"An error occurred while pushing to Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+
+
+@vibe.command('pull', help='Pull task status from a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', required=True, help='Vibe Kanban board name or ID.')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', required=True, help='Vibe Kanban API base URL.')
+@click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def pull(repo, board_name, kanban_api, bidirectional, token):
+    """Pull task status from a Vibe Kanban board into GitHub."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pulling board status from '{board_name}'...")
+    try:
+        statuses = kanban_client.pull_board_status(board_name=board_name, bidirectional=bidirectional)
+        click.echo(f"Pulled {len(statuses)} updates from board '{board_name}'.")
+
+        # Process updates and sync to GitHub
+        for status in statuses:
+            issue_number = status.get("issue_number")
+            new_state = status.get("state")
+            if issue_number and new_state:
+                click.echo(f"Updating issue #{issue_number} to state '{new_state}'...")
+                try:
+                    issue = gh_client.repo.get_issue(number=issue_number)
+                    issue.edit(state=new_state)
+                    click.secho(f"  -> Successfully updated issue #{issue_number}.", fg="green")
+                except GithubException as e:
+                    click.secho(f"  -> Failed to update issue #{issue_number}: {e}", fg="red")
+
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+        return
+    except Exception as e:
+        click.secho(f"An error occurred while pulling from Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+    click.secho("Pull completed.", fg="green")
+
+
+@cli.command(name='start-api', help='Run the FastAPI server')
+def start_api():
+    """Starts the FastAPI application using Uvicorn."""
+    # Based on the template, the api app is at src/api/app.py
+    api_app_path = Path('src/api/app.py')
+    if not api_app_path.exists():
+        click.secho(f"API application not found at '{api_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with an API using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+        
+    # The import string for uvicorn is based on file path relative to project root
+    # src/api/app.py with variable `app` becomes `src.api.app:app`
+    app_import_string = "src.api.app:app"
+
+    cmd = [sys.executable, "-m", "uvicorn", app_import_string, "--reload"]
+    click.secho(f"Starting FastAPI server with Uvicorn: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `uvicorn` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install uvicorn[standard]")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"API server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+@click.pass_context
+def assistant(ctx, args):
+    """
+    Invokes the Aider AI assistant CLI tool with the given arguments.
+    If the first argument is a known subcommand, it's executed. Otherwise,
+    all arguments are passed through to the `aider` command.
+    """
+    if args and args[0] in ctx.command.commands:
+        # This is a subcommand invocation.
+        cmd_name = args[0]
+        cmd_args = list(args[1:])
+        cmd = ctx.command.commands[cmd_name]
+        # In order for click to parse the subcommand's arguments correctly,
+        # we create a new context for it and invoke it.
+        with cmd.make_context(cmd_name, cmd_args) as cmd_ctx:
+            sys.exit(cmd.invoke(cmd_ctx))
+
+    # This is a passthrough invocation to `aider`.
+    # Ensure AI keys are loaded in environment
+    if not os.getenv('OPENAI_API_KEY'):
+        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+    if not os.getenv('GEMINI_API_KEY'):
+        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+    
+    # Build environment for subprocess
+    env = os.environ.copy()
+    cmd = ['aider'] + list(args)
+    try:
+        # We use subprocess.run and capture output for tests, but for live use,
+        # we don't want to capture, so Aider can be interactive.
+        # A simple way to detect a test run is to check if a specific env var is set.
+        if "PYTEST_CURRENT_TEST" in os.environ:
+             result = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding='utf-8')
+        else:
+             result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+        sys.exit(1)
+
+
+@assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
+@click.argument('issues_file', type=click.Path(exists=True))
+@click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
+@click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
+def process_issues(issues_file, results_dir, timeout):
+    """
+    Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
+    This implements the "atomic issue resolution" pattern.
+    """
+    results_path = Path(results_dir)
+    results_path.mkdir(exist_ok=True)
+    
+    with open(issues_file, 'r', encoding='utf-8') as f:
+        issues = [line.strip() for line in f if line.strip()]
+
+    click.secho(f"Found {len(issues)} issues to process.", fg='magenta')
+
+    for issue in issues:
+        click.secho(f"Processing: {issue}", fg='cyan')
+        
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        result_file = results_path / f"issue_{timestamp}.log"
+        
+        cmd = [
+            "aider",
+            "--message", issue,
+            "--yes",
+            "--no-stream",
+            "--auto-commits"
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout,
+                encoding='utf-8'
+            )
+            
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Exit status: {result.returncode}\n\n")
+                log_f.write("--- STDOUT ---\n")
+                log_f.write(result.stdout)
+                log_f.write("\n--- STDERR ---\n")
+                log_f.write(result.stderr)
+                
+            if result.returncode == 0:
+                click.secho(f"✅ SUCCESS: {issue}", fg='green')
+            else:
+                click.secho(f"❌ FAILED: {issue}", fg='red')
+                click.secho(f"  Exit status: {result.returncode}. Log: {result_file}", fg='red')
+        
+        except FileNotFoundError:
+            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+            sys.exit(1)
+        except subprocess.TimeoutExpired:
+            click.secho(f"❌ TIMEOUT: {issue}. Log: {result_file}", fg='red')
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Result: TIMEOUT after {timeout} seconds.\n")
+
+    click.secho("\nProcessing complete.", fg='green')
+
+@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+def uninstall():
+    """Provides instructions for uninstalling and offers to clean up config data."""
+    click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
+    click.secho("\n1. Uninstall the package itself:", fg="cyan", bold=True)
+    click.secho("   Run: pip uninstall gitscaffold", fg="green")
+
+    click.secho("\n2. Clean up global configuration directory:", fg="cyan", bold=True)
+    config_path = get_global_config_path()
+    config_dir = config_path.parent
+
+    if not config_dir.exists():
+        click.secho("No global configuration directory found to remove.", fg="green")
+        return
+
+    click.echo(f"   Your global configuration is stored at: {config_dir}")
+    prompt = click.style("   Do you want to permanently delete this directory?", fg="yellow", bold=True)
+    if click.confirm(prompt, default=False):
+        try:
+            shutil.rmtree(config_dir)
+            click.secho(f"Successfully deleted {config_dir}", fg="green")
+        except OSError as e:
+            click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
+    else:
+        click.secho("Aborted directory deletion.", fg="yellow")
+, t)
+                    if mnum:
+                        data[current]['tasks'].append(mnum.group(1).strip())
+                        continue
+                    if t.strip().startswith('- '):
+                        data[current]['tasks'].append(t.strip()[2:].strip())
+                        continue
     except FileNotFoundError:
         click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
         sys.exit(1)
@@ -2206,7 +3639,2906 @@ def uninstall():
         return
 
     click.echo(f"   Your global configuration is stored at: {config_dir}")
-    prompt = click.style(f"   Do you want to permanently delete this directory?", fg="yellow", bold=True)
+    prompt = click.style("   Do you want to permanently delete this directory?", fg="yellow", bold=True)
+    if click.confirm(prompt, default=False):
+        try:
+            shutil.rmtree(config_dir)
+            click.secho(f"Successfully deleted {config_dir}", fg="green")
+        except OSError as e:
+            click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
+    else:
+        click.secho("Aborted directory deletion.", fg="yellow")
+, t)
+                    if mnum:
+                        data[current]['tasks'].append(mnum.group(1).strip())
+                        continue
+                    if t.strip().startswith('- '):
+                        data[current]['tasks'].append(t.strip()[2:].strip())
+                        continue
+    except FileNotFoundError:
+        click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
+        sys.exit(1)
+    # Flatten mapping for lookups
+    mapping = {}
+    for ctx, obj in data.items():
+        for key in ('goal', 'tasks', 'deliverables'):
+            for itm in obj[key]:
+                mapping[itm] = {'context': ctx, **obj}
+    return mapping
+
+def _enrich_get_context(title, roadmap):
+    if title in roadmap:
+        return roadmap[title], title
+    candidates = difflib.get_close_matches(title, roadmap.keys(), n=1, cutoff=0.5)
+    if candidates:
+        m = candidates[0]
+        return roadmap[m], m
+    return None, None
+
+def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
+    if not api_key:
+        if provider == 'openai':
+            api_key = get_openai_api_key()
+        elif provider == 'gemini':
+            api_key = get_gemini_api_key()
+    
+    if not api_key:
+        sys.exit(1)
+
+    # The actual call is now delegated to the unified `enrich_issue_description`
+    context_parts = [f"Context: {ctx['context']}"]
+    if ctx.get('goal'):
+        context_parts.append("Goal:\n" + "\n".join(f"- {g}" for g in ctx['goal']))
+    if ctx.get('tasks'):
+        context_parts.append("Tasks:\n" + "\n".join(f"- {t}" for t in ctx['tasks']))
+    if ctx.get('deliverables'):
+        context_parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
+    
+    full_context = "\n".join(context_parts)
+
+    return enrich_issue_description(
+        title=title,
+        existing_body=existing_body,
+        provider=provider,
+        api_key=api_key,
+        context=full_context
+    )
+
+@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.pass_context
+def enrich(ctx, ai_provider):
+    """General-purpose CLI for GitHub issue enrichment via LLM using roadmap context."""
+    ctx.obj = {'ai_provider': ai_provider}
+
+@enrich.command('issue', help='Enrich a single issue')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--issue', 'issue_number', type=int, required=True, help='Issue number')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply the update')
+@click.pass_context
+def enrich_issue_command(click_ctx, repo, issue_number, roadmap_path, apply_changes):
+    """Enrich a single issue."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issue = repo_obj.get_issue(number=issue_number)
+    roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+    if not roadmap_ctx:
+        click.secho(f"No roadmap context for issue #{issue_number}", fg="red", err=True)
+        sys.exit(1)
+    enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+    click.echo(enriched)
+    if apply_changes:
+        issue.edit(body=enriched)
+        click.secho(f"Issue #{issue_number} updated.", fg="green")
+
+
+@enrich.command('batch', help='Batch enrich issues')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--csv', 'csv_path', help='Output CSV file')
+@click.option('--interactive', is_flag=True, help='Interactive approval')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply all updates')
+@click.pass_context
+def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, apply_changes):
+    """Batch enrich issues."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issues = list(repo_obj.get_issues(state='open'))
+    records = []
+    for issue in issues:
+        roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+        if not roadmap_ctx:
+            continue
+        enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+        records.append((issue.number, issue.title, roadmap_ctx['context'], matched, enriched))
+    
+    if csv_path:
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['issue', 'title', 'context', 'matched', 'enriched_body'])
+            writer.writerows(records)
+        click.secho(f"Wrote {len(records)} records to {csv_path}", fg="green")
+        return
+    
+    if interactive:
+        for num, title, ctx_name, matched, body in records:
+            click.secho(f"\n--- Issue #{num}: {title} ({ctx_name}) matched '{matched}' ---", bold=True)
+            click.echo(body)
+            ans = click.prompt("Apply this update? [y/N/q]", default='n', show_default=False).strip().lower()
+            if ans == 'y':
+                repo_obj.get_issue(num).edit(body=body)
+                click.secho(f"Updated issue #{num}", fg="green")
+            if ans == 'q':
+                break
+        return
+
+    if apply_changes:
+        for num, _, _, _, body in records:
+            repo_obj.get_issue(num).edit(body=body)
+            click.secho(f"Updated issue #{num}", fg="green")
+        return
+        
+    for num, title, ctx_name, matched, _ in records:
+        click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
+
+
+
+
+@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@click.argument('repo', metavar='REPO')
+@click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
+@click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.option('--ai-key', help='AI API key (overrides environment variables).')
+@click.option('--model', help='AI model to use (e.g., gpt-4-turbo-preview, gemini-pro).')
+@click.option('--temperature', type=float, help='AI temperature (e.g., 0.5).')
+@click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation and create all issues')
+@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
+def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperature, dry_run, yes, verbose):
+    """Import issues from an unstructured markdown file using AI.
+
+    This command parses a Markdown file, using an AI model to extract potential
+    GitHub issues from the text. This is useful for quickly converting documents like
+    meeting notes or brainstorming sessions into actionable GitHub issues.
+    """
+    if not Path(markdown_file).exists():
+        click.secho(f"Error: The file '{markdown_file}' does not exist.", fg="red", err=True)
+        sys.exit(1)
+
+    if verbose:
+        click.secho("Starting 'import-md' command...", fg="cyan", bold=True)
+    
+    # Get tokens
+    actual_token = token or get_github_token()
+    if not actual_token:
+        click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    actual_ai_key = ai_key
+    if not actual_ai_key:
+        if ai_provider == 'openai':
+            actual_ai_key = get_openai_api_key()
+        else: # gemini
+            actual_ai_key = get_gemini_api_key()
+    if not actual_ai_key:
+        click.secho(f"{ai_provider.capitalize()} API key is required. Exiting.", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Using repository: {repo}", fg='magenta')
+
+    repo = _sanitize_repo_string(repo)
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        if verbose:
+            click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+    except GithubException as e:
+        if e.status == 404:
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+        elif e.status == 401:
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+        else:
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Extracting issues from '{markdown_file}' using {ai_provider.capitalize()} (model: {model or 'default'})...", fg='cyan')
+    
+    # Set defaults for model and temperature if not provided
+    if ai_provider == 'openai':
+        final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
+        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+    else: # gemini
+        final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
+        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+
+    try:
+        issues = extract_issues_from_markdown(
+            md_file=markdown_file,
+            provider=ai_provider,
+            api_key=actual_ai_key,
+            model_name=final_model,
+            temperature=final_temp
+        )
+    except Exception as e:
+        click.secho(f"Error extracting issues from markdown: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    if not issues:
+        click.secho("No issues extracted from the markdown file.", fg="yellow")
+        return
+
+    click.secho(f"Extracted {len(issues)} potential issues:", fg="green", bold=True)
+    for issue in issues:
+        click.secho(f"  - Title: {issue['title']}", fg="white")
+
+    if dry_run:
+        click.secho("\n[dry-run] No issues will be created. The following issues would be created:", fg="blue")
+        for issue in issues:
+            click.secho(f"\n--- [dry-run] Issue: {issue['title']} ---", fg="blue", bold=True)
+            click.echo(issue.get('description', ''))
+        return
+
+    if not yes:
+        prompt = click.style(
+            f"\nProceed with creating {len(issues)} issues in '{repo}'?", fg="yellow", bold=True
+        )
+        if not click.confirm(prompt, default=True):
+            click.secho("Aborting.", fg="red")
+            return
+
+    click.secho("\nCreating issues on GitHub...", fg="cyan")
+    created_count = 0
+    failed_count = 0
+    for issue in issues:
+        title = issue['title']
+        body = issue.get('description', '')
+        if verbose:
+            click.secho(f"Creating issue: '{title}'", fg="yellow")
+        try:
+            created_issue = gh_client.create_issue(title=title, body=body)
+            click.secho(f"  -> Successfully created issue #{created_issue.number}.", fg="green")
+            created_count += 1
+        except Exception as e:
+            click.secho(f"  -> Failed to create issue '{title}': {e}", fg="red", err=True)
+            failed_count += 1
+    
+    click.secho("\n'import-md' command finished.", fg="green", bold=True)
+    click.secho(f"Successfully created: {created_count} issues.", fg="green")
+    if failed_count > 0:
+        click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
+
+
+@cli.command(name='start-demo', help='Run the Streamlit demo')
+def start_demo():
+    """Starts the Streamlit demo app if it exists."""
+    demo_app_path = Path('demo/app.py')
+    if not demo_app_path.exists():
+        click.secho(f"Demo application not found at '{demo_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with a demo using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+
+    cmd = [sys.executable, "-m", "streamlit", "run", str(demo_app_path)]
+    click.secho(f"Starting Streamlit demo: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `streamlit` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install streamlit")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"Demo server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+# Vibe Kanban integration commands
+@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+def vibe():
+    """Vibe Kanban integration subcommands."""
+    pass
+
+
+@vibe.command('push', help='Push GitHub issues to a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
+@click.option('--milestone', help='Only include issues in this milestone')
+@click.option('--label', 'labels', multiple=True, help='Only include issues with these labels')
+@click.option('--state', default='open', show_default=True, help='Only include issues with this state')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def push(repo, board_name, milestone, labels, state, kanban_api, token):
+    """Push GitHub issues into a Vibe Kanban board."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Build query parameters for fetching issues
+    params = {'state': state}
+    if labels:
+        try:
+            # PyGithub expects Label objects, not strings
+            params['labels'] = [gh_client.repo.get_label(l) for l in labels]
+        except GithubException as e:
+            click.secho(f"Error: Could not find one or more labels: {labels}. Details: {e}", fg="red", err=True)
+            sys.exit(1)
+
+    if milestone:
+        milestone_obj = gh_client._find_milestone(milestone)
+        if not milestone_obj:
+            click.secho(f"Error: Milestone '{milestone}' not found.", fg="red", err=True)
+            sys.exit(1)
+        params['milestone'] = milestone_obj
+    
+    click.secho(f"Fetching issues from '{repo}'...", fg="cyan")
+    try:
+        issues = list(gh_client.repo.get_issues(**params))
+    except GithubException as e:
+        click.secho(f"Error fetching issues from GitHub: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    click.echo(f"Found {len(issues)} issues to push.")
+    if not issues:
+        click.secho("No issues match the criteria. Nothing to push.", fg="yellow")
+        return
+
+    # Serialize PyGithub issue objects into a simple format for the client
+    issues_data = [
+        {
+            "number": issue.number,
+            "title": issue.title,
+            "body": issue.body or "",
+            "url": issue.html_url,
+            "state": issue.state,
+            "labels": [label.name for label in issue.labels],
+        }
+        for issue in issues
+    ]
+    
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pushing {len(issues_data)} issues to board '{board_name}'...")
+    try:
+        kanban_client.push_issues_to_board(board_name=board_name, issues=issues_data)
+        click.secho("Push completed.", fg="green")
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+    except Exception as e:
+        click.secho(f"An error occurred while pushing to Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+
+
+@vibe.command('pull', help='Pull task status from a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', required=True, help='Vibe Kanban board name or ID.')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', required=True, help='Vibe Kanban API base URL.')
+@click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def pull(repo, board_name, kanban_api, bidirectional, token):
+    """Pull task status from a Vibe Kanban board into GitHub."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pulling board status from '{board_name}'...")
+    try:
+        statuses = kanban_client.pull_board_status(board_name=board_name, bidirectional=bidirectional)
+        click.echo(f"Pulled {len(statuses)} updates from board '{board_name}'.")
+
+        # Process updates and sync to GitHub
+        for status in statuses:
+            issue_number = status.get("issue_number")
+            new_state = status.get("state")
+            if issue_number and new_state:
+                click.echo(f"Updating issue #{issue_number} to state '{new_state}'...")
+                try:
+                    issue = gh_client.repo.get_issue(number=issue_number)
+                    issue.edit(state=new_state)
+                    click.secho(f"  -> Successfully updated issue #{issue_number}.", fg="green")
+                except GithubException as e:
+                    click.secho(f"  -> Failed to update issue #{issue_number}: {e}", fg="red")
+
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+        return
+    except Exception as e:
+        click.secho(f"An error occurred while pulling from Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+    click.secho("Pull completed.", fg="green")
+
+
+@cli.command(name='start-api', help='Run the FastAPI server')
+def start_api():
+    """Starts the FastAPI application using Uvicorn."""
+    # Based on the template, the api app is at src/api/app.py
+    api_app_path = Path('src/api/app.py')
+    if not api_app_path.exists():
+        click.secho(f"API application not found at '{api_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with an API using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+        
+    # The import string for uvicorn is based on file path relative to project root
+    # src/api/app.py with variable `app` becomes `src.api.app:app`
+    app_import_string = "src.api.app:app"
+
+    cmd = [sys.executable, "-m", "uvicorn", app_import_string, "--reload"]
+    click.secho(f"Starting FastAPI server with Uvicorn: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `uvicorn` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install uvicorn[standard]")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"API server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+@click.pass_context
+def assistant(ctx, args):
+    """
+    Invokes the Aider AI assistant CLI tool with the given arguments.
+    If the first argument is a known subcommand, it's executed. Otherwise,
+    all arguments are passed through to the `aider` command.
+    """
+    if args and args[0] in ctx.command.commands:
+        # This is a subcommand invocation.
+        cmd_name = args[0]
+        cmd_args = list(args[1:])
+        cmd = ctx.command.commands[cmd_name]
+        # In order for click to parse the subcommand's arguments correctly,
+        # we create a new context for it and invoke it.
+        with cmd.make_context(cmd_name, cmd_args) as cmd_ctx:
+            sys.exit(cmd.invoke(cmd_ctx))
+
+    # This is a passthrough invocation to `aider`.
+    # Ensure AI keys are loaded in environment
+    if not os.getenv('OPENAI_API_KEY'):
+        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+    if not os.getenv('GEMINI_API_KEY'):
+        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+    
+    # Build environment for subprocess
+    env = os.environ.copy()
+    cmd = ['aider'] + list(args)
+    try:
+        # We use subprocess.run and capture output for tests, but for live use,
+        # we don't want to capture, so Aider can be interactive.
+        # A simple way to detect a test run is to check if a specific env var is set.
+        if "PYTEST_CURRENT_TEST" in os.environ:
+             result = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding='utf-8')
+        else:
+             result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+        sys.exit(1)
+
+
+@assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
+@click.argument('issues_file', type=click.Path(exists=True))
+@click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
+@click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
+def process_issues(issues_file, results_dir, timeout):
+    """
+    Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
+    This implements the "atomic issue resolution" pattern.
+    """
+    results_path = Path(results_dir)
+    results_path.mkdir(exist_ok=True)
+    
+    with open(issues_file, 'r', encoding='utf-8') as f:
+        issues = [line.strip() for line in f if line.strip()]
+
+    click.secho(f"Found {len(issues)} issues to process.", fg='magenta')
+
+    for issue in issues:
+        click.secho(f"Processing: {issue}", fg='cyan')
+        
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        result_file = results_path / f"issue_{timestamp}.log"
+        
+        cmd = [
+            "aider",
+            "--message", issue,
+            "--yes",
+            "--no-stream",
+            "--auto-commits"
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout,
+                encoding='utf-8'
+            )
+            
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Exit status: {result.returncode}\n\n")
+                log_f.write("--- STDOUT ---\n")
+                log_f.write(result.stdout)
+                log_f.write("\n--- STDERR ---\n")
+                log_f.write(result.stderr)
+                
+            if result.returncode == 0:
+                click.secho(f"✅ SUCCESS: {issue}", fg='green')
+            else:
+                click.secho(f"❌ FAILED: {issue}", fg='red')
+                click.secho(f"  Exit status: {result.returncode}. Log: {result_file}", fg='red')
+        
+        except FileNotFoundError:
+            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+            sys.exit(1)
+        except subprocess.TimeoutExpired:
+            click.secho(f"❌ TIMEOUT: {issue}. Log: {result_file}", fg='red')
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Result: TIMEOUT after {timeout} seconds.\n")
+
+    click.secho("\nProcessing complete.", fg='green')
+
+@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+def uninstall():
+    """Provides instructions for uninstalling and offers to clean up config data."""
+    click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
+    click.secho("\n1. Uninstall the package itself:", fg="cyan", bold=True)
+    click.secho("   Run: pip uninstall gitscaffold", fg="green")
+
+    click.secho("\n2. Clean up global configuration directory:", fg="cyan", bold=True)
+    config_path = get_global_config_path()
+    config_dir = config_path.parent
+
+    if not config_dir.exists():
+        click.secho("No global configuration directory found to remove.", fg="green")
+        return
+
+    click.echo(f"   Your global configuration is stored at: {config_dir}")
+    prompt = click.style("   Do you want to permanently delete this directory?", fg="yellow", bold=True)
+    if click.confirm(prompt, default=False):
+        try:
+            shutil.rmtree(config_dir)
+            click.secho(f"Successfully deleted {config_dir}", fg="green")
+        except OSError as e:
+            click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
+    else:
+        click.secho("Aborted directory deletion.", fg="yellow")
+, t)
+    for ctx, obj in data.items():
+        for key in ('goal', 'tasks', 'deliverables'):
+            for itm in obj[key]:
+                mapping[itm] = {'context': ctx, **obj}
+    return mapping
+
+def _enrich_get_context(title, roadmap):
+    if title in roadmap:
+        return roadmap[title], title
+    candidates = difflib.get_close_matches(title, roadmap.keys(), n=1, cutoff=0.5)
+    if candidates:
+        m = candidates[0]
+        return roadmap[m], m
+    return None, None
+
+def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
+    if not api_key:
+        if provider == 'openai':
+            api_key = get_openai_api_key()
+        elif provider == 'gemini':
+            api_key = get_gemini_api_key()
+    
+    if not api_key:
+        sys.exit(1)
+
+    # The actual call is now delegated to the unified `enrich_issue_description`
+    context_parts = [f"Context: {ctx['context']}"]
+    if ctx.get('goal'):
+        context_parts.append("Goal:\n" + "\n".join(f"- {g}" for g in ctx['goal']))
+    if ctx.get('tasks'):
+        context_parts.append("Tasks:\n" + "\n".join(f"- {t}" for t in ctx['tasks']))
+    if ctx.get('deliverables'):
+        context_parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
+    
+    full_context = "\n".join(context_parts)
+
+    return enrich_issue_description(
+        title=title,
+        existing_body=existing_body,
+        provider=provider,
+        api_key=api_key,
+        context=full_context
+    )
+
+@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.pass_context
+def enrich(ctx, ai_provider):
+    """General-purpose CLI for GitHub issue enrichment via LLM using roadmap context."""
+    ctx.obj = {'ai_provider': ai_provider}
+
+@enrich.command('issue', help='Enrich a single issue')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--issue', 'issue_number', type=int, required=True, help='Issue number')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply the update')
+@click.pass_context
+def enrich_issue_command(click_ctx, repo, issue_number, roadmap_path, apply_changes):
+    """Enrich a single issue."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issue = repo_obj.get_issue(number=issue_number)
+    roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+    if not roadmap_ctx:
+        click.secho(f"No roadmap context for issue #{issue_number}", fg="red", err=True)
+        sys.exit(1)
+    enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+    click.echo(enriched)
+    if apply_changes:
+        issue.edit(body=enriched)
+        click.secho(f"Issue #{issue_number} updated.", fg="green")
+
+
+@enrich.command('batch', help='Batch enrich issues')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--csv', 'csv_path', help='Output CSV file')
+@click.option('--interactive', is_flag=True, help='Interactive approval')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply all updates')
+@click.pass_context
+def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, apply_changes):
+    """Batch enrich issues."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issues = list(repo_obj.get_issues(state='open'))
+    records = []
+    for issue in issues:
+        roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+        if not roadmap_ctx:
+            continue
+        enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+        records.append((issue.number, issue.title, roadmap_ctx['context'], matched, enriched))
+    
+    if csv_path:
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['issue', 'title', 'context', 'matched', 'enriched_body'])
+            writer.writerows(records)
+        click.secho(f"Wrote {len(records)} records to {csv_path}", fg="green")
+        return
+    
+    if interactive:
+        for num, title, ctx_name, matched, body in records:
+            click.secho(f"\n--- Issue #{num}: {title} ({ctx_name}) matched '{matched}' ---", bold=True)
+            click.echo(body)
+            ans = click.prompt("Apply this update? [y/N/q]", default='n', show_default=False).strip().lower()
+            if ans == 'y':
+                repo_obj.get_issue(num).edit(body=body)
+                click.secho(f"Updated issue #{num}", fg="green")
+            if ans == 'q':
+                break
+        return
+
+    if apply_changes:
+        for num, _, _, _, body in records:
+            repo_obj.get_issue(num).edit(body=body)
+            click.secho(f"Updated issue #{num}", fg="green")
+        return
+        
+    for num, title, ctx_name, matched, _ in records:
+        click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
+
+
+
+
+@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@click.argument('repo', metavar='REPO')
+@click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
+@click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.option('--ai-key', help='AI API key (overrides environment variables).')
+@click.option('--model', help='AI model to use (e.g., gpt-4-turbo-preview, gemini-pro).')
+@click.option('--temperature', type=float, help='AI temperature (e.g., 0.5).')
+@click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation and create all issues')
+@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
+def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperature, dry_run, yes, verbose):
+    """Import issues from an unstructured markdown file using AI.
+
+    This command parses a Markdown file, using an AI model to extract potential
+    GitHub issues from the text. This is useful for quickly converting documents like
+    meeting notes or brainstorming sessions into actionable GitHub issues.
+    """
+    if not Path(markdown_file).exists():
+        click.secho(f"Error: The file '{markdown_file}' does not exist.", fg="red", err=True)
+        sys.exit(1)
+
+    if verbose:
+        click.secho("Starting 'import-md' command...", fg="cyan", bold=True)
+    
+    # Get tokens
+    actual_token = token or get_github_token()
+    if not actual_token:
+        click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    actual_ai_key = ai_key
+    if not actual_ai_key:
+        if ai_provider == 'openai':
+            actual_ai_key = get_openai_api_key()
+        else: # gemini
+            actual_ai_key = get_gemini_api_key()
+    if not actual_ai_key:
+        click.secho(f"{ai_provider.capitalize()} API key is required. Exiting.", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Using repository: {repo}", fg='magenta')
+
+    repo = _sanitize_repo_string(repo)
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        if verbose:
+            click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+    except GithubException as e:
+        if e.status == 404:
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+        elif e.status == 401:
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+        else:
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Extracting issues from '{markdown_file}' using {ai_provider.capitalize()} (model: {model or 'default'})...", fg='cyan')
+    
+    # Set defaults for model and temperature if not provided
+    if ai_provider == 'openai':
+        final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
+        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+    else: # gemini
+        final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
+        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+
+    try:
+        issues = extract_issues_from_markdown(
+            md_file=markdown_file,
+            provider=ai_provider,
+            api_key=actual_ai_key,
+            model_name=final_model,
+            temperature=final_temp
+        )
+    except Exception as e:
+        click.secho(f"Error extracting issues from markdown: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    if not issues:
+        click.secho("No issues extracted from the markdown file.", fg="yellow")
+        return
+
+    click.secho(f"Extracted {len(issues)} potential issues:", fg="green", bold=True)
+    for issue in issues:
+        click.secho(f"  - Title: {issue['title']}", fg="white")
+
+    if dry_run:
+        click.secho("\n[dry-run] No issues will be created. The following issues would be created:", fg="blue")
+        for issue in issues:
+            click.secho(f"\n--- [dry-run] Issue: {issue['title']} ---", fg="blue", bold=True)
+            click.echo(issue.get('description', ''))
+        return
+
+    if not yes:
+        prompt = click.style(
+            f"\nProceed with creating {len(issues)} issues in '{repo}'?", fg="yellow", bold=True
+        )
+        if not click.confirm(prompt, default=True):
+            click.secho("Aborting.", fg="red")
+            return
+
+    click.secho("\nCreating issues on GitHub...", fg="cyan")
+    created_count = 0
+    failed_count = 0
+    for issue in issues:
+        title = issue['title']
+        body = issue.get('description', '')
+        if verbose:
+            click.secho(f"Creating issue: '{title}'", fg="yellow")
+        try:
+            created_issue = gh_client.create_issue(title=title, body=body)
+            click.secho(f"  -> Successfully created issue #{created_issue.number}.", fg="green")
+            created_count += 1
+        except Exception as e:
+            click.secho(f"  -> Failed to create issue '{title}': {e}", fg="red", err=True)
+            failed_count += 1
+    
+    click.secho("\n'import-md' command finished.", fg="green", bold=True)
+    click.secho(f"Successfully created: {created_count} issues.", fg="green")
+    if failed_count > 0:
+        click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
+
+
+@cli.command(name='start-demo', help='Run the Streamlit demo')
+def start_demo():
+    """Starts the Streamlit demo app if it exists."""
+    demo_app_path = Path('demo/app.py')
+    if not demo_app_path.exists():
+        click.secho(f"Demo application not found at '{demo_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with a demo using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+
+    cmd = [sys.executable, "-m", "streamlit", "run", str(demo_app_path)]
+    click.secho(f"Starting Streamlit demo: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `streamlit` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install streamlit")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"Demo server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+# Vibe Kanban integration commands
+@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+def vibe():
+    """Vibe Kanban integration subcommands."""
+    pass
+
+
+@vibe.command('push', help='Push GitHub issues to a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
+@click.option('--milestone', help='Only include issues in this milestone')
+@click.option('--label', 'labels', multiple=True, help='Only include issues with these labels')
+@click.option('--state', default='open', show_default=True, help='Only include issues with this state')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def push(repo, board_name, milestone, labels, state, kanban_api, token):
+    """Push GitHub issues into a Vibe Kanban board."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Build query parameters for fetching issues
+    params = {'state': state}
+    if labels:
+        try:
+            # PyGithub expects Label objects, not strings
+            params['labels'] = [gh_client.repo.get_label(l) for l in labels]
+        except GithubException as e:
+            click.secho(f"Error: Could not find one or more labels: {labels}. Details: {e}", fg="red", err=True)
+            sys.exit(1)
+
+    if milestone:
+        milestone_obj = gh_client._find_milestone(milestone)
+        if not milestone_obj:
+            click.secho(f"Error: Milestone '{milestone}' not found.", fg="red", err=True)
+            sys.exit(1)
+        params['milestone'] = milestone_obj
+    
+    click.secho(f"Fetching issues from '{repo}'...", fg="cyan")
+    try:
+        issues = list(gh_client.repo.get_issues(**params))
+    except GithubException as e:
+        click.secho(f"Error fetching issues from GitHub: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    click.echo(f"Found {len(issues)} issues to push.")
+    if not issues:
+        click.secho("No issues match the criteria. Nothing to push.", fg="yellow")
+        return
+
+    # Serialize PyGithub issue objects into a simple format for the client
+    issues_data = [
+        {
+            "number": issue.number,
+            "title": issue.title,
+            "body": issue.body or "",
+            "url": issue.html_url,
+            "state": issue.state,
+            "labels": [label.name for label in issue.labels],
+        }
+        for issue in issues
+    ]
+    
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pushing {len(issues_data)} issues to board '{board_name}'...")
+    try:
+        kanban_client.push_issues_to_board(board_name=board_name, issues=issues_data)
+        click.secho("Push completed.", fg="green")
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+    except Exception as e:
+        click.secho(f"An error occurred while pushing to Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+
+
+@vibe.command('pull', help='Pull task status from a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', required=True, help='Vibe Kanban board name or ID.')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', required=True, help='Vibe Kanban API base URL.')
+@click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def pull(repo, board_name, kanban_api, bidirectional, token):
+    """Pull task status from a Vibe Kanban board into GitHub."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pulling board status from '{board_name}'...")
+    try:
+        statuses = kanban_client.pull_board_status(board_name=board_name, bidirectional=bidirectional)
+        click.echo(f"Pulled {len(statuses)} updates from board '{board_name}'.")
+
+        # Process updates and sync to GitHub
+        for status in statuses:
+            issue_number = status.get("issue_number")
+            new_state = status.get("state")
+            if issue_number and new_state:
+                click.echo(f"Updating issue #{issue_number} to state '{new_state}'...")
+                try:
+                    issue = gh_client.repo.get_issue(number=issue_number)
+                    issue.edit(state=new_state)
+                    click.secho(f"  -> Successfully updated issue #{issue_number}.", fg="green")
+                except GithubException as e:
+                    click.secho(f"  -> Failed to update issue #{issue_number}: {e}", fg="red")
+
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+        return
+    except Exception as e:
+        click.secho(f"An error occurred while pulling from Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+    click.secho("Pull completed.", fg="green")
+
+
+@cli.command(name='start-api', help='Run the FastAPI server')
+def start_api():
+    """Starts the FastAPI application using Uvicorn."""
+    # Based on the template, the api app is at src/api/app.py
+    api_app_path = Path('src/api/app.py')
+    if not api_app_path.exists():
+        click.secho(f"API application not found at '{api_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with an API using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+        
+    # The import string for uvicorn is based on file path relative to project root
+    # src/api/app.py with variable `app` becomes `src.api.app:app`
+    app_import_string = "src.api.app:app"
+
+    cmd = [sys.executable, "-m", "uvicorn", app_import_string, "--reload"]
+    click.secho(f"Starting FastAPI server with Uvicorn: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `uvicorn` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install uvicorn[standard]")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"API server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+@click.pass_context
+def assistant(ctx, args):
+    """
+    Invokes the Aider AI assistant CLI tool with the given arguments.
+    If the first argument is a known subcommand, it's executed. Otherwise,
+    all arguments are passed through to the `aider` command.
+    """
+    if args and args[0] in ctx.command.commands:
+        # This is a subcommand invocation.
+        cmd_name = args[0]
+        cmd_args = list(args[1:])
+        cmd = ctx.command.commands[cmd_name]
+        # In order for click to parse the subcommand's arguments correctly,
+        # we create a new context for it and invoke it.
+        with cmd.make_context(cmd_name, cmd_args) as cmd_ctx:
+            sys.exit(cmd.invoke(cmd_ctx))
+
+    # This is a passthrough invocation to `aider`.
+    # Ensure AI keys are loaded in environment
+    if not os.getenv('OPENAI_API_KEY'):
+        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+    if not os.getenv('GEMINI_API_KEY'):
+        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+    
+    # Build environment for subprocess
+    env = os.environ.copy()
+    cmd = ['aider'] + list(args)
+    try:
+        # We use subprocess.run and capture output for tests, but for live use,
+        # we don't want to capture, so Aider can be interactive.
+        # A simple way to detect a test run is to check if a specific env var is set.
+        if "PYTEST_CURRENT_TEST" in os.environ:
+             result = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding='utf-8')
+        else:
+             result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+        sys.exit(1)
+
+
+@assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
+@click.argument('issues_file', type=click.Path(exists=True))
+@click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
+@click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
+def process_issues(issues_file, results_dir, timeout):
+    """
+    Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
+    This implements the "atomic issue resolution" pattern.
+    """
+    results_path = Path(results_dir)
+    results_path.mkdir(exist_ok=True)
+    
+    with open(issues_file, 'r', encoding='utf-8') as f:
+        issues = [line.strip() for line in f if line.strip()]
+
+    click.secho(f"Found {len(issues)} issues to process.", fg='magenta')
+
+    for issue in issues:
+        click.secho(f"Processing: {issue}", fg='cyan')
+        
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        result_file = results_path / f"issue_{timestamp}.log"
+        
+        cmd = [
+            "aider",
+            "--message", issue,
+            "--yes",
+            "--no-stream",
+            "--auto-commits"
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout,
+                encoding='utf-8'
+            )
+            
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Exit status: {result.returncode}\n\n")
+                log_f.write("--- STDOUT ---\n")
+                log_f.write(result.stdout)
+                log_f.write("\n--- STDERR ---\n")
+                log_f.write(result.stderr)
+                
+            if result.returncode == 0:
+                click.secho(f"✅ SUCCESS: {issue}", fg='green')
+            else:
+                click.secho(f"❌ FAILED: {issue}", fg='red')
+                click.secho(f"  Exit status: {result.returncode}. Log: {result_file}", fg='red')
+        
+        except FileNotFoundError:
+            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+            sys.exit(1)
+        except subprocess.TimeoutExpired:
+            click.secho(f"❌ TIMEOUT: {issue}. Log: {result_file}", fg='red')
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Result: TIMEOUT after {timeout} seconds.\n")
+
+    click.secho("\nProcessing complete.", fg='green')
+
+@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+def uninstall():
+    """Provides instructions for uninstalling and offers to clean up config data."""
+    click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
+    click.secho("\n1. Uninstall the package itself:", fg="cyan", bold=True)
+    click.secho("   Run: pip uninstall gitscaffold", fg="green")
+
+    click.secho("\n2. Clean up global configuration directory:", fg="cyan", bold=True)
+    config_path = get_global_config_path()
+    config_dir = config_path.parent
+
+    if not config_dir.exists():
+        click.secho("No global configuration directory found to remove.", fg="green")
+        return
+
+    click.echo(f"   Your global configuration is stored at: {config_dir}")
+    prompt = click.style("   Do you want to permanently delete this directory?", fg="yellow", bold=True)
+    if click.confirm(prompt, default=False):
+        try:
+            shutil.rmtree(config_dir)
+            click.secho(f"Successfully deleted {config_dir}", fg="green")
+        except OSError as e:
+            click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
+    else:
+        click.secho("Aborted directory deletion.", fg="yellow")
+, t)
+                    if mnum:
+                        data[current]['tasks'].append(mnum.group(1).strip())
+                        continue
+                    if t.strip().startswith('- '):
+                        data[current]['tasks'].append(t.strip()[2:].strip())
+                        continue
+    except FileNotFoundError:
+        click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
+        sys.exit(1)
+    # Flatten mapping for lookups
+    mapping = {}
+    for ctx, obj in data.items():
+        for key in ('goal', 'tasks', 'deliverables'):
+            for itm in obj[key]:
+                mapping[itm] = {'context': ctx, **obj}
+    return mapping
+
+def _enrich_get_context(title, roadmap):
+    if title in roadmap:
+        return roadmap[title], title
+    candidates = difflib.get_close_matches(title, roadmap.keys(), n=1, cutoff=0.5)
+    if candidates:
+        m = candidates[0]
+        return roadmap[m], m
+    return None, None
+
+def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
+    if not api_key:
+        if provider == 'openai':
+            api_key = get_openai_api_key()
+        elif provider == 'gemini':
+            api_key = get_gemini_api_key()
+    
+    if not api_key:
+        sys.exit(1)
+
+    # The actual call is now delegated to the unified `enrich_issue_description`
+    context_parts = [f"Context: {ctx['context']}"]
+    if ctx.get('goal'):
+        context_parts.append("Goal:\n" + "\n".join(f"- {g}" for g in ctx['goal']))
+    if ctx.get('tasks'):
+        context_parts.append("Tasks:\n" + "\n".join(f"- {t}" for t in ctx['tasks']))
+    if ctx.get('deliverables'):
+        context_parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
+    
+    full_context = "\n".join(context_parts)
+
+    return enrich_issue_description(
+        title=title,
+        existing_body=existing_body,
+        provider=provider,
+        api_key=api_key,
+        context=full_context
+    )
+
+@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.pass_context
+def enrich(ctx, ai_provider):
+    """General-purpose CLI for GitHub issue enrichment via LLM using roadmap context."""
+    ctx.obj = {'ai_provider': ai_provider}
+
+@enrich.command('issue', help='Enrich a single issue')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--issue', 'issue_number', type=int, required=True, help='Issue number')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply the update')
+@click.pass_context
+def enrich_issue_command(click_ctx, repo, issue_number, roadmap_path, apply_changes):
+    """Enrich a single issue."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issue = repo_obj.get_issue(number=issue_number)
+    roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+    if not roadmap_ctx:
+        click.secho(f"No roadmap context for issue #{issue_number}", fg="red", err=True)
+        sys.exit(1)
+    enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+    click.echo(enriched)
+    if apply_changes:
+        issue.edit(body=enriched)
+        click.secho(f"Issue #{issue_number} updated.", fg="green")
+
+
+@enrich.command('batch', help='Batch enrich issues')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--csv', 'csv_path', help='Output CSV file')
+@click.option('--interactive', is_flag=True, help='Interactive approval')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply all updates')
+@click.pass_context
+def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, apply_changes):
+    """Batch enrich issues."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issues = list(repo_obj.get_issues(state='open'))
+    records = []
+    for issue in issues:
+        roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+        if not roadmap_ctx:
+            continue
+        enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+        records.append((issue.number, issue.title, roadmap_ctx['context'], matched, enriched))
+    
+    if csv_path:
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['issue', 'title', 'context', 'matched', 'enriched_body'])
+            writer.writerows(records)
+        click.secho(f"Wrote {len(records)} records to {csv_path}", fg="green")
+        return
+    
+    if interactive:
+        for num, title, ctx_name, matched, body in records:
+            click.secho(f"\n--- Issue #{num}: {title} ({ctx_name}) matched '{matched}' ---", bold=True)
+            click.echo(body)
+            ans = click.prompt("Apply this update? [y/N/q]", default='n', show_default=False).strip().lower()
+            if ans == 'y':
+                repo_obj.get_issue(num).edit(body=body)
+                click.secho(f"Updated issue #{num}", fg="green")
+            if ans == 'q':
+                break
+        return
+
+    if apply_changes:
+        for num, _, _, _, body in records:
+            repo_obj.get_issue(num).edit(body=body)
+            click.secho(f"Updated issue #{num}", fg="green")
+        return
+        
+    for num, title, ctx_name, matched, _ in records:
+        click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
+
+
+
+
+@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@click.argument('repo', metavar='REPO')
+@click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
+@click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.option('--ai-key', help='AI API key (overrides environment variables).')
+@click.option('--model', help='AI model to use (e.g., gpt-4-turbo-preview, gemini-pro).')
+@click.option('--temperature', type=float, help='AI temperature (e.g., 0.5).')
+@click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation and create all issues')
+@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
+def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperature, dry_run, yes, verbose):
+    """Import issues from an unstructured markdown file using AI.
+
+    This command parses a Markdown file, using an AI model to extract potential
+    GitHub issues from the text. This is useful for quickly converting documents like
+    meeting notes or brainstorming sessions into actionable GitHub issues.
+    """
+    if not Path(markdown_file).exists():
+        click.secho(f"Error: The file '{markdown_file}' does not exist.", fg="red", err=True)
+        sys.exit(1)
+
+    if verbose:
+        click.secho("Starting 'import-md' command...", fg="cyan", bold=True)
+    
+    # Get tokens
+    actual_token = token or get_github_token()
+    if not actual_token:
+        click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    actual_ai_key = ai_key
+    if not actual_ai_key:
+        if ai_provider == 'openai':
+            actual_ai_key = get_openai_api_key()
+        else: # gemini
+            actual_ai_key = get_gemini_api_key()
+    if not actual_ai_key:
+        click.secho(f"{ai_provider.capitalize()} API key is required. Exiting.", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Using repository: {repo}", fg='magenta')
+
+    repo = _sanitize_repo_string(repo)
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        if verbose:
+            click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+    except GithubException as e:
+        if e.status == 404:
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+        elif e.status == 401:
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+        else:
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Extracting issues from '{markdown_file}' using {ai_provider.capitalize()} (model: {model or 'default'})...", fg='cyan')
+    
+    # Set defaults for model and temperature if not provided
+    if ai_provider == 'openai':
+        final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
+        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+    else: # gemini
+        final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
+        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+
+    try:
+        issues = extract_issues_from_markdown(
+            md_file=markdown_file,
+            provider=ai_provider,
+            api_key=actual_ai_key,
+            model_name=final_model,
+            temperature=final_temp
+        )
+    except Exception as e:
+        click.secho(f"Error extracting issues from markdown: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    if not issues:
+        click.secho("No issues extracted from the markdown file.", fg="yellow")
+        return
+
+    click.secho(f"Extracted {len(issues)} potential issues:", fg="green", bold=True)
+    for issue in issues:
+        click.secho(f"  - Title: {issue['title']}", fg="white")
+
+    if dry_run:
+        click.secho("\n[dry-run] No issues will be created. The following issues would be created:", fg="blue")
+        for issue in issues:
+            click.secho(f"\n--- [dry-run] Issue: {issue['title']} ---", fg="blue", bold=True)
+            click.echo(issue.get('description', ''))
+        return
+
+    if not yes:
+        prompt = click.style(
+            f"\nProceed with creating {len(issues)} issues in '{repo}'?", fg="yellow", bold=True
+        )
+        if not click.confirm(prompt, default=True):
+            click.secho("Aborting.", fg="red")
+            return
+
+    click.secho("\nCreating issues on GitHub...", fg="cyan")
+    created_count = 0
+    failed_count = 0
+    for issue in issues:
+        title = issue['title']
+        body = issue.get('description', '')
+        if verbose:
+            click.secho(f"Creating issue: '{title}'", fg="yellow")
+        try:
+            created_issue = gh_client.create_issue(title=title, body=body)
+            click.secho(f"  -> Successfully created issue #{created_issue.number}.", fg="green")
+            created_count += 1
+        except Exception as e:
+            click.secho(f"  -> Failed to create issue '{title}': {e}", fg="red", err=True)
+            failed_count += 1
+    
+    click.secho("\n'import-md' command finished.", fg="green", bold=True)
+    click.secho(f"Successfully created: {created_count} issues.", fg="green")
+    if failed_count > 0:
+        click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
+
+
+@cli.command(name='start-demo', help='Run the Streamlit demo')
+def start_demo():
+    """Starts the Streamlit demo app if it exists."""
+    demo_app_path = Path('demo/app.py')
+    if not demo_app_path.exists():
+        click.secho(f"Demo application not found at '{demo_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with a demo using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+
+    cmd = [sys.executable, "-m", "streamlit", "run", str(demo_app_path)]
+    click.secho(f"Starting Streamlit demo: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `streamlit` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install streamlit")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"Demo server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+# Vibe Kanban integration commands
+@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+def vibe():
+    """Vibe Kanban integration subcommands."""
+    pass
+
+
+@vibe.command('push', help='Push GitHub issues to a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
+@click.option('--milestone', help='Only include issues in this milestone')
+@click.option('--label', 'labels', multiple=True, help='Only include issues with these labels')
+@click.option('--state', default='open', show_default=True, help='Only include issues with this state')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def push(repo, board_name, milestone, labels, state, kanban_api, token):
+    """Push GitHub issues into a Vibe Kanban board."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Build query parameters for fetching issues
+    params = {'state': state}
+    if labels:
+        try:
+            # PyGithub expects Label objects, not strings
+            params['labels'] = [gh_client.repo.get_label(l) for l in labels]
+        except GithubException as e:
+            click.secho(f"Error: Could not find one or more labels: {labels}. Details: {e}", fg="red", err=True)
+            sys.exit(1)
+
+    if milestone:
+        milestone_obj = gh_client._find_milestone(milestone)
+        if not milestone_obj:
+            click.secho(f"Error: Milestone '{milestone}' not found.", fg="red", err=True)
+            sys.exit(1)
+        params['milestone'] = milestone_obj
+    
+    click.secho(f"Fetching issues from '{repo}'...", fg="cyan")
+    try:
+        issues = list(gh_client.repo.get_issues(**params))
+    except GithubException as e:
+        click.secho(f"Error fetching issues from GitHub: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    click.echo(f"Found {len(issues)} issues to push.")
+    if not issues:
+        click.secho("No issues match the criteria. Nothing to push.", fg="yellow")
+        return
+
+    # Serialize PyGithub issue objects into a simple format for the client
+    issues_data = [
+        {
+            "number": issue.number,
+            "title": issue.title,
+            "body": issue.body or "",
+            "url": issue.html_url,
+            "state": issue.state,
+            "labels": [label.name for label in issue.labels],
+        }
+        for issue in issues
+    ]
+    
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pushing {len(issues_data)} issues to board '{board_name}'...")
+    try:
+        kanban_client.push_issues_to_board(board_name=board_name, issues=issues_data)
+        click.secho("Push completed.", fg="green")
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+    except Exception as e:
+        click.secho(f"An error occurred while pushing to Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+
+
+@vibe.command('pull', help='Pull task status from a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', required=True, help='Vibe Kanban board name or ID.')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', required=True, help='Vibe Kanban API base URL.')
+@click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def pull(repo, board_name, kanban_api, bidirectional, token):
+    """Pull task status from a Vibe Kanban board into GitHub."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pulling board status from '{board_name}'...")
+    try:
+        statuses = kanban_client.pull_board_status(board_name=board_name, bidirectional=bidirectional)
+        click.echo(f"Pulled {len(statuses)} updates from board '{board_name}'.")
+
+        # Process updates and sync to GitHub
+        for status in statuses:
+            issue_number = status.get("issue_number")
+            new_state = status.get("state")
+            if issue_number and new_state:
+                click.echo(f"Updating issue #{issue_number} to state '{new_state}'...")
+                try:
+                    issue = gh_client.repo.get_issue(number=issue_number)
+                    issue.edit(state=new_state)
+                    click.secho(f"  -> Successfully updated issue #{issue_number}.", fg="green")
+                except GithubException as e:
+                    click.secho(f"  -> Failed to update issue #{issue_number}: {e}", fg="red")
+
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+        return
+    except Exception as e:
+        click.secho(f"An error occurred while pulling from Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+    click.secho("Pull completed.", fg="green")
+
+
+@cli.command(name='start-api', help='Run the FastAPI server')
+def start_api():
+    """Starts the FastAPI application using Uvicorn."""
+    # Based on the template, the api app is at src/api/app.py
+    api_app_path = Path('src/api/app.py')
+    if not api_app_path.exists():
+        click.secho(f"API application not found at '{api_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with an API using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+        
+    # The import string for uvicorn is based on file path relative to project root
+    # src/api/app.py with variable `app` becomes `src.api.app:app`
+    app_import_string = "src.api.app:app"
+
+    cmd = [sys.executable, "-m", "uvicorn", app_import_string, "--reload"]
+    click.secho(f"Starting FastAPI server with Uvicorn: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `uvicorn` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install uvicorn[standard]")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"API server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+@click.pass_context
+def assistant(ctx, args):
+    """
+    Invokes the Aider AI assistant CLI tool with the given arguments.
+    If the first argument is a known subcommand, it's executed. Otherwise,
+    all arguments are passed through to the `aider` command.
+    """
+    if args and args[0] in ctx.command.commands:
+        # This is a subcommand invocation.
+        cmd_name = args[0]
+        cmd_args = list(args[1:])
+        cmd = ctx.command.commands[cmd_name]
+        # In order for click to parse the subcommand's arguments correctly,
+        # we create a new context for it and invoke it.
+        with cmd.make_context(cmd_name, cmd_args) as cmd_ctx:
+            sys.exit(cmd.invoke(cmd_ctx))
+
+    # This is a passthrough invocation to `aider`.
+    # Ensure AI keys are loaded in environment
+    if not os.getenv('OPENAI_API_KEY'):
+        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+    if not os.getenv('GEMINI_API_KEY'):
+        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+    
+    # Build environment for subprocess
+    env = os.environ.copy()
+    cmd = ['aider'] + list(args)
+    try:
+        # We use subprocess.run and capture output for tests, but for live use,
+        # we don't want to capture, so Aider can be interactive.
+        # A simple way to detect a test run is to check if a specific env var is set.
+        if "PYTEST_CURRENT_TEST" in os.environ:
+             result = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding='utf-8')
+        else:
+             result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+        sys.exit(1)
+
+
+@assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
+@click.argument('issues_file', type=click.Path(exists=True))
+@click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
+@click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
+def process_issues(issues_file, results_dir, timeout):
+    """
+    Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
+    This implements the "atomic issue resolution" pattern.
+    """
+    results_path = Path(results_dir)
+    results_path.mkdir(exist_ok=True)
+    
+    with open(issues_file, 'r', encoding='utf-8') as f:
+        issues = [line.strip() for line in f if line.strip()]
+
+    click.secho(f"Found {len(issues)} issues to process.", fg='magenta')
+
+    for issue in issues:
+        click.secho(f"Processing: {issue}", fg='cyan')
+        
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        result_file = results_path / f"issue_{timestamp}.log"
+        
+        cmd = [
+            "aider",
+            "--message", issue,
+            "--yes",
+            "--no-stream",
+            "--auto-commits"
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout,
+                encoding='utf-8'
+            )
+            
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Exit status: {result.returncode}\n\n")
+                log_f.write("--- STDOUT ---\n")
+                log_f.write(result.stdout)
+                log_f.write("\n--- STDERR ---\n")
+                log_f.write(result.stderr)
+                
+            if result.returncode == 0:
+                click.secho(f"✅ SUCCESS: {issue}", fg='green')
+            else:
+                click.secho(f"❌ FAILED: {issue}", fg='red')
+                click.secho(f"  Exit status: {result.returncode}. Log: {result_file}", fg='red')
+        
+        except FileNotFoundError:
+            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+            sys.exit(1)
+        except subprocess.TimeoutExpired:
+            click.secho(f"❌ TIMEOUT: {issue}. Log: {result_file}", fg='red')
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Result: TIMEOUT after {timeout} seconds.\n")
+
+    click.secho("\nProcessing complete.", fg='green')
+
+@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+def uninstall():
+    """Provides instructions for uninstalling and offers to clean up config data."""
+    click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
+    click.secho("\n1. Uninstall the package itself:", fg="cyan", bold=True)
+    click.secho("   Run: pip uninstall gitscaffold", fg="green")
+
+    click.secho("\n2. Clean up global configuration directory:", fg="cyan", bold=True)
+    config_path = get_global_config_path()
+    config_dir = config_path.parent
+
+    if not config_dir.exists():
+        click.secho("No global configuration directory found to remove.", fg="green")
+        return
+
+    click.echo(f"   Your global configuration is stored at: {config_dir}")
+    prompt = click.style("   Do you want to permanently delete this directory?", fg="yellow", bold=True)
+    if click.confirm(prompt, default=False):
+        try:
+            shutil.rmtree(config_dir)
+            click.secho(f"Successfully deleted {config_dir}", fg="green")
+        except OSError as e:
+            click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
+    else:
+        click.secho("Aborted directory deletion.", fg="yellow")
+, t)
+                    if mnum:
+                        data[current]['tasks'].append(mnum.group(1).strip())
+                        continue
+                    if t.strip().startswith('- '):
+                        data[current]['tasks'].append(t.strip()[2:].strip())
+                        continue
+    except FileNotFoundError:
+        click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
+        sys.exit(1)
+    # Flatten mapping for lookups
+    mapping = {}
+    for ctx, obj in data.items():
+        for key in ('goal', 'tasks', 'deliverables'):
+            for itm in obj[key]:
+                mapping[itm] = {'context': ctx, **obj}
+    return mapping
+
+def _enrich_get_context(title, roadmap):
+    if title in roadmap:
+        return roadmap[title], title
+    candidates = difflib.get_close_matches(title, roadmap.keys(), n=1, cutoff=0.5)
+    if candidates:
+        m = candidates[0]
+        return roadmap[m], m
+    return None, None
+
+def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
+    if not api_key:
+        if provider == 'openai':
+            api_key = get_openai_api_key()
+        elif provider == 'gemini':
+            api_key = get_gemini_api_key()
+    
+    if not api_key:
+        sys.exit(1)
+
+    # The actual call is now delegated to the unified `enrich_issue_description`
+    context_parts = [f"Context: {ctx['context']}"]
+    if ctx.get('goal'):
+        context_parts.append("Goal:\n" + "\n".join(f"- {g}" for g in ctx['goal']))
+    if ctx.get('tasks'):
+        context_parts.append("Tasks:\n" + "\n".join(f"- {t}" for t in ctx['tasks']))
+    if ctx.get('deliverables'):
+        context_parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
+    
+    full_context = "\n".join(context_parts)
+
+    return enrich_issue_description(
+        title=title,
+        existing_body=existing_body,
+        provider=provider,
+        api_key=api_key,
+        context=full_context
+    )
+
+@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.pass_context
+def enrich(ctx, ai_provider):
+    """General-purpose CLI for GitHub issue enrichment via LLM using roadmap context."""
+    ctx.obj = {'ai_provider': ai_provider}
+
+@enrich.command('issue', help='Enrich a single issue')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--issue', 'issue_number', type=int, required=True, help='Issue number')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply the update')
+@click.pass_context
+def enrich_issue_command(click_ctx, repo, issue_number, roadmap_path, apply_changes):
+    """Enrich a single issue."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issue = repo_obj.get_issue(number=issue_number)
+    roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+    if not roadmap_ctx:
+        click.secho(f"No roadmap context for issue #{issue_number}", fg="red", err=True)
+        sys.exit(1)
+    enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+    click.echo(enriched)
+    if apply_changes:
+        issue.edit(body=enriched)
+        click.secho(f"Issue #{issue_number} updated.", fg="green")
+
+
+@enrich.command('batch', help='Batch enrich issues')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--csv', 'csv_path', help='Output CSV file')
+@click.option('--interactive', is_flag=True, help='Interactive approval')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply all updates')
+@click.pass_context
+def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, apply_changes):
+    """Batch enrich issues."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issues = list(repo_obj.get_issues(state='open'))
+    records = []
+    for issue in issues:
+        roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+        if not roadmap_ctx:
+            continue
+        enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+        records.append((issue.number, issue.title, roadmap_ctx['context'], matched, enriched))
+    
+    if csv_path:
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['issue', 'title', 'context', 'matched', 'enriched_body'])
+            writer.writerows(records)
+        click.secho(f"Wrote {len(records)} records to {csv_path}", fg="green")
+        return
+    
+    if interactive:
+        for num, title, ctx_name, matched, body in records:
+            click.secho(f"\n--- Issue #{num}: {title} ({ctx_name}) matched '{matched}' ---", bold=True)
+            click.echo(body)
+            ans = click.prompt("Apply this update? [y/N/q]", default='n', show_default=False).strip().lower()
+            if ans == 'y':
+                repo_obj.get_issue(num).edit(body=body)
+                click.secho(f"Updated issue #{num}", fg="green")
+            if ans == 'q':
+                break
+        return
+
+    if apply_changes:
+        for num, _, _, _, body in records:
+            repo_obj.get_issue(num).edit(body=body)
+            click.secho(f"Updated issue #{num}", fg="green")
+        return
+        
+    for num, title, ctx_name, matched, _ in records:
+        click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
+
+
+
+
+@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@click.argument('repo', metavar='REPO')
+@click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
+@click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.option('--ai-key', help='AI API key (overrides environment variables).')
+@click.option('--model', help='AI model to use (e.g., gpt-4-turbo-preview, gemini-pro).')
+@click.option('--temperature', type=float, help='AI temperature (e.g., 0.5).')
+@click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation and create all issues')
+@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
+def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperature, dry_run, yes, verbose):
+    """Import issues from an unstructured markdown file using AI.
+
+    This command parses a Markdown file, using an AI model to extract potential
+    GitHub issues from the text. This is useful for quickly converting documents like
+    meeting notes or brainstorming sessions into actionable GitHub issues.
+    """
+    if not Path(markdown_file).exists():
+        click.secho(f"Error: The file '{markdown_file}' does not exist.", fg="red", err=True)
+        sys.exit(1)
+
+    if verbose:
+        click.secho("Starting 'import-md' command...", fg="cyan", bold=True)
+    
+    # Get tokens
+    actual_token = token or get_github_token()
+    if not actual_token:
+        click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    actual_ai_key = ai_key
+    if not actual_ai_key:
+        if ai_provider == 'openai':
+            actual_ai_key = get_openai_api_key()
+        else: # gemini
+            actual_ai_key = get_gemini_api_key()
+    if not actual_ai_key:
+        click.secho(f"{ai_provider.capitalize()} API key is required. Exiting.", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Using repository: {repo}", fg='magenta')
+
+    repo = _sanitize_repo_string(repo)
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        if verbose:
+            click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+    except GithubException as e:
+        if e.status == 404:
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+        elif e.status == 401:
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+        else:
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Extracting issues from '{markdown_file}' using {ai_provider.capitalize()} (model: {model or 'default'})...", fg='cyan')
+    
+    # Set defaults for model and temperature if not provided
+    if ai_provider == 'openai':
+        final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
+        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+    else: # gemini
+        final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
+        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+
+    try:
+        issues = extract_issues_from_markdown(
+            md_file=markdown_file,
+            provider=ai_provider,
+            api_key=actual_ai_key,
+            model_name=final_model,
+            temperature=final_temp
+        )
+    except Exception as e:
+        click.secho(f"Error extracting issues from markdown: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    if not issues:
+        click.secho("No issues extracted from the markdown file.", fg="yellow")
+        return
+
+    click.secho(f"Extracted {len(issues)} potential issues:", fg="green", bold=True)
+    for issue in issues:
+        click.secho(f"  - Title: {issue['title']}", fg="white")
+
+    if dry_run:
+        click.secho("\n[dry-run] No issues will be created. The following issues would be created:", fg="blue")
+        for issue in issues:
+            click.secho(f"\n--- [dry-run] Issue: {issue['title']} ---", fg="blue", bold=True)
+            click.echo(issue.get('description', ''))
+        return
+
+    if not yes:
+        prompt = click.style(
+            f"\nProceed with creating {len(issues)} issues in '{repo}'?", fg="yellow", bold=True
+        )
+        if not click.confirm(prompt, default=True):
+            click.secho("Aborting.", fg="red")
+            return
+
+    click.secho("\nCreating issues on GitHub...", fg="cyan")
+    created_count = 0
+    failed_count = 0
+    for issue in issues:
+        title = issue['title']
+        body = issue.get('description', '')
+        if verbose:
+            click.secho(f"Creating issue: '{title}'", fg="yellow")
+        try:
+            created_issue = gh_client.create_issue(title=title, body=body)
+            click.secho(f"  -> Successfully created issue #{created_issue.number}.", fg="green")
+            created_count += 1
+        except Exception as e:
+            click.secho(f"  -> Failed to create issue '{title}': {e}", fg="red", err=True)
+            failed_count += 1
+    
+    click.secho("\n'import-md' command finished.", fg="green", bold=True)
+    click.secho(f"Successfully created: {created_count} issues.", fg="green")
+    if failed_count > 0:
+        click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
+
+
+@cli.command(name='start-demo', help='Run the Streamlit demo')
+def start_demo():
+    """Starts the Streamlit demo app if it exists."""
+    demo_app_path = Path('demo/app.py')
+    if not demo_app_path.exists():
+        click.secho(f"Demo application not found at '{demo_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with a demo using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+
+    cmd = [sys.executable, "-m", "streamlit", "run", str(demo_app_path)]
+    click.secho(f"Starting Streamlit demo: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `streamlit` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install streamlit")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"Demo server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+# Vibe Kanban integration commands
+@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+def vibe():
+    """Vibe Kanban integration subcommands."""
+    pass
+
+
+@vibe.command('push', help='Push GitHub issues to a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
+@click.option('--milestone', help='Only include issues in this milestone')
+@click.option('--label', 'labels', multiple=True, help='Only include issues with these labels')
+@click.option('--state', default='open', show_default=True, help='Only include issues with this state')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def push(repo, board_name, milestone, labels, state, kanban_api, token):
+    """Push GitHub issues into a Vibe Kanban board."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Build query parameters for fetching issues
+    params = {'state': state}
+    if labels:
+        try:
+            # PyGithub expects Label objects, not strings
+            params['labels'] = [gh_client.repo.get_label(l) for l in labels]
+        except GithubException as e:
+            click.secho(f"Error: Could not find one or more labels: {labels}. Details: {e}", fg="red", err=True)
+            sys.exit(1)
+
+    if milestone:
+        milestone_obj = gh_client._find_milestone(milestone)
+        if not milestone_obj:
+            click.secho(f"Error: Milestone '{milestone}' not found.", fg="red", err=True)
+            sys.exit(1)
+        params['milestone'] = milestone_obj
+    
+    click.secho(f"Fetching issues from '{repo}'...", fg="cyan")
+    try:
+        issues = list(gh_client.repo.get_issues(**params))
+    except GithubException as e:
+        click.secho(f"Error fetching issues from GitHub: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    click.echo(f"Found {len(issues)} issues to push.")
+    if not issues:
+        click.secho("No issues match the criteria. Nothing to push.", fg="yellow")
+        return
+
+    # Serialize PyGithub issue objects into a simple format for the client
+    issues_data = [
+        {
+            "number": issue.number,
+            "title": issue.title,
+            "body": issue.body or "",
+            "url": issue.html_url,
+            "state": issue.state,
+            "labels": [label.name for label in issue.labels],
+        }
+        for issue in issues
+    ]
+    
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pushing {len(issues_data)} issues to board '{board_name}'...")
+    try:
+        kanban_client.push_issues_to_board(board_name=board_name, issues=issues_data)
+        click.secho("Push completed.", fg="green")
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+    except Exception as e:
+        click.secho(f"An error occurred while pushing to Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+
+
+@vibe.command('pull', help='Pull task status from a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', required=True, help='Vibe Kanban board name or ID.')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', required=True, help='Vibe Kanban API base URL.')
+@click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def pull(repo, board_name, kanban_api, bidirectional, token):
+    """Pull task status from a Vibe Kanban board into GitHub."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pulling board status from '{board_name}'...")
+    try:
+        statuses = kanban_client.pull_board_status(board_name=board_name, bidirectional=bidirectional)
+        click.echo(f"Pulled {len(statuses)} updates from board '{board_name}'.")
+
+        # Process updates and sync to GitHub
+        for status in statuses:
+            issue_number = status.get("issue_number")
+            new_state = status.get("state")
+            if issue_number and new_state:
+                click.echo(f"Updating issue #{issue_number} to state '{new_state}'...")
+                try:
+                    issue = gh_client.repo.get_issue(number=issue_number)
+                    issue.edit(state=new_state)
+                    click.secho(f"  -> Successfully updated issue #{issue_number}.", fg="green")
+                except GithubException as e:
+                    click.secho(f"  -> Failed to update issue #{issue_number}: {e}", fg="red")
+
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+        return
+    except Exception as e:
+        click.secho(f"An error occurred while pulling from Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+    click.secho("Pull completed.", fg="green")
+
+
+@cli.command(name='start-api', help='Run the FastAPI server')
+def start_api():
+    """Starts the FastAPI application using Uvicorn."""
+    # Based on the template, the api app is at src/api/app.py
+    api_app_path = Path('src/api/app.py')
+    if not api_app_path.exists():
+        click.secho(f"API application not found at '{api_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with an API using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+        
+    # The import string for uvicorn is based on file path relative to project root
+    # src/api/app.py with variable `app` becomes `src.api.app:app`
+    app_import_string = "src.api.app:app"
+
+    cmd = [sys.executable, "-m", "uvicorn", app_import_string, "--reload"]
+    click.secho(f"Starting FastAPI server with Uvicorn: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `uvicorn` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install uvicorn[standard]")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"API server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+@click.pass_context
+def assistant(ctx, args):
+    """
+    Invokes the Aider AI assistant CLI tool with the given arguments.
+    If the first argument is a known subcommand, it's executed. Otherwise,
+    all arguments are passed through to the `aider` command.
+    """
+    if args and args[0] in ctx.command.commands:
+        # This is a subcommand invocation.
+        cmd_name = args[0]
+        cmd_args = list(args[1:])
+        cmd = ctx.command.commands[cmd_name]
+        # In order for click to parse the subcommand's arguments correctly,
+        # we create a new context for it and invoke it.
+        with cmd.make_context(cmd_name, cmd_args) as cmd_ctx:
+            sys.exit(cmd.invoke(cmd_ctx))
+
+    # This is a passthrough invocation to `aider`.
+    # Ensure AI keys are loaded in environment
+    if not os.getenv('OPENAI_API_KEY'):
+        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+    if not os.getenv('GEMINI_API_KEY'):
+        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+    
+    # Build environment for subprocess
+    env = os.environ.copy()
+    cmd = ['aider'] + list(args)
+    try:
+        # We use subprocess.run and capture output for tests, but for live use,
+        # we don't want to capture, so Aider can be interactive.
+        # A simple way to detect a test run is to check if a specific env var is set.
+        if "PYTEST_CURRENT_TEST" in os.environ:
+             result = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding='utf-8')
+        else:
+             result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+        sys.exit(1)
+
+
+@assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
+@click.argument('issues_file', type=click.Path(exists=True))
+@click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
+@click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
+def process_issues(issues_file, results_dir, timeout):
+    """
+    Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
+    This implements the "atomic issue resolution" pattern.
+    """
+    results_path = Path(results_dir)
+    results_path.mkdir(exist_ok=True)
+    
+    with open(issues_file, 'r', encoding='utf-8') as f:
+        issues = [line.strip() for line in f if line.strip()]
+
+    click.secho(f"Found {len(issues)} issues to process.", fg='magenta')
+
+    for issue in issues:
+        click.secho(f"Processing: {issue}", fg='cyan')
+        
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        result_file = results_path / f"issue_{timestamp}.log"
+        
+        cmd = [
+            "aider",
+            "--message", issue,
+            "--yes",
+            "--no-stream",
+            "--auto-commits"
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout,
+                encoding='utf-8'
+            )
+            
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Exit status: {result.returncode}\n\n")
+                log_f.write("--- STDOUT ---\n")
+                log_f.write(result.stdout)
+                log_f.write("\n--- STDERR ---\n")
+                log_f.write(result.stderr)
+                
+            if result.returncode == 0:
+                click.secho(f"✅ SUCCESS: {issue}", fg='green')
+            else:
+                click.secho(f"❌ FAILED: {issue}", fg='red')
+                click.secho(f"  Exit status: {result.returncode}. Log: {result_file}", fg='red')
+        
+        except FileNotFoundError:
+            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+            sys.exit(1)
+        except subprocess.TimeoutExpired:
+            click.secho(f"❌ TIMEOUT: {issue}. Log: {result_file}", fg='red')
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Result: TIMEOUT after {timeout} seconds.\n")
+
+    click.secho("\nProcessing complete.", fg='green')
+
+@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+def uninstall():
+    """Provides instructions for uninstalling and offers to clean up config data."""
+    click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
+    click.secho("\n1. Uninstall the package itself:", fg="cyan", bold=True)
+    click.secho("   Run: pip uninstall gitscaffold", fg="green")
+
+    click.secho("\n2. Clean up global configuration directory:", fg="cyan", bold=True)
+    config_path = get_global_config_path()
+    config_dir = config_path.parent
+
+    if not config_dir.exists():
+        click.secho("No global configuration directory found to remove.", fg="green")
+        return
+
+    click.echo(f"   Your global configuration is stored at: {config_dir}")
+    prompt = click.style("   Do you want to permanently delete this directory?", fg="yellow", bold=True)
+    if click.confirm(prompt, default=False):
+        try:
+            shutil.rmtree(config_dir)
+            click.secho(f"Successfully deleted {config_dir}", fg="green")
+        except OSError as e:
+            click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
+    else:
+        click.secho("Aborted directory deletion.", fg="yellow")
+, t)
+                    if mnum:
+                        data[current]['tasks'].append(mnum.group(1).strip())
+                        continue
+                    if t.strip().startswith('- '):
+                        data[current]['tasks'].append(t.strip()[2:].strip())
+                        continue
+    except FileNotFoundError:
+        click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
+        sys.exit(1)
+    # Flatten mapping for lookups
+    mapping = {}
+    for ctx, obj in data.items():
+        for key in ('goal', 'tasks', 'deliverables'):
+            for itm in obj[key]:
+                mapping[itm] = {'context': ctx, **obj}
+    return mapping
+
+def _enrich_get_context(title, roadmap):
+    if title in roadmap:
+        return roadmap[title], title
+    candidates = difflib.get_close_matches(title, roadmap.keys(), n=1, cutoff=0.5)
+    if candidates:
+        m = candidates[0]
+        return roadmap[m], m
+    return None, None
+
+def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
+    if not api_key:
+        if provider == 'openai':
+            api_key = get_openai_api_key()
+        elif provider == 'gemini':
+            api_key = get_gemini_api_key()
+    
+    if not api_key:
+        sys.exit(1)
+
+    # The actual call is now delegated to the unified `enrich_issue_description`
+    context_parts = [f"Context: {ctx['context']}"]
+    if ctx.get('goal'):
+        context_parts.append("Goal:\n" + "\n".join(f"- {g}" for g in ctx['goal']))
+    if ctx.get('tasks'):
+        context_parts.append("Tasks:\n" + "\n".join(f"- {t}" for t in ctx['tasks']))
+    if ctx.get('deliverables'):
+        context_parts.append("Deliverables:\n" + "\n".join(f"- {d}" for d in ctx['deliverables']))
+    
+    full_context = "\n".join(context_parts)
+
+    return enrich_issue_description(
+        title=title,
+        existing_body=existing_body,
+        provider=provider,
+        api_key=api_key,
+        context=full_context
+    )
+
+@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.pass_context
+def enrich(ctx, ai_provider):
+    """General-purpose CLI for GitHub issue enrichment via LLM using roadmap context."""
+    ctx.obj = {'ai_provider': ai_provider}
+
+@enrich.command('issue', help='Enrich a single issue')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--issue', 'issue_number', type=int, required=True, help='Issue number')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply the update')
+@click.pass_context
+def enrich_issue_command(click_ctx, repo, issue_number, roadmap_path, apply_changes):
+    """Enrich a single issue."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issue = repo_obj.get_issue(number=issue_number)
+    roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+    if not roadmap_ctx:
+        click.secho(f"No roadmap context for issue #{issue_number}", fg="red", err=True)
+        sys.exit(1)
+    enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+    click.echo(enriched)
+    if apply_changes:
+        issue.edit(body=enriched)
+        click.secho(f"Issue #{issue_number} updated.", fg="green")
+
+
+@enrich.command('batch', help='Batch enrich issues')
+@click.option('--repo', required=True, help='owner/repo')
+@click.option('--path', 'roadmap_path', default='ROADMAP.md', help='Path to roadmap file')
+@click.option('--csv', 'csv_path', help='Output CSV file')
+@click.option('--interactive', is_flag=True, help='Interactive approval')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Apply all updates')
+@click.pass_context
+def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, apply_changes):
+    """Batch enrich issues."""
+    token = get_github_token()
+    if not token: sys.exit(1)
+    repo = _sanitize_repo_string(repo)
+    gh = Github(token)
+    try:
+        repo_obj = gh.get_repo(repo)
+    except GithubException as e:
+        click.secho(f"Error: cannot access repo {repo}: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    roadmap = _enrich_parse_roadmap(roadmap_path)
+    issues = list(repo_obj.get_issues(state='open'))
+    records = []
+    for issue in issues:
+        roadmap_ctx, matched = _enrich_get_context(issue.title.strip(), roadmap)
+        if not roadmap_ctx:
+            continue
+        enriched = _enrich_call_llm(issue.title, issue.body, roadmap_ctx, click_ctx.obj['ai_provider'], None)
+        records.append((issue.number, issue.title, roadmap_ctx['context'], matched, enriched))
+    
+    if csv_path:
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['issue', 'title', 'context', 'matched', 'enriched_body'])
+            writer.writerows(records)
+        click.secho(f"Wrote {len(records)} records to {csv_path}", fg="green")
+        return
+    
+    if interactive:
+        for num, title, ctx_name, matched, body in records:
+            click.secho(f"\n--- Issue #{num}: {title} ({ctx_name}) matched '{matched}' ---", bold=True)
+            click.echo(body)
+            ans = click.prompt("Apply this update? [y/N/q]", default='n', show_default=False).strip().lower()
+            if ans == 'y':
+                repo_obj.get_issue(num).edit(body=body)
+                click.secho(f"Updated issue #{num}", fg="green")
+            if ans == 'q':
+                break
+        return
+
+    if apply_changes:
+        for num, _, _, _, body in records:
+            repo_obj.get_issue(num).edit(body=body)
+            click.secho(f"Updated issue #{num}", fg="green")
+        return
+        
+    for num, title, ctx_name, matched, _ in records:
+        click.echo(f"Would update issue #{num}: {title} (matched '{matched}' in {ctx_name})")
+
+
+
+
+@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@click.argument('repo', metavar='REPO')
+@click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
+@click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
+@click.option('--ai-key', help='AI API key (overrides environment variables).')
+@click.option('--model', help='AI model to use (e.g., gpt-4-turbo-preview, gemini-pro).')
+@click.option('--temperature', type=float, help='AI temperature (e.g., 0.5).')
+@click.option('--dry-run', is_flag=True, help='List issues without creating them')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation and create all issues')
+@click.option('--verbose', '-v', is_flag=True, help='Show progress logs')
+def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperature, dry_run, yes, verbose):
+    """Import issues from an unstructured markdown file using AI.
+
+    This command parses a Markdown file, using an AI model to extract potential
+    GitHub issues from the text. This is useful for quickly converting documents like
+    meeting notes or brainstorming sessions into actionable GitHub issues.
+    """
+    if not Path(markdown_file).exists():
+        click.secho(f"Error: The file '{markdown_file}' does not exist.", fg="red", err=True)
+        sys.exit(1)
+
+    if verbose:
+        click.secho("Starting 'import-md' command...", fg="cyan", bold=True)
+    
+    # Get tokens
+    actual_token = token or get_github_token()
+    if not actual_token:
+        click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
+        sys.exit(1)
+
+    actual_ai_key = ai_key
+    if not actual_ai_key:
+        if ai_provider == 'openai':
+            actual_ai_key = get_openai_api_key()
+        else: # gemini
+            actual_ai_key = get_gemini_api_key()
+    if not actual_ai_key:
+        click.secho(f"{ai_provider.capitalize()} API key is required. Exiting.", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Using repository: {repo}", fg='magenta')
+
+    repo = _sanitize_repo_string(repo)
+    try:
+        gh_client = GitHubClient(actual_token, repo)
+        if verbose:
+            click.secho(f"Successfully connected to repository '{repo}'.", fg="green")
+    except GithubException as e:
+        if e.status == 404:
+            click.secho(f"Error: Repository '{repo}' not found. Please check the name and your permissions.", fg="red", err=True)
+        elif e.status == 401:
+            click.secho("Error: GitHub token is invalid or has insufficient permissions.", fg="red", err=True)
+        else:
+            click.secho(f"An unexpected GitHub error occurred: {e}", fg="red", err=True)
+        sys.exit(1)
+    
+    if verbose:
+        click.secho(f"Extracting issues from '{markdown_file}' using {ai_provider.capitalize()} (model: {model or 'default'})...", fg='cyan')
+    
+    # Set defaults for model and temperature if not provided
+    if ai_provider == 'openai':
+        final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
+        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+    else: # gemini
+        final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
+        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+
+    try:
+        issues = extract_issues_from_markdown(
+            md_file=markdown_file,
+            provider=ai_provider,
+            api_key=actual_ai_key,
+            model_name=final_model,
+            temperature=final_temp
+        )
+    except Exception as e:
+        click.secho(f"Error extracting issues from markdown: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    if not issues:
+        click.secho("No issues extracted from the markdown file.", fg="yellow")
+        return
+
+    click.secho(f"Extracted {len(issues)} potential issues:", fg="green", bold=True)
+    for issue in issues:
+        click.secho(f"  - Title: {issue['title']}", fg="white")
+
+    if dry_run:
+        click.secho("\n[dry-run] No issues will be created. The following issues would be created:", fg="blue")
+        for issue in issues:
+            click.secho(f"\n--- [dry-run] Issue: {issue['title']} ---", fg="blue", bold=True)
+            click.echo(issue.get('description', ''))
+        return
+
+    if not yes:
+        prompt = click.style(
+            f"\nProceed with creating {len(issues)} issues in '{repo}'?", fg="yellow", bold=True
+        )
+        if not click.confirm(prompt, default=True):
+            click.secho("Aborting.", fg="red")
+            return
+
+    click.secho("\nCreating issues on GitHub...", fg="cyan")
+    created_count = 0
+    failed_count = 0
+    for issue in issues:
+        title = issue['title']
+        body = issue.get('description', '')
+        if verbose:
+            click.secho(f"Creating issue: '{title}'", fg="yellow")
+        try:
+            created_issue = gh_client.create_issue(title=title, body=body)
+            click.secho(f"  -> Successfully created issue #{created_issue.number}.", fg="green")
+            created_count += 1
+        except Exception as e:
+            click.secho(f"  -> Failed to create issue '{title}': {e}", fg="red", err=True)
+            failed_count += 1
+    
+    click.secho("\n'import-md' command finished.", fg="green", bold=True)
+    click.secho(f"Successfully created: {created_count} issues.", fg="green")
+    if failed_count > 0:
+        click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
+
+
+@cli.command(name='start-demo', help='Run the Streamlit demo')
+def start_demo():
+    """Starts the Streamlit demo app if it exists."""
+    demo_app_path = Path('demo/app.py')
+    if not demo_app_path.exists():
+        click.secho(f"Demo application not found at '{demo_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with a demo using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+
+    cmd = [sys.executable, "-m", "streamlit", "run", str(demo_app_path)]
+    click.secho(f"Starting Streamlit demo: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `streamlit` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install streamlit")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"Demo server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+# Vibe Kanban integration commands
+@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+def vibe():
+    """Vibe Kanban integration subcommands."""
+    pass
+
+
+@vibe.command('push', help='Push GitHub issues to a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', help='Vibe Kanban board name or ID.', required=True)
+@click.option('--milestone', help='Only include issues in this milestone')
+@click.option('--label', 'labels', multiple=True, help='Only include issues with these labels')
+@click.option('--state', default='open', show_default=True, help='Only include issues with this state')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', help='Vibe Kanban API base URL.')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def push(repo, board_name, milestone, labels, state, kanban_api, token):
+    """Push GitHub issues into a Vibe Kanban board."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Build query parameters for fetching issues
+    params = {'state': state}
+    if labels:
+        try:
+            # PyGithub expects Label objects, not strings
+            params['labels'] = [gh_client.repo.get_label(l) for l in labels]
+        except GithubException as e:
+            click.secho(f"Error: Could not find one or more labels: {labels}. Details: {e}", fg="red", err=True)
+            sys.exit(1)
+
+    if milestone:
+        milestone_obj = gh_client._find_milestone(milestone)
+        if not milestone_obj:
+            click.secho(f"Error: Milestone '{milestone}' not found.", fg="red", err=True)
+            sys.exit(1)
+        params['milestone'] = milestone_obj
+    
+    click.secho(f"Fetching issues from '{repo}'...", fg="cyan")
+    try:
+        issues = list(gh_client.repo.get_issues(**params))
+    except GithubException as e:
+        click.secho(f"Error fetching issues from GitHub: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    click.echo(f"Found {len(issues)} issues to push.")
+    if not issues:
+        click.secho("No issues match the criteria. Nothing to push.", fg="yellow")
+        return
+
+    # Serialize PyGithub issue objects into a simple format for the client
+    issues_data = [
+        {
+            "number": issue.number,
+            "title": issue.title,
+            "body": issue.body or "",
+            "url": issue.html_url,
+            "state": issue.state,
+            "labels": [label.name for label in issue.labels],
+        }
+        for issue in issues
+    ]
+    
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pushing {len(issues_data)} issues to board '{board_name}'...")
+    try:
+        kanban_client.push_issues_to_board(board_name=board_name, issues=issues_data)
+        click.secho("Push completed.", fg="green")
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+    except Exception as e:
+        click.secho(f"An error occurred while pushing to Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+
+
+@vibe.command('pull', help='Pull task status from a Vibe Kanban board')
+@click.option('--repo', required=True, help='GitHub repository in owner/repo format.')
+@click.option('--board', 'board_name', required=True, help='Vibe Kanban board name or ID.')
+@click.option('--kanban-api', envvar='VIBE_KANBAN_API', required=True, help='Vibe Kanban API base URL.')
+@click.option('--bidirectional', is_flag=True, help='Also sync comments from GitHub back to Vibe Kanban')
+@click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token.')
+def pull(repo, board_name, kanban_api, bidirectional, token):
+    """Pull task status from a Vibe Kanban board into GitHub."""
+    actual_token = token or get_github_token()
+    repo = _sanitize_repo_string(repo)
+    gh_client = GitHubClient(actual_token, repo)
+
+    # Initialize Vibe Kanban client
+    kanban_token = os.getenv('VIBE_KANBAN_TOKEN')
+    kanban_client = VibeKanbanClient(api_url=kanban_api, token=kanban_token)
+    click.echo(f"Pulling board status from '{board_name}'...")
+    try:
+        statuses = kanban_client.pull_board_status(board_name=board_name, bidirectional=bidirectional)
+        click.echo(f"Pulled {len(statuses)} updates from board '{board_name}'.")
+
+        # Process updates and sync to GitHub
+        for status in statuses:
+            issue_number = status.get("issue_number")
+            new_state = status.get("state")
+            if issue_number and new_state:
+                click.echo(f"Updating issue #{issue_number} to state '{new_state}'...")
+                try:
+                    issue = gh_client.repo.get_issue(number=issue_number)
+                    issue.edit(state=new_state)
+                    click.secho(f"  -> Successfully updated issue #{issue_number}.", fg="green")
+                except GithubException as e:
+                    click.secho(f"  -> Failed to update issue #{issue_number}: {e}", fg="red")
+
+    except NotImplementedError as e:
+        click.secho(f"Functionality not implemented: {e}", fg="yellow")
+        return
+    except Exception as e:
+        click.secho(f"An error occurred while pulling from Vibe Kanban: {e}", fg="red", err=True)
+        sys.exit(1)
+    click.secho("Pull completed.", fg="green")
+
+
+@cli.command(name='start-api', help='Run the FastAPI server')
+def start_api():
+    """Starts the FastAPI application using Uvicorn."""
+    # Based on the template, the api app is at src/api/app.py
+    api_app_path = Path('src/api/app.py')
+    if not api_app_path.exists():
+        click.secho(f"API application not found at '{api_app_path}'.", fg='red', err=True)
+        click.echo("You can create a new project with an API using `gitscaffold setup-repository` or `gitscaffold setup-template`.")
+        sys.exit(1)
+        
+    # The import string for uvicorn is based on file path relative to project root
+    # src/api/app.py with variable `app` becomes `src.api.app:app`
+    app_import_string = "src.api.app:app"
+
+    cmd = [sys.executable, "-m", "uvicorn", app_import_string, "--reload"]
+    click.secho(f"Starting FastAPI server with Uvicorn: {' '.join(cmd)}", fg='green')
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        click.secho("Error: `uvicorn` command not found.", fg='red', err=True)
+        click.echo("Please install it with: pip install uvicorn[standard]")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"API server failed to start or exited with an error: {e}", fg='red', err=True)
+        sys.exit(1)
+
+
+@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+@click.pass_context
+def assistant(ctx, args):
+    """
+    Invokes the Aider AI assistant CLI tool with the given arguments.
+    If the first argument is a known subcommand, it's executed. Otherwise,
+    all arguments are passed through to the `aider` command.
+    """
+    if args and args[0] in ctx.command.commands:
+        # This is a subcommand invocation.
+        cmd_name = args[0]
+        cmd_args = list(args[1:])
+        cmd = ctx.command.commands[cmd_name]
+        # In order for click to parse the subcommand's arguments correctly,
+        # we create a new context for it and invoke it.
+        with cmd.make_context(cmd_name, cmd_args) as cmd_ctx:
+            sys.exit(cmd.invoke(cmd_ctx))
+
+    # This is a passthrough invocation to `aider`.
+    # Ensure AI keys are loaded in environment
+    if not os.getenv('OPENAI_API_KEY'):
+        click.secho('Warning: OPENAI_API_KEY not set. Set it via "gitscaffold config set OPENAI_API_KEY <key>".', fg='yellow')
+    if not os.getenv('GEMINI_API_KEY'):
+        click.secho('Warning: GEMINI_API_KEY not set. Set it via "gitscaffold config set GEMINI_API_KEY <key>".', fg='yellow')
+    
+    # Build environment for subprocess
+    env = os.environ.copy()
+    cmd = ['aider'] + list(args)
+    try:
+        # We use subprocess.run and capture output for tests, but for live use,
+        # we don't want to capture, so Aider can be interactive.
+        # A simple way to detect a test run is to check if a specific env var is set.
+        if "PYTEST_CURRENT_TEST" in os.environ:
+             result = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding='utf-8')
+        else:
+             result = subprocess.run(cmd, env=env)
+        sys.exit(result.returncode)
+    except FileNotFoundError:
+        click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+        sys.exit(1)
+
+
+@assistant.command('process-issues', help='Process a list of issues sequentially in one-shot mode.')
+@click.argument('issues_file', type=click.Path(exists=True))
+@click.option('--results-dir', default='results', show_default=True, help='Directory to save detailed logs.')
+@click.option('--timeout', default=300, show_default=True, help='Timeout in seconds for each Aider process.')
+def process_issues(issues_file, results_dir, timeout):
+    """
+    Reads a list of issues from a file (one per line) and runs Aider on each one sequentially.
+    This implements the "atomic issue resolution" pattern.
+    """
+    results_path = Path(results_dir)
+    results_path.mkdir(exist_ok=True)
+    
+    with open(issues_file, 'r', encoding='utf-8') as f:
+        issues = [line.strip() for line in f if line.strip()]
+
+    click.secho(f"Found {len(issues)} issues to process.", fg='magenta')
+
+    for issue in issues:
+        click.secho(f"Processing: {issue}", fg='cyan')
+        
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        result_file = results_path / f"issue_{timestamp}.log"
+        
+        cmd = [
+            "aider",
+            "--message", issue,
+            "--yes",
+            "--no-stream",
+            "--auto-commits"
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                timeout=timeout,
+                encoding='utf-8'
+            )
+            
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Exit status: {result.returncode}\n\n")
+                log_f.write("--- STDOUT ---\n")
+                log_f.write(result.stdout)
+                log_f.write("\n--- STDERR ---\n")
+                log_f.write(result.stderr)
+                
+            if result.returncode == 0:
+                click.secho(f"✅ SUCCESS: {issue}", fg='green')
+            else:
+                click.secho(f"❌ FAILED: {issue}", fg='red')
+                click.secho(f"  Exit status: {result.returncode}. Log: {result_file}", fg='red')
+        
+        except FileNotFoundError:
+            click.secho('Aider CLI not found. Please ensure the "aider" package is installed.', fg='red')
+            sys.exit(1)
+        except subprocess.TimeoutExpired:
+            click.secho(f"❌ TIMEOUT: {issue}. Log: {result_file}", fg='red')
+            with open(result_file, 'w', encoding='utf-8') as log_f:
+                log_f.write(f"Issue: {issue}\n")
+                log_f.write(f"Result: TIMEOUT after {timeout} seconds.\n")
+
+    click.secho("\nProcessing complete.", fg='green')
+
+@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+def uninstall():
+    """Provides instructions for uninstalling and offers to clean up config data."""
+    click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
+    click.secho("\n1. Uninstall the package itself:", fg="cyan", bold=True)
+    click.secho("   Run: pip uninstall gitscaffold", fg="green")
+
+    click.secho("\n2. Clean up global configuration directory:", fg="cyan", bold=True)
+    config_path = get_global_config_path()
+    config_dir = config_path.parent
+
+    if not config_dir.exists():
+        click.secho("No global configuration directory found to remove.", fg="green")
+        return
+
+    click.echo(f"   Your global configuration is stored at: {config_dir}")
+    prompt = click.style("   Do you want to permanently delete this directory?", fg="yellow", bold=True)
     if click.confirm(prompt, default=False):
         try:
             shutil.rmtree(config_dir)

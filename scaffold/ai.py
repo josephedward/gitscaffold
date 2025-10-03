@@ -205,7 +205,7 @@ def suggest_labels_for_issue(title: str, body: str, provider: str, api_key: str,
             response = client.chat.completions.create(
                 model=effective_model_name,
                 messages=messages,
-                temperature=_env_float('OPENAI_TEMPERATURE', float(temperature)),
+                temperature=float(os.getenv('OPENAI_TEMPERATURE', temperature)),
                 max_tokens=100
             )
             suggested_labels_str = response.choices[0].message.content
