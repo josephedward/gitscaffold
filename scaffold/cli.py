@@ -1078,27 +1078,50 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, ai_prov
 
         features_to_create = []
         tasks_to_create = defaultdict(list)
+        tasks_to_update = []
+        tasks_to_close = []
+
         for feat in validated_roadmap.features:
             if feat.title in existing_issue_titles:
                 click.secho(f"Feature '{feat.title}' already exists in GitHub issues. Checking its tasks...", fg="green")
+                # Potentially update the feature issue here if needed
             else:
                 features_to_create.append(feat)
 
             for task in feat.tasks:
                 if task.title in existing_issue_titles:
                     click.secho(f"Task '{task.title}' (for feature '{feat.title}') already exists in GitHub issues.", fg="green")
+                    issue = gh_client._find_issue(task.title)
+                    if issue:
+                        # Determine if this task should be closed
+                        should_close = bool(task.completed) and issue.state != 'closed'
+                        if should_close:
+                            tasks_to_close.append(issue)
+                        elif not task.completed and issue.state == 'closed':
+                            # Logic to reopen can be added here if desired
+                            pass
+
+                        # Only consider updating description if we're not closing this issue
+                        if not should_close:
+                            current_body = (issue.body or '').strip()
+                            new_body = (task.description or '').strip()
+                            if new_body and new_body != current_body:
+                                tasks_to_update.append((issue, task.description))
+
                 else:
                     tasks_to_create[feat.title].append(task)
         
         total_tasks = sum(len(ts) for ts in tasks_to_create.values())
         total_new_items = len(milestones_to_create) + len(features_to_create) + total_tasks
+        total_updates = len(tasks_to_update)
+        total_closes = len(tasks_to_close)
 
-        if total_new_items == 0:
-            click.secho("No new items to create. Repository is up-to-date with the roadmap.", fg="green", bold=True)
+        if total_new_items == 0 and total_updates == 0 and total_closes == 0:
+            click.secho("No new items to create, update, or close. Repository is up-to-date with the roadmap.", fg="green", bold=True)
             return
 
-        # 2. Display summary of what will be created
-        click.secho(f"\nFound {total_new_items} new items to create:", fg="yellow", bold=True)
+        # 2. Display summary of what will be done
+        click.secho(f"\nFound {total_new_items} new items, {total_updates} updates, and {total_closes} closures to perform:", fg="yellow", bold=True)
         if milestones_to_create:
             click.secho("\nMilestones to be created:", fg="cyan")
             for m in milestones_to_create:
@@ -1117,6 +1140,16 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, ai_prov
                 click.secho(f"  Under {label} feature '{feat_title}':", fg="cyan")
                 for task in tasks:
                     click.secho(f"    - {task.title}", fg="magenta")
+        
+        if tasks_to_update:
+            click.secho("\nIssues to be updated:", fg="cyan")
+            for issue, new_body in tasks_to_update:
+                click.secho(f"  - #{issue.number}: {issue.title}", fg="magenta")
+
+        if tasks_to_close:
+            click.secho("\nIssues to be closed:", fg="cyan")
+            for issue in tasks_to_close:
+                click.secho(f"  - #{issue.number}: {issue.title}", fg="magenta")
 
         # 3. Handle dry run
         if dry_run:
@@ -1125,7 +1158,7 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, ai_prov
 
         # 4. Confirm before proceeding
         if not yes:
-            prompt = click.style(f"\nProceed with creating {total_new_items} new items in '{repo}'?", fg="yellow", bold=True)
+            prompt = click.style(f"\nProceed with these changes in '{repo}'?", fg="yellow", bold=True)
             if not click.confirm(prompt, default=True):
                 click.secho("Aborting.", fg="red")
                 return
@@ -1195,6 +1228,18 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, ai_prov
                         sys.exit(1)
                     raise
                 click.secho(f"  -> Task issue created: #{task_issue.number}", fg="green")
+
+        # Update issues
+        for issue, new_body in tasks_to_update:
+            click.secho(f"Updating issue #{issue.number}: {issue.title}", fg="cyan")
+            gh_client.update_issue(issue.number, body=new_body)
+            click.secho(f"  -> Issue #{issue.number} updated.", fg="green")
+
+        # Close issues
+        for issue in tasks_to_close:
+            click.secho(f"Closing issue #{issue.number}: {issue.title}", fg="cyan")
+            gh_client.close_issue(issue.number)
+            click.secho(f"  -> Issue #{issue.number} closed.", fg="green")
 
 
 

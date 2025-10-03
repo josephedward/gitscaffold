@@ -1,5 +1,13 @@
 # Release Notes
 
+## v0.1.18 (Unreleased)
+- Placeholder for upcoming changes. Fill before tagging.
+- Potential items:
+  - Fixes: ...
+  - Features: ...
+  - Docs: ...
+  - CI: Coverage reporting via pytest-cov and README update.
+
 ## v0.1.17 (2025-08-06)
 - **Fix**: Resolved an UnboundLocalError in the `sync` command by defaulting issue bodies when missing descriptions.
 - **Docs**: Moved Vibe Kanban integration details to `docs/integration_vibe-kanban.md` and removed detailed examples from README.md and usage.md.
