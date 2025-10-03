@@ -46,7 +46,7 @@ try:
 except ImportError:
     from importlib_resources import files as pkg_files  # type: ignore
 from .vibe_kanban import VibeKanbanClient
-from .ai import enrich_issue_description, extract_issues_from_markdown
+from .ai import enrich_issue_description, extract_issues_from_markdown, suggest_labels_for_issue
 from datetime import date
 import re
 import random
@@ -59,6 +59,8 @@ import csv
 
 from rich.console import Console
 from rich.table import Table
+from .matcher import find_best_issue_match
+import json
 
 
 def _print_logo():
@@ -384,6 +386,37 @@ def gh_issue_close(repo, number):
         click.secho(str(e), fg='yellow')
     except subprocess.CalledProcessError as e:
         click.secho(f"gh error: {e}", fg='red')
+
+
+@gh_group.command('auto-label', help='Automatically label an issue using AI')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.', required=False)
+@click.argument('number', type=int)
+@click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use for extraction and enrichment.')
+def gh_auto_label(repo, number, ai_provider):
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.secho('Could not detect repository. Use --repo.', fg='red')
+            raise SystemExit(1)
+    try:
+        token = get_github_token()
+        if not token:
+            click.secho("GitHub token is required to proceed. Exiting.", fg="red", err=True)
+            sys.exit(1)
+        
+        if ai_provider == 'openai':
+            ai_api_key = get_openai_api_key()
+        elif ai_provider == 'gemini':
+            ai_api_key = get_gemini_api_key()
+
+        if not ai_api_key:
+            sys.exit(1)
+
+        gh_client = GitHubClient(token, repo)
+        gh_client.auto_label_issue(number, ai_provider, ai_api_key)
+        click.secho(f"Successfully processed labels for issue #{number}", fg='green')
+    except (FileNotFoundError, GithubException) as e:
+        click.secho(str(e), fg='yellow')
 
 
 @cli.group(name='scripts', help='Manage bundled shell script primitives.')
@@ -1887,7 +1920,81 @@ def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, a
 
 
 
+@cli.command(name="match", help="Match pull requests to issues using fuzzy matching.")
+@click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
+@click.option('--dry-run', is_flag=True, help='Simulate and show what would be matched, without making changes.')
+@click.option('--yes', '-y', is_flag=True, help='Skip confirmation and apply changes.')
+def match(repo, dry_run, yes):
+    """
+    Matches open pull requests to open issues using fuzzy matching on their titles.
+    """
+    if not repo:
+        repo = get_repo_from_git_config()
+        if not repo:
+            click.secho("Could not determine repository from git config. Please use --repo.", fg="red", err=True)
+            sys.exit(1)
+        click.secho(f"Using repository from current git config: {repo}", fg="magenta")
+    else:
+        click.secho(f"Using repository provided via --repo flag: {repo}", fg="magenta")
+
+    repo = _sanitize_repo_string(repo)
+
+    try:
+        gh = GitHubCLI()
+        click.secho("Fetching open pull requests and issues...", fg="cyan")
+        prs = gh.list_prs(repo, state='open', fields=['title', 'number', 'body'])
+        issues = gh.list_issues(repo, state='open', fields=['title', 'number', 'body'])
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.secho(f"gh error: {e}", fg='red')
+        sys.exit(1)
+
+    if not prs:
+        click.secho("No open pull requests found.", fg="yellow")
+        return
+
+    if not issues:
+        click.secho("No open issues found to match against.", fg="yellow")
+        return
+
+    click.secho(f"Found {len(prs)} open pull requests and {len(issues)} open issues.", fg="magenta")
+
+    for pr in prs:
+        pr_number = pr['number']
+        pr_title = pr['title']
+        pr_body = pr.get('body', '')
+
+        # Check if PR is already linked
+        if pr_body and re.search(r'(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)\s+#\\d+', pr_body, re.IGNORECASE):
+            click.secho(f"PR #{pr_number} '{pr_title}' is already linked to an issue. Skipping.", fg="green")
+            continue
+
+        best_match_issue = find_best_issue_match(pr_title, issues)
+
+        if best_match_issue:
+            issue_number = best_match_issue['number']
+            issue_title = best_match_issue['title']
+            click.secho(f"Found potential match for PR #{pr_number} '{pr_title}': Issue #{issue_number} '{issue_title}'", fg="yellow")
+
+            if dry_run:
+                click.secho(f"[dry-run] Would link PR #{pr_number} to Issue #{issue_number}.", fg="blue")
+                continue
+
+            if yes or click.confirm(f"Do you want to link PR #{pr_number} to Issue #{issue_number}?", default=True):
+                try:
+                    new_body = f"{pr_body}\n\nCloses #{issue_number}"
+                    gh.edit_pr(repo, pr_number, body=new_body)
+                    click.secho(f"Successfully linked PR #{pr_number} to Issue #{issue_number}.", fg="green")
+                except subprocess.CalledProcessError as e:
+                    click.secho(f"Failed to link PR #{pr_number} to Issue #{issue_number}: {e}", fg="red")
+        else:
+            click.secho(f"No suitable match found for PR #{pr_number} '{pr_title}'.", fg="white")
+
+
 @cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')

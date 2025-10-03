@@ -185,3 +185,17 @@ class GitHubCLI:
     def close_issue(self, repo: str, number: int) -> None:
         self._run(["issue", "close", str(number), "--repo", repo], capture=False)
 
+    def list_prs(self, repo: str, state: str = "open", limit: int = 100, fields: list = None) -> list:
+        if fields is None:
+            fields = ["number", "title", "state", "headRefName", "baseRefName", "author", "createdAt", "url"]
+        json_fields = ",".join(fields)
+        cp = self._run([
+            "pr", "list", "--repo", repo, "--state", state, "--limit", str(limit),
+            "--json", json_fields
+        ])
+        import json
+        return json.loads(cp.stdout or "[]")
+
+    def edit_pr(self, repo: str, number: int, body: str) -> None:
+        self._run(["pr", "edit", str(number), "--repo", repo, "--body", body], capture=False)
+
