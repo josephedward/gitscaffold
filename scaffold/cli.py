@@ -89,6 +89,17 @@ from .matcher import find_best_issue_match
 import json
 
 
+# Safe float reader for environment variables
+def _env_float(name: str, default: float) -> float:
+    val = os.getenv(name)
+    if val is None or val == "":
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
 def _print_logo():
     logo = (
         "░█▀▀░▀█▀░▀█▀░█▀▀░█▀▀░█▀█░█▀▀░█▀▀░█▀█░█░░░█▀▄\n"
@@ -217,6 +228,8 @@ def cli(ctx, interactive):
     if ctx.invoked_subcommand is None:
         _print_logo()
         click.echo(ctx.get_help())
+
+ 
 
 
 @cli.group(name='config', help='Manage global configuration and secrets.')
@@ -2090,10 +2103,10 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
     # Set defaults for model and temperature if not provided
     if ai_provider == 'openai':
         final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
-        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('OPENAI_TEMPERATURE', 0.5)
     else: # gemini
         final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
-        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('GEMINI_TEMPERATURE', 0.5)
 
     try:
         issues = extract_issues_from_markdown(
@@ -2655,10 +2668,10 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
     # Set defaults for model and temperature if not provided
     if ai_provider == 'openai':
         final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
-        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('OPENAI_TEMPERATURE', 0.5)
     else: # gemini
         final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
-        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('GEMINI_TEMPERATURE', 0.5)
 
     try:
         issues = extract_issues_from_markdown(
@@ -3018,23 +3031,6 @@ def uninstall():
             click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
     else:
         click.secho("Aborted directory deletion.", fg="yellow")
-, t)
-                    if mnum:
-                        data[current]['tasks'].append(mnum.group(1).strip())
-                        continue
-                    if t.strip().startswith('- '):
-                        data[current]['tasks'].append(t.strip()[2:].strip())
-                        continue
-    except FileNotFoundError:
-        click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
-        sys.exit(1)
-    # Flatten mapping for lookups
-    mapping = {}
-    for ctx, obj in data.items():
-        for key in ('goal', 'tasks', 'deliverables'):
-            for itm in obj[key]:
-                mapping[itm] = {'context': ctx, **obj}
-    return mapping
 
 def _enrich_get_context(title, roadmap):
     if title in roadmap:
@@ -3683,23 +3679,6 @@ def uninstall():
             click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
     else:
         click.secho("Aborted directory deletion.", fg="yellow")
-, t)
-                    if mnum:
-                        data[current]['tasks'].append(mnum.group(1).strip())
-                        continue
-                    if t.strip().startswith('- '):
-                        data[current]['tasks'].append(t.strip()[2:].strip())
-                        continue
-    except FileNotFoundError:
-        click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
-        sys.exit(1)
-    # Flatten mapping for lookups
-    mapping = {}
-    for ctx, obj in data.items():
-        for key in ('goal', 'tasks', 'deliverables'):
-            for itm in obj[key]:
-                mapping[itm] = {'context': ctx, **obj}
-    return mapping
 
 def _enrich_get_context(title, roadmap):
     if title in roadmap:
@@ -3902,10 +3881,10 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
     # Set defaults for model and temperature if not provided
     if ai_provider == 'openai':
         final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
-        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('OPENAI_TEMPERATURE', 0.5)
     else: # gemini
         final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
-        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('GEMINI_TEMPERATURE', 0.5)
 
     try:
         issues = extract_issues_from_markdown(
@@ -4265,12 +4244,6 @@ def uninstall():
             click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
     else:
         click.secho("Aborted directory deletion.", fg="yellow")
-, t)
-    for ctx, obj in data.items():
-        for key in ('goal', 'tasks', 'deliverables'):
-            for itm in obj[key]:
-                mapping[itm] = {'context': ctx, **obj}
-    return mapping
 
 def _enrich_get_context(title, roadmap):
     if title in roadmap:
@@ -4473,10 +4446,10 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
     # Set defaults for model and temperature if not provided
     if ai_provider == 'openai':
         final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
-        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('OPENAI_TEMPERATURE', 0.5)
     else: # gemini
         final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
-        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('GEMINI_TEMPERATURE', 0.5)
 
     try:
         issues = extract_issues_from_markdown(
@@ -4836,23 +4809,6 @@ def uninstall():
             click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
     else:
         click.secho("Aborted directory deletion.", fg="yellow")
-, t)
-                    if mnum:
-                        data[current]['tasks'].append(mnum.group(1).strip())
-                        continue
-                    if t.strip().startswith('- '):
-                        data[current]['tasks'].append(t.strip()[2:].strip())
-                        continue
-    except FileNotFoundError:
-        click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
-        sys.exit(1)
-    # Flatten mapping for lookups
-    mapping = {}
-    for ctx, obj in data.items():
-        for key in ('goal', 'tasks', 'deliverables'):
-            for itm in obj[key]:
-                mapping[itm] = {'context': ctx, **obj}
-    return mapping
 
 def _enrich_get_context(title, roadmap):
     if title in roadmap:
@@ -5055,10 +5011,10 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
     # Set defaults for model and temperature if not provided
     if ai_provider == 'openai':
         final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
-        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('OPENAI_TEMPERATURE', 0.5)
     else: # gemini
         final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
-        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('GEMINI_TEMPERATURE', 0.5)
 
     try:
         issues = extract_issues_from_markdown(
@@ -5418,23 +5374,6 @@ def uninstall():
             click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
     else:
         click.secho("Aborted directory deletion.", fg="yellow")
-, t)
-                    if mnum:
-                        data[current]['tasks'].append(mnum.group(1).strip())
-                        continue
-                    if t.strip().startswith('- '):
-                        data[current]['tasks'].append(t.strip()[2:].strip())
-                        continue
-    except FileNotFoundError:
-        click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
-        sys.exit(1)
-    # Flatten mapping for lookups
-    mapping = {}
-    for ctx, obj in data.items():
-        for key in ('goal', 'tasks', 'deliverables'):
-            for itm in obj[key]:
-                mapping[itm] = {'context': ctx, **obj}
-    return mapping
 
 def _enrich_get_context(title, roadmap):
     if title in roadmap:
@@ -5637,10 +5576,10 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
     # Set defaults for model and temperature if not provided
     if ai_provider == 'openai':
         final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
-        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('OPENAI_TEMPERATURE', 0.5)
     else: # gemini
         final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
-        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('GEMINI_TEMPERATURE', 0.5)
 
     try:
         issues = extract_issues_from_markdown(
@@ -6000,18 +5939,6 @@ def uninstall():
             click.secho(f"Error deleting directory {config_dir}: {e}", fg="red", err=True)
     else:
         click.secho("Aborted directory deletion.", fg="yellow")
-, t)
-                    if mnum:
-                        data[current]['tasks'].append(mnum.group(1).strip())
-                        continue
-                    if t.strip().startswith('- '):
-                        data[current]['tasks'].append(t.strip()[2:].strip())
-                        continue
-    except FileNotFoundError:
-        click.secho(f"Error: ROADMAP.md not found at {path}", fg="red", err=True)
-        sys.exit(1)
-    # Flatten mapping for lookups
-    mapping = {}
     for ctx, obj in data.items():
         for key in ('goal', 'tasks', 'deliverables'):
             for itm in obj[key]:
@@ -6219,10 +6146,10 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
     # Set defaults for model and temperature if not provided
     if ai_provider == 'openai':
         final_model = model or os.getenv('OPENAI_MODEL', 'gpt-4-turbo-preview')
-        final_temp = temperature if temperature is not None else float(os.getenv('OPENAI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('OPENAI_TEMPERATURE', 0.5)
     else: # gemini
         final_model = model or os.getenv('GEMINI_MODEL', 'gemini-pro')
-        final_temp = temperature if temperature is not None else float(os.getenv('GEMINI_TEMPERATURE', '0.5'))
+        final_temp = temperature if temperature is not None else _env_float('GEMINI_TEMPERATURE', 0.5)
 
     try:
         issues = extract_issues_from_markdown(
@@ -6603,3 +6530,97 @@ def run_action_locally(workflow_file, event, job, dry_run):
     except subprocess.CalledProcessError as e:
         click.secho(f"Error running local action: {e}", fg='red', err=True)
         sys.exit(1)
+
+# -- End of legacy and base command definitions --
+
+# Register refined top-level groups (new menu) and wire subcommands after all legacy commands are defined.
+try:
+    from .settings import settings as settings_group
+    from .roadmap import roadmap as roadmap_group
+    from .issues import issues as issues_group
+    from .ci import ci as ci_group
+    from .source import source as source_group
+    from .api import api as api_group
+    from .demo import demo as demo_group
+    from .ai_group import ai as ai_group
+
+    # Wire settings
+    for name in ('set','get','list','path','remove'):
+        if name in config.commands:
+            settings_group.add_command(config.commands[name], name=name)
+    if 'list' in config.commands:
+        settings_group.add_command(config.commands['list'], name='show')
+    if 'uninstall' in cli.commands:
+        settings_group.add_command(cli.commands['uninstall'], name='uninstall')
+    if 'setup' in cli.commands:
+        settings_group.add_command(cli.commands['setup'], name='setup')
+
+    # Wire roadmap
+    for name in ('sync','diff','import-md'):
+        if name in cli.commands:
+            roadmap_group.add_command(cli.commands[name], name=name)
+
+    # Wire issues
+    gh_group = cli.commands.get('gh')
+    if gh_group and 'issue-list' in gh_group.commands:
+        issues_group.add_command(gh_group.commands['issue-list'], name='list')
+    for name in ('delete-closed','deduplicate','sanitize','next','match'):
+        if name in cli.commands:
+            issues_group.add_command(cli.commands[name], name=name)
+    if 'enrich' in cli.commands:
+        issues_group.add_command(cli.commands['enrich'], name='enrich')
+
+    # Wire ci
+    if 'run-action-locally' in cli.commands:
+        ci_group.add_command(cli.commands['run-action-locally'], name='run-local')
+
+    # Wire source
+    ops_group = cli.commands.get('ops')
+    if ops_group:
+        for name in ('delete-branches','remove-from-git'):
+            if name in ops_group.commands:
+                source_group.add_command(ops_group.commands[name], name=name)
+
+    # Wire api
+    if 'start-api' in cli.commands:
+        api_group.add_command(cli.commands['start-api'], name='start')
+
+    # Wire demo
+    if 'start-demo' in cli.commands:
+        demo_group.add_command(cli.commands['start-demo'], name='streamlit')
+
+    # Wire ai
+    if 'assistant' in cli.commands:
+        ai_group.add_command(cli.commands['assistant'], name='aider')
+    if 'vibe' in cli.commands:
+        ai_group.add_command(cli.commands['vibe'], name='vibe')
+    if 'enrich' in cli.commands:
+        ai_group.add_command(cli.commands['enrich'], name='enrich')
+
+    # Attach to root CLI
+    cli.add_command(settings_group, name='settings')
+    cli.add_command(roadmap_group, name='roadmap')
+    cli.add_command(issues_group, name='issues')
+    cli.add_command(ci_group, name='ci')
+    cli.add_command(source_group, name='source')
+    cli.add_command(api_group, name='api')
+    cli.add_command(demo_group, name='demo')
+    cli.add_command(ai_group, name='ai')
+
+    # Hide legacy top-level commands/groups from help (kept callable for compatibility)
+    for legacy_name in [
+        'config', 'gh', 'scripts', 'ops', 'vibe', 'assistant', 'enrich',
+        'start-demo', 'start-api', 'run-action-locally', 'setup', 'uninstall',
+        'sync', 'diff', 'import-md', 'next', 'delete-closed', 'sanitize', 'deduplicate', 'match'
+    ]:
+        if legacy_name in cli.commands:
+            try:
+                cli.commands[legacy_name].hidden = True
+            except Exception:
+                pass
+except Exception as _e:
+    # Non-fatal if something isn't importable; legacy commands remain available.
+    logging.debug(f"Refined groups not fully registered: {_e}")
+
+
+ 

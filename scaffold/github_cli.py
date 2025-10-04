@@ -13,9 +13,9 @@ def _home_bin_dir() -> Path:
 
 
 def find_gh_executable() -> Optional[str]:
-    """Find a usable gh executable (PATH or ~/.gitscaffold/bin/gh)."""
+    """Find a usable gh executable (prefer PATH, then ~/.gitscaffold/bin/gh)."""
     gh_path = shutil.which("gh")
-    if gh_path and os.access(gh_path, os.X_OK):
+    if gh_path:
         return gh_path
     candidate = _home_bin_dir() / "gh"
     if candidate.exists() and os.access(candidate, os.X_OK):
@@ -185,8 +185,8 @@ class GitHubCLI:
     def _run(self, args: List[str], check: bool = True, capture: bool = True, timeout: int = 60) -> subprocess.CompletedProcess:
         cmd = [self.gh] + args
         if capture:
-            return subprocess.run(cmd, check=check, capture_output=True, text=True, timeout=timeout)
-        return subprocess.run(cmd, check=check, timeout=timeout)
+            return subprocess.run(cmd, check=check, capture_output=True, text=True)
+        return subprocess.run(cmd, check=check)
 
     def version(self) -> str:
         cp = self._run(["--version"])  # type: ignore[arg-type]
