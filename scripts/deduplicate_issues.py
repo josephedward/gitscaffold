@@ -1,7 +1,17 @@
 import subprocess
 import json
 import argparse
-from thefuzz import fuzz
+try:
+    from thefuzz import fuzz
+except Exception:  # Fallback if thefuzz is unavailable
+    from difflib import SequenceMatcher
+
+    class _SimpleFuzz:
+        @staticmethod
+        def ratio(a: str, b: str) -> int:
+            return int(100 * SequenceMatcher(None, a, b).ratio())
+
+    fuzz = _SimpleFuzz()
 
 def get_open_issues():
     """Fetches all open issues from the GitHub repository."""
