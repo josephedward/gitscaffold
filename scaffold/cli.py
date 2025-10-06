@@ -1048,7 +1048,7 @@ A brief description of your project.
 """
 
 
-@project_group.command(name="setup", help='Initialize a new project with default files')
+@settings_group.command(name="setup", help='Initialize a new project with default files')
 def setup():
     """Creates a sample ROADMAP.md and a .env file to get started."""
     click.secho("Setting up new project...", fg="cyan", bold=True)
