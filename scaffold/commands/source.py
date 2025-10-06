@@ -60,8 +60,29 @@ def wt_prune():
     prune_worktrees()
 
 
+# Worktree config commands
+@worktree.group('config', help='Manage worktree configuration.')
+def wt_config():
+    pass
+
+@wt_config.command('init', help='Initialize a .gitscaffold-worktree.yml config file.')
+def wt_config_init():
+    from scaffold.core.worktree_config import init_config
+    init_config()
+
+@wt_config.command('show', help='Display the current worktree configuration.')
+def wt_config_show():
+    from scaffold.core.worktree_config import show_config
+    show_config()
+
+@wt_config.command('template-list', help='List available post-create hook templates.')
+def wt_config_template_list():
+    from scaffold.core.worktree_config import list_templates
+    list_templates()
+
+
 # Agents integration stubs under worktree
-@worktree.group('agents', help='Multi-agent helpers for worktrees (stubs).')
+@worktree.group('agents', help='Multi-agent helpers for worktrees.')
 def wt_agents():
     pass
 
@@ -69,22 +90,26 @@ def wt_agents():
 @wt_agents.command('setup')
 @click.option('--branches', help='Comma-separated list of branches to prepare')
 def wt_agents_setup(branches):
-    click.secho('Agent setup is not implemented yet. Define templates and hooks under .gitscaffold-worktree.yml.', fg='yellow')
+    from scaffold.core.worktree_agents import setup_agents
+    setup_agents(branches=branches)
 
 
 @wt_agents.command('start')
 @click.argument('branch')
 @click.option('--agent', type=click.Choice(['aider','cursor','claude']), default='aider')
 def wt_agents_start(branch, agent):
-    click.secho(f"Start agent '{agent}' for worktree '{branch}' (not implemented yet)", fg='yellow')
+    from scaffold.core.worktree_agents import start_agent
+    start_agent(branch=branch, agent_name=agent)
 
 
 @wt_agents.command('status')
 def wt_agents_status():
-    click.secho('Agent status reporting is not implemented yet.', fg='yellow')
+    from scaffold.core.worktree_agents import agent_status
+    agent_status()
 
 
 @wt_agents.command('kill')
 @click.argument('branch')
 def wt_agents_kill(branch):
-    click.secho(f"Stop agent for worktree '{branch}' (not implemented yet)", fg='yellow')
+    from scaffold.core.worktree_agents import kill_agent
+    kill_agent(branch=branch)

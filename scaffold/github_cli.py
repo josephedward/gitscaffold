@@ -227,6 +227,42 @@ class GitHubCLI:
     def close_issue(self, repo: str, number: int) -> None:
         self._run(["issue", "close", str(number), "--repo", repo], capture=False)
 
+    def view_issue(self, repo: str, number: int, fields: Optional[str] = None) -> dict:
+        if fields is None:
+            fields = "number,title,state,author,assignees,labels,milestone,createdAt,updatedAt,closedAt,url,body"
+        cp = self._run(["issue", "view", str(number), "--repo", repo, "--json", fields])
+        import json
+        return json.loads(cp.stdout or "{}")
+
+    def comment_issue(self, repo: str, number: int, body: str) -> None:
+        self._run(["issue", "comment", str(number), "--repo", repo, "--body", body], capture=False)
+
+    def edit_issue(
+        self,
+        repo: str,
+        number: int,
+        title: Optional[str] = None,
+        body: Optional[str] = None,
+        add_labels: Optional[list[str]] = None,
+        remove_labels: Optional[list[str]] = None,
+        add_assignees: Optional[list[str]] = None,
+        remove_assignees: Optional[list[str]] = None,
+    ) -> None:
+        args = ["issue", "edit", str(number), "--repo", repo]
+        if title:
+            args += ["--title", title]
+        if body:
+            args += ["--body", body]
+        for l in (add_labels or []):
+            args += ["--add-label", l]
+        for l in (remove_labels or []):
+            args += ["--remove-label", l]
+        for a in (add_assignees or []):
+            args += ["--add-assignee", a]
+        for a in (remove_assignees or []):
+            args += ["--remove-assignee", a]
+        self._run(args, capture=False)
+
     def issue_view(self, repo: str, number: int, fields: Optional[str] = None) -> dict:
         """Return issue details via gh issue view --json ..."""
         if fields is None:
