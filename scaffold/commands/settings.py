@@ -16,11 +16,11 @@ except ImportError:  # pragma: no cover
 
 
 @click.group(name='settings', help='Manage config, tokens, install/uninstall.')
-def settings():
+def settings_group():
     pass
 
 
-@settings.group(name='config', help='Manage global configuration and secrets.')
+@settings_group.group(name='config', help='Manage global configuration and secrets.')
 def config():
     """Manages global configuration stored in a file like ~/.gitscaffold/config."""
     pass
@@ -95,99 +95,3 @@ def config_remove(key):
         click.secho(f"Removed {key.upper()} from {config_path}", fg="green")
     else:
         click.secho(f"Key '{key.upper()}' not found in {config_path}", fg="yellow")
-
-
-# AI provider settings (keys + default provider)
-@settings.group('ai', help='Manage AI providers and API keys.')
-def settings_ai():
-    pass
-
-
-def _mask(val: str) -> str:
-    if not val:
-        return ''
-    if len(val) <= 6:
-        return '*' * len(val)
-    return val[:3] + '*' * (len(val) - 6) + val[-3:]
-
-
-@settings_ai.command('list')
-def ai_list():
-    import os
-    from scaffold.core.config import get_default_ai_provider
-    prov = get_default_ai_provider() or '(not set)'
-    keys = {
-        'openai': os.getenv('OPENAI_API_KEY'),
-        'gemini': os.getenv('GEMINI_API_KEY'),
-        'perplexity': os.getenv('PERPLEXITY_API_KEY'),
-        'openrouter': os.getenv('OPENROUTER_API_KEY'),
-    }
-    click.secho(f"Default provider: {prov}", fg='cyan')
-    for name, val in keys.items():
-        click.echo(f"- {name}: {'configured ' + _mask(val) if val else 'not set'}")
-
-
-@settings_ai.command('set')
-@click.option('--provider', type=click.Choice(['openai','gemini','perplexity','openrouter']), required=True)
-@click.option('--key', help='API key value (if omitted, prompts)')
-def ai_set(provider, key):
-    from scaffold.core.config import set_global_config_key
-    if not key:
-        key = click.prompt(f'Enter {provider} API key', hide_input=True)
-    env_key = {
-        'openai': 'OPENAI_API_KEY',
-        'gemini': 'GEMINI_API_KEY',
-        'perplexity': 'PERPLEXITY_API_KEY',
-        'openrouter': 'OPENROUTER_API_KEY',
-    }[provider]
-    set_global_config_key(env_key, key)
-    click.secho(f"Saved {provider} key.", fg='green')
-
-
-@settings_ai.command('get')
-@click.option('--provider', type=click.Choice(['openai','gemini','perplexity','openrouter']), required=True)
-@click.option('--show', is_flag=True, help='Show full key (unsafe)')
-def ai_get(provider, show):
-    import os
-    env_key = {
-        'openai': 'OPENAI_API_KEY',
-        'gemini': 'GEMINI_API_KEY',
-        'perplexity': 'PERPLEXITY_API_KEY',
-        'openrouter': 'OPENROUTER_API_KEY',
-    }[provider]
-    val = os.getenv(env_key)
-    if not val:
-        click.secho(f"No key found for {provider}", fg='yellow')
-        return
-    click.echo(val if show else _mask(val))
-
-
-@settings_ai.command('remove')
-@click.option('--provider', type=click.Choice(['openai','gemini','perplexity','openrouter']), required=True)
-def ai_remove(provider):
-    from scaffold.core.config import remove_global_config_key
-    env_key = {
-        'openai': 'OPENAI_API_KEY',
-        'gemini': 'GEMINI_API_KEY',
-        'perplexity': 'PERPLEXITY_API_KEY',
-        'openrouter': 'OPENROUTER_API_KEY',
-    }[provider]
-    removed = remove_global_config_key(env_key)
-    if removed:
-        click.secho(f"Removed {provider} key.", fg='green')
-    else:
-        click.secho(f"No {provider} key to remove.", fg='yellow')
-
-
-@settings_ai.command('use')
-@click.option('--provider', type=click.Choice(['openai','gemini','perplexity','openrouter']), required=True)
-def ai_use(provider):
-    from scaffold.core.config import set_default_ai_provider
-    set_default_ai_provider(provider)
-
-
-@settings_ai.command('show')
-def ai_show():
-    from scaffold.core.config import get_default_ai_provider
-    prov = get_default_ai_provider() or '(not set)'
-    click.secho(f"Default provider: {prov}", fg='cyan')
