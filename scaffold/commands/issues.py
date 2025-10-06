@@ -200,6 +200,52 @@ def gh_issue_label_remove(repo, number, label):
             raise
 
 
+# Labels group (stubs)
+@issues.group('labels', help='Manage labels (stubs).')
+def labels_group():
+    pass
+
+
+@labels_group.command('list')
+def labels_list():
+    click.secho('Listing labels is not implemented yet.', fg='yellow')
+
+
+@labels_group.command('create')
+@click.argument('name')
+def labels_create(name):
+    click.secho(f"Creating label '{name}' is not implemented yet.", fg='yellow')
+
+
+@labels_group.command('delete')
+@click.argument('name')
+def labels_delete(name):
+    click.secho(f"Deleting label '{name}' is not implemented yet.", fg='yellow')
+
+
+# Milestones group (stubs)
+@issues.group('milestones', help='Manage milestones (stubs).')
+def milestones_group():
+    pass
+
+
+@milestones_group.command('list')
+def milestones_list():
+    click.secho('Listing milestones is not implemented yet.', fg='yellow')
+
+
+@milestones_group.command('create')
+@click.argument('title')
+def milestones_create(title):
+    click.secho(f"Creating milestone '{title}' is not implemented yet.", fg='yellow')
+
+
+@milestones_group.command('close')
+@click.argument('number')
+def milestones_close(number):
+    click.secho(f"Closing milestone #{number} is not implemented yet.", fg='yellow')
+
+
 # Kanban via gh project (read-only for now)
 @issues.group('projects', help='GitHub Projects (kanban) via gh')
 def projects():
