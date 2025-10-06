@@ -16,11 +16,11 @@ except ImportError:  # pragma: no cover
 
 
 @click.group(name='settings', help='Manage config, tokens, install/uninstall.')
-def settings_group():
+def settings():
     pass
 
 
-@settings_group.group(name='config', help='Manage global configuration and secrets.')
+@settings.group(name='config', help='Manage global configuration and secrets.')
 def config():
     """Manages global configuration stored in a file like ~/.gitscaffold/config."""
     pass
@@ -98,7 +98,7 @@ def config_remove(key):
 
 
 # AI provider settings (keys + default provider)
-@settings_group.group('ai', help='Manage AI providers and API keys.')
+@settings.group('ai', help='Manage AI providers and API keys.')
 def settings_ai():
     pass
 
