@@ -58,7 +58,13 @@ testpaths = ["tests"]
 addopts = "-ra"
 
 [tool.setuptools]
-packages = ["scaffold", "scaffold.scripts", "scaffold.templates"]
+packages = [
+  "scaffold",
+  "scaffold.core",
+  "scaffold.commands",
+  "scaffold.scripts",
+  "scaffold.templates"
+]
 
 [tool.setuptools.package-data]
 scaffold = [
@@ -68,5 +74,4 @@ scaffold = [
 [tool.setuptools.dynamic]
 version = {attr = "scaffold.__version__"}
 
-[project.optional-dependencies]
-test = ["pytest", "pytest-cov"]
+# Duplicate optional-dependencies removed; tests defined above.
