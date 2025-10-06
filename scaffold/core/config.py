@@ -112,3 +112,40 @@ def get_gemini_api_key() -> str:
         click.secho("Google Gemini API key saved to global config file.", fg="green")
         os.environ['GEMINI_API_KEY'] = api_key
     return api_key
+
+
+# Additional AI providers
+def get_perplexity_api_key() -> str:
+    """Retrieve Perplexity API key or prompt and persist globally."""
+    api_key = os.getenv('PERPLEXITY_API_KEY')
+    if not api_key:
+        logging.warning("PERPLEXITY_API_KEY not found in environment or config files.")
+        api_key = click.prompt('Please enter your Perplexity API key', hide_input=True)
+        set_global_config_key('PERPLEXITY_API_KEY', api_key)
+        click.secho("Perplexity API key saved to global config file.", fg="green")
+        os.environ['PERPLEXITY_API_KEY'] = api_key
+    return api_key
+
+
+def get_openrouter_api_key() -> str:
+    """Retrieve OpenRouter API key or prompt and persist globally."""
+    api_key = os.getenv('OPENROUTER_API_KEY')
+    if not api_key:
+        logging.warning("OPENROUTER_API_KEY not found in environment or config files.")
+        api_key = click.prompt('Please enter your OpenRouter API key', hide_input=True)
+        set_global_config_key('OPENROUTER_API_KEY', api_key)
+        click.secho("OpenRouter API key saved to global config file.", fg="green")
+        os.environ['OPENROUTER_API_KEY'] = api_key
+    return api_key
+
+
+def set_default_ai_provider(provider: str) -> None:
+    provider = (provider or '').strip().lower()
+    if provider not in ('openai', 'gemini', 'perplexity', 'openrouter'):
+        raise click.ClickException("Unsupported provider. Choose from: openai, gemini, perplexity, openrouter.")
+    set_global_config_key('AI_PROVIDER', provider)
+    click.secho(f"Default AI provider set to {provider}.", fg='green')
+
+
+def get_default_ai_provider() -> Optional[str]:
+    return os.getenv('AI_PROVIDER')
