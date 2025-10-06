@@ -69,6 +69,14 @@ def create_issue(title, body, repo):
     except Exception as e:
         click.secho(f"Error: {e}", fg='red')
 from .github_cli import GitHubCLI, find_gh_executable, install_gh
+from .core.config import (
+    get_github_token,
+    get_openai_api_key,
+    get_gemini_api_key,
+    get_repo_from_git_config,
+    get_global_config_path,
+    set_global_config_key,
+)
 from .scripts_installer import install_scripts, list_scripts, default_install_dir
 try:
     from importlib.resources import files as pkg_files
@@ -216,96 +224,46 @@ def cli(ctx, interactive):
     # If no subcommand is invoked and not in interactive mode, show logo and help.
     if ctx.invoked_subcommand is None:
         _print_logo()
+        # Show top-level groups for quick discovery
         click.echo(ctx.get_help())
+        click.secho("\nCommand groups:", fg="cyan", bold=True)
+        for name, cmd in cli.commands.items():
+            if isinstance(cmd, click.core.Group):
+                click.echo(f"- {name}")
 
 
-@cli.group(name='config', help='Manage global configuration and secrets.')
-def config():
-    """Manages global configuration stored in a file like ~/.gitscaffold/config."""
+@cli.group(name='core', help='Core commands for roadmap synchronization and management.')
+def core_group():
     pass
 
-@config.command('set', help='Set a configuration key-value pair.')
-@click.argument('key')
-@click.argument('value')
-def config_set(key, value):
-    """Sets a key-value pair in the global config file."""
-    set_global_config_key(key.upper(), value)
-    config_path = get_global_config_path()
-    click.secho(f"Set {key.upper()} in {config_path}", fg="green")
+@cli.group(name='issue', help='Commands for issue management.')
+def issue_group():
+    pass
 
-@config.command('get', help='Get a configuration value.')
-@click.argument('key')
-def config_get(key):
-    """Gets a value from the global config file."""
-    config_path = get_global_config_path()
-    try:
-        from dotenv import dotenv_values
-    except ImportError:
-        click.secho("python-dotenv is required to read config files.", fg="red", err=True)
-        sys.exit(1)
-        
-    if not config_path.exists():
-        click.secho(f"Config file not found: {config_path}", fg="yellow")
-        sys.exit(1)
+@cli.group(name='project', help='Commands for project setup and configuration.')
+def project_group():
+    pass
 
-    values = dotenv_values(config_path)
-    value = values.get(key.upper())
-    if value is not None:
-        click.echo(value)
-    else:
-        click.secho(f"Key '{key.upper()}' not found in {config_path}", fg="yellow")
-        sys.exit(1)
+@cli.group(name='integrations', help='Commands for integrations with other tools.')
+def integrations_group():
+    pass
 
-@config.command('list', help='List all global configuration key-value pairs.')
-def config_list():
-    """Lists all key-value pairs from the global config file."""
-    config_path = get_global_config_path()
-    if not config_path.exists():
-        click.secho(f"Config file not found: {config_path}", fg="yellow")
-        return
+@cli.group(name='devops', help='Commands for DevOps and automation.')
+def devops_group():
+    pass
 
-    try:
-        from dotenv import dotenv_values
-    except ImportError:
-        click.secho("python-dotenv is required to read config files.", fg="red", err=True)
-        sys.exit(1)
-
-    values = dotenv_values(config_path)
-    if not values:
-        click.echo("Config file is empty.")
-        return
-    
-    table = Table(title=f"Global Configuration ({config_path})")
-    table.add_column("Key", style="cyan")
-    table.add_column("Value", style="magenta")
-    for key, value in values.items():
-        table.add_row(key, value)
-    
-    console = Console()
-    console.print(table)
-
-@config.command('path', help='Show path to the global config file.')
-def config_path_command():
-    """Shows the path to the global config file."""
-    click.echo(get_global_config_path())
-@config.command('remove', help='Remove a configuration key.')
-@click.argument('key')
-def config_remove(key):
-    """Removes a key-value pair from the global config file."""
-    config_path = get_global_config_path()
-    try:
-        removed, _ = unset_key(str(config_path), key.upper())
-        if removed:
-            click.secho(f"Removed {key.upper()} from {config_path}", fg="green")
-        else:
-            click.secho(f"Key '{key.upper()}' not found in {config_path}", fg="yellow")
-    except click.ClickException:
-        raise
-    except Exception as e:
-        click.secho(f"Error removing key '{key.upper()}': {e}", fg="red", err=True)
+@cli.group(name='server', help='Commands for running servers.')
+def server_group():
+    pass
 
 
-@cli.group(name='gh', help='Manage and use the bundled GitHub CLI (gh).')
+from .commands.config_cmd import config as config_group
+
+
+# Register external command groups
+project_group.add_command(config_group)
+
+@integrations_group.group(name='gh', help='Manage and use the bundled GitHub CLI (gh).')
 def gh_group():
     """Commands that help manage/local-install GitHub CLI and perform basic issue actions."""
     pass
@@ -471,7 +429,7 @@ def gh_auto_label(repo, issue_number, provider, api_key, model, temperature):
         sys.exit(1)
 
 
-@cli.group(name='scripts', help='Manage bundled shell script primitives.')
+@devops_group.group(name='scripts', help='Manage bundled shell script primitives.')
 def scripts_group():
     pass
 
@@ -493,7 +451,7 @@ def scripts_list_cmd():
         click.echo(name)
 
 
-@cli.group(name='ops', help='Run built-in maintenance scripts (exact flags passthrough).')
+@devops_group.group(name='ops', help='Run built-in maintenance scripts (exact flags passthrough).')
 def ops_group():
     pass
 
@@ -831,7 +789,7 @@ A brief description of your project.
 """
 
 
-@cli.command(name="setup", help='Initialize a new project with default files')
+@project_group.command(name="setup", help='Initialize a new project with default files')
 def setup():
     """Creates a sample ROADMAP.md and a .env file to get started."""
     click.secho("Setting up new project...", fg="cyan", bold=True)
@@ -1295,7 +1253,7 @@ def sync(roadmap_file, token, repo, dry_run, force_ai, no_ai, ai_enrich, ai_prov
 
 
     
-@cli.command(name='diff', help='Diff a local roadmap with GitHub issues (AI-first extraction for unstructured Markdown; disable with --no-ai; requires an AI API key)')
+@core_group.command(name='diff', help='Diff a local roadmap with GitHub issues (AI-first extraction for unstructured Markdown; disable with --no-ai; requires an AI API key)')
 @click.argument('roadmap_file', type=click.Path(exists=True), metavar='ROADMAP_FILE')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
@@ -1499,7 +1457,7 @@ def diff(roadmap_file, repo, token, no_ai, ai_provider, ai_key):
             click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='next', help='Show next action items')
+@core_group.command(name='next', help='Show next action items')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (prompts if not set).')
 @click.option('--roadmap-file', '-f', 'roadmap_file', type=click.Path(), default='ROADMAP.md', show_default=True,
@@ -1593,7 +1551,7 @@ def next_command(repo, token, roadmap_file):
     click.echo("\nCommand finished.")
 
 
-@cli.command(name='delete-closed', help='Delete all closed issues')
+@issue_group.command(name='delete-closed', help='Delete all closed issues')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--dry-run', is_flag=True, help='List issues that would be deleted, without actually deleting them.')
@@ -1654,7 +1612,7 @@ def delete_closed_issues_command(repo, token, dry_run, yes):
         click.echo(f"Failed to delete: {failed_count} issues. Check logs for errors.", err=True)
 
 
-@cli.command(name='sanitize', help='Clean up issue titles')
+@issue_group.command(name='sanitize', help='Clean up issue titles')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', envvar='GITHUB_TOKEN', help='GitHub API token (reads from .env or GITHUB_TOKEN env var).')
 @click.option('--dry-run', is_flag=True, help='List issues that would be changed, without actually changing them.')
@@ -1740,7 +1698,7 @@ def sanitize_command(repo, token, dry_run, yes):
         click.secho(f"Failed to update: {failed_count} issues", fg="red", err=True)
 
 
-@cli.command(name='deduplicate', help='Close duplicate open issues')
+@issue_group.command(name='deduplicate', help='Close duplicate open issues')
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to the current git repo.')
 @click.option('--token', help='GitHub API token (prompts if not set).')
 @click.option('--dry-run', is_flag=True, help='List duplicate issues that would be closed, without actually closing them.')
@@ -1927,7 +1885,7 @@ def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
         context=full_context
     )
 
-@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@issue_group.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
 @click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
 @click.pass_context
 def enrich(ctx, ai_provider):
@@ -2026,7 +1984,7 @@ def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, a
 
 
 
-@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@core_group.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
@@ -2152,7 +2110,7 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
         click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='start-demo', help='Run the Streamlit demo')
+@server_group.command(name='start-demo', help='Run the Streamlit demo')
 def start_demo():
     """Starts the Streamlit demo app if it exists."""
     demo_app_path = Path('demo/app.py')
@@ -2175,7 +2133,7 @@ def start_demo():
 
 
 # Vibe Kanban integration commands
-@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+@integrations_group.group('vibe', help='Manage Vibe Kanban integration commands.')
 def vibe():
     """Vibe Kanban integration subcommands."""
     pass
@@ -2293,7 +2251,7 @@ def pull(repo, board_name, kanban_api, bidirectional, token):
     click.secho("Pull completed.", fg="green")
 
 
-@cli.command(name='start-api', help='Run the FastAPI server')
+@server_group.command(name='start-api', help='Run the FastAPI server')
 def start_api():
     """Starts the FastAPI application using Uvicorn."""
     # Based on the template, the api app is at src/api/app.py
@@ -2320,7 +2278,7 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@integrations_group.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def assistant(ctx, args):
@@ -2428,7 +2386,7 @@ def process_issues(issues_file, results_dir, timeout):
 
     click.secho("\nProcessing complete.", fg='green')
 
-@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+@project_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
     """Provides instructions for uninstalling and offers to clean up config data."""
     click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
@@ -2492,7 +2450,7 @@ def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
         context=full_context
     )
 
-@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@issue_group.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
 @click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
 @click.pass_context
 def enrich(ctx, ai_provider):
@@ -2591,7 +2549,7 @@ def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, a
 
 
 
-@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@core_group.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
@@ -2717,7 +2675,7 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
         click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='start-demo', help='Run the Streamlit demo')
+@server_group.command(name='start-demo', help='Run the Streamlit demo')
 def start_demo():
     """Starts the Streamlit demo app if it exists."""
     demo_app_path = Path('demo/app.py')
@@ -2740,7 +2698,7 @@ def start_demo():
 
 
 # Vibe Kanban integration commands
-@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+@integrations_group.group('vibe', help='Manage Vibe Kanban integration commands.')
 def vibe():
     """Vibe Kanban integration subcommands."""
     pass
@@ -2858,7 +2816,7 @@ def pull(repo, board_name, kanban_api, bidirectional, token):
     click.secho("Pull completed.", fg="green")
 
 
-@cli.command(name='start-api', help='Run the FastAPI server')
+@server_group.command(name='start-api', help='Run the FastAPI server')
 def start_api():
     """Starts the FastAPI application using Uvicorn."""
     # Based on the template, the api app is at src/api/app.py
@@ -2885,7 +2843,7 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@integrations_group.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def assistant(ctx, args):
@@ -2993,7 +2951,7 @@ def process_issues(issues_file, results_dir, timeout):
 
     click.secho("\nProcessing complete.", fg='green')
 
-@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+@project_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
     """Provides instructions for uninstalling and offers to clean up config data."""
     click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
@@ -3057,7 +3015,7 @@ def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
         context=full_context
     )
 
-@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@issue_group.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
 @click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
 @click.pass_context
 def enrich(ctx, ai_provider):
@@ -3156,7 +3114,7 @@ def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, a
 
 
 
-@cli.command(name="match", help="Match pull requests to issues using fuzzy matching.")
+@issue_group.command(name="match", help="Match pull requests to issues using fuzzy matching.")
 @click.option('--repo', help='Target GitHub repository in `owner/repo` format. Defaults to git origin.')
 @click.option('--dry-run', is_flag=True, help='Simulate and show what would be matched, without making changes.')
 @click.option('--yes', '-y', is_flag=True, help='Skip confirmation and apply changes.')
@@ -3229,7 +3187,7 @@ def match(repo, dry_run, yes):
             click.secho(f"No suitable match found for PR #{pr_number} '{pr_title}'.", fg="white")
 
 
-@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@core_group.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
 
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
@@ -3365,7 +3323,7 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
         click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='start-demo', help='Run the Streamlit demo')
+@server_group.command(name='start-demo', help='Run the Streamlit demo')
 def start_demo():
     """Starts the Streamlit demo app if it exists."""
     demo_app_path = Path('demo/app.py')
@@ -3388,7 +3346,7 @@ def start_demo():
 
 
 # Vibe Kanban integration commands
-@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+@integrations_group.group('vibe', help='Manage Vibe Kanban integration commands.')
 def vibe():
     """Vibe Kanban integration subcommands."""
     pass
@@ -3506,7 +3464,7 @@ def pull(repo, board_name, kanban_api, bidirectional, token):
     click.secho("Pull completed.", fg="green")
 
 
-@cli.command(name='start-api', help='Run the FastAPI server')
+@server_group.command(name='start-api', help='Run the FastAPI server')
 def start_api():
     """Starts the FastAPI application using Uvicorn."""
     # Based on the template, the api app is at src/api/app.py
@@ -3533,7 +3491,7 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@integrations_group.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def assistant(ctx, args):
@@ -3641,7 +3599,7 @@ def process_issues(issues_file, results_dir, timeout):
 
     click.secho("\nProcessing complete.", fg='green')
 
-@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+@project_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
     """Provides instructions for uninstalling and offers to clean up config data."""
     click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
@@ -3705,7 +3663,7 @@ def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
         context=full_context
     )
 
-@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@issue_group.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
 @click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
 @click.pass_context
 def enrich(ctx, ai_provider):
@@ -3804,7 +3762,7 @@ def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, a
 
 
 
-@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@core_group.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
@@ -3930,7 +3888,7 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
         click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='start-demo', help='Run the Streamlit demo')
+@server_group.command(name='start-demo', help='Run the Streamlit demo')
 def start_demo():
     """Starts the Streamlit demo app if it exists."""
     demo_app_path = Path('demo/app.py')
@@ -3953,7 +3911,7 @@ def start_demo():
 
 
 # Vibe Kanban integration commands
-@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+@integrations_group.group('vibe', help='Manage Vibe Kanban integration commands.')
 def vibe():
     """Vibe Kanban integration subcommands."""
     pass
@@ -4071,7 +4029,7 @@ def pull(repo, board_name, kanban_api, bidirectional, token):
     click.secho("Pull completed.", fg="green")
 
 
-@cli.command(name='start-api', help='Run the FastAPI server')
+@server_group.command(name='start-api', help='Run the FastAPI server')
 def start_api():
     """Starts the FastAPI application using Uvicorn."""
     # Based on the template, the api app is at src/api/app.py
@@ -4098,7 +4056,7 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@integrations_group.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def assistant(ctx, args):
@@ -4206,7 +4164,7 @@ def process_issues(issues_file, results_dir, timeout):
 
     click.secho("\nProcessing complete.", fg='green')
 
-@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+@project_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
     """Provides instructions for uninstalling and offers to clean up config data."""
     click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
@@ -4270,7 +4228,7 @@ def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
         context=full_context
     )
 
-@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@issue_group.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
 @click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
 @click.pass_context
 def enrich(ctx, ai_provider):
@@ -4369,7 +4327,7 @@ def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, a
 
 
 
-@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@core_group.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
@@ -4495,7 +4453,7 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
         click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='start-demo', help='Run the Streamlit demo')
+@server_group.command(name='start-demo', help='Run the Streamlit demo')
 def start_demo():
     """Starts the Streamlit demo app if it exists."""
     demo_app_path = Path('demo/app.py')
@@ -4518,7 +4476,7 @@ def start_demo():
 
 
 # Vibe Kanban integration commands
-@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+@integrations_group.group('vibe', help='Manage Vibe Kanban integration commands.')
 def vibe():
     """Vibe Kanban integration subcommands."""
     pass
@@ -4636,7 +4594,7 @@ def pull(repo, board_name, kanban_api, bidirectional, token):
     click.secho("Pull completed.", fg="green")
 
 
-@cli.command(name='start-api', help='Run the FastAPI server')
+@server_group.command(name='start-api', help='Run the FastAPI server')
 def start_api():
     """Starts the FastAPI application using Uvicorn."""
     # Based on the template, the api app is at src/api/app.py
@@ -4663,7 +4621,7 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@integrations_group.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def assistant(ctx, args):
@@ -4771,7 +4729,7 @@ def process_issues(issues_file, results_dir, timeout):
 
     click.secho("\nProcessing complete.", fg='green')
 
-@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+@project_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
     """Provides instructions for uninstalling and offers to clean up config data."""
     click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
@@ -4835,7 +4793,7 @@ def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
         context=full_context
     )
 
-@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@issue_group.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
 @click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
 @click.pass_context
 def enrich(ctx, ai_provider):
@@ -4934,7 +4892,7 @@ def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, a
 
 
 
-@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@core_group.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
@@ -5060,7 +5018,7 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
         click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='start-demo', help='Run the Streamlit demo')
+@server_group.command(name='start-demo', help='Run the Streamlit demo')
 def start_demo():
     """Starts the Streamlit demo app if it exists."""
     demo_app_path = Path('demo/app.py')
@@ -5083,7 +5041,7 @@ def start_demo():
 
 
 # Vibe Kanban integration commands
-@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+@integrations_group.group('vibe', help='Manage Vibe Kanban integration commands.')
 def vibe():
     """Vibe Kanban integration subcommands."""
     pass
@@ -5201,7 +5159,7 @@ def pull(repo, board_name, kanban_api, bidirectional, token):
     click.secho("Pull completed.", fg="green")
 
 
-@cli.command(name='start-api', help='Run the FastAPI server')
+@server_group.command(name='start-api', help='Run the FastAPI server')
 def start_api():
     """Starts the FastAPI application using Uvicorn."""
     # Based on the template, the api app is at src/api/app.py
@@ -5228,7 +5186,7 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@integrations_group.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def assistant(ctx, args):
@@ -5336,7 +5294,7 @@ def process_issues(issues_file, results_dir, timeout):
 
     click.secho("\nProcessing complete.", fg='green')
 
-@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+@project_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
     """Provides instructions for uninstalling and offers to clean up config data."""
     click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
@@ -5400,7 +5358,7 @@ def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
         context=full_context
     )
 
-@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@issue_group.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
 @click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
 @click.pass_context
 def enrich(ctx, ai_provider):
@@ -5499,7 +5457,7 @@ def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, a
 
 
 
-@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@core_group.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
@@ -5625,7 +5583,7 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
         click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='start-demo', help='Run the Streamlit demo')
+@server_group.command(name='start-demo', help='Run the Streamlit demo')
 def start_demo():
     """Starts the Streamlit demo app if it exists."""
     demo_app_path = Path('demo/app.py')
@@ -5648,7 +5606,7 @@ def start_demo():
 
 
 # Vibe Kanban integration commands
-@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+@integrations_group.group('vibe', help='Manage Vibe Kanban integration commands.')
 def vibe():
     """Vibe Kanban integration subcommands."""
     pass
@@ -5766,7 +5724,7 @@ def pull(repo, board_name, kanban_api, bidirectional, token):
     click.secho("Pull completed.", fg="green")
 
 
-@cli.command(name='start-api', help='Run the FastAPI server')
+@server_group.command(name='start-api', help='Run the FastAPI server')
 def start_api():
     """Starts the FastAPI application using Uvicorn."""
     # Based on the template, the api app is at src/api/app.py
@@ -5793,7 +5751,7 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@integrations_group.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def assistant(ctx, args):
@@ -5901,7 +5859,7 @@ def process_issues(issues_file, results_dir, timeout):
 
     click.secho("\nProcessing complete.", fg='green')
 
-@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+@project_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
     """Provides instructions for uninstalling and offers to clean up config data."""
     click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
@@ -5965,7 +5923,7 @@ def _enrich_call_llm(title, existing_body, ctx, provider, api_key):
         context=full_context
     )
 
-@cli.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
+@issue_group.group(name='enrich', help='Enrich GitHub issues using roadmap context via LLM')
 @click.option('--ai-provider', type=click.Choice(['openai', 'gemini']), default='openai', show_default=True, help='AI provider to use.')
 @click.pass_context
 def enrich(ctx, ai_provider):
@@ -6064,7 +6022,7 @@ def enrich_batch_command(click_ctx, repo, roadmap_path, csv_path, interactive, a
 
 
 
-@cli.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
+@core_group.command(name='import-md', help='Import issues from an unstructured Markdown file via AI')
 @click.argument('repo', metavar='REPO')
 @click.argument('markdown_file', type=click.Path(), metavar='MARKDOWN_FILE')
 @click.option('--token', help='GitHub token (overrides GITHUB_TOKEN env var)')
@@ -6190,7 +6148,7 @@ def import_md(repo, markdown_file, token, ai_provider, ai_key, model, temperatur
         click.secho(f"Failed to create: {failed_count} issues.", fg="red", err=True)
 
 
-@cli.command(name='start-demo', help='Run the Streamlit demo')
+@server_group.command(name='start-demo', help='Run the Streamlit demo')
 def start_demo():
     """Starts the Streamlit demo app if it exists."""
     demo_app_path = Path('demo/app.py')
@@ -6213,7 +6171,7 @@ def start_demo():
 
 
 # Vibe Kanban integration commands
-@cli.group('vibe', help='Manage Vibe Kanban integration commands.')
+@integrations_group.group('vibe', help='Manage Vibe Kanban integration commands.')
 def vibe():
     """Vibe Kanban integration subcommands."""
     pass
@@ -6331,7 +6289,7 @@ def pull(repo, board_name, kanban_api, bidirectional, token):
     click.secho("Pull completed.", fg="green")
 
 
-@cli.command(name='start-api', help='Run the FastAPI server')
+@server_group.command(name='start-api', help='Run the FastAPI server')
 def start_api():
     """Starts the FastAPI application using Uvicorn."""
     # Based on the template, the api app is at src/api/app.py
@@ -6358,7 +6316,7 @@ def start_api():
         sys.exit(1)
 
 
-@cli.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
+@integrations_group.group(name='assistant', help='Invoke the Aider AI assistant.', invoke_without_command=True)
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 @click.pass_context
 def assistant(ctx, args):
@@ -6466,7 +6424,7 @@ def process_issues(issues_file, results_dir, timeout):
 
     click.secho("\nProcessing complete.", fg='green')
 
-@cli.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+@project_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
     """Provides instructions for uninstalling and offers to clean up config data."""
     click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
@@ -6493,7 +6451,7 @@ def uninstall():
         click.secho("Aborted directory deletion.", fg="yellow")
 
 
-@cli.command(name='run-action-locally', help='Run a GitHub Action locally using nektos/act')
+@devops_group.command(name='run-action-locally', help='Run a GitHub Action locally using nektos/act')
 @click.option('--workflow-file', '-W', required=True, help='Path to the workflow file (e.g., .github/workflows/ci.yml).')
 @click.option('--event', '-e', default='workflow_dispatch', show_default=True, help='Event to simulate (e.g., push, pull_request).')
 @click.option('--job', '-j', help='Run a specific job within the workflow.')
