@@ -263,33 +263,6 @@ class GitHubCLI:
             args += ["--remove-assignee", a]
         self._run(args, capture=False)
 
-    def issue_view(self, repo: str, number: int, fields: Optional[str] = None) -> dict:
-        """Return issue details via gh issue view --json ..."""
-        if fields is None:
-            fields = "number,title,state,labels,assignees,milestone,author,createdAt,url,body"
-        args = [
-            "issue", "view", str(number), "--repo", repo, "--json", fields
-        ]
-        cp = self._run(args)
-        import json
-        return json.loads(cp.stdout or "{}")
-
-    def edit_issue(self, repo: str, number: int, title: Optional[str] = None, body: Optional[str] = None) -> None:
-        args = ["issue", "edit", str(number), "--repo", repo]
-        if title:
-            args += ["--title", title]
-        if body:
-            args += ["--body", body]
-        self._run(args, capture=False)
-
-    def issue_comment(self, repo: str, number: int, body: str) -> None:
-        args = ["issue", "comment", str(number), "--repo", repo, "--body", body]
-        self._run(args, capture=False)
-
-    def issue_remove_label(self, repo: str, number: int, label: str) -> None:
-        args = ["issue", "edit", str(number), "--repo", repo, "--remove-label", label]
-        self._run(args, capture=False)
-
     def list_labels(self, repo: str, limit: int = 100) -> list:
         fields = "name,description,color"
         cp = self._run([

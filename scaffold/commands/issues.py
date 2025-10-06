@@ -92,6 +92,114 @@ def gh_issue_close(repo, number):
             raise
 
 
+@issues.command('view', help='View an issue via GitHub CLI (gh)')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.')
+@click.argument('number', type=int)
+def gh_issue_view(repo, number):
+    repo = repo or get_repo_from_git_config()
+    if not repo:
+        click.secho('Could not detect repository. Use --repo.', fg='red')
+        raise SystemExit(1)
+    try:
+        from scaffold.github_cli import GitHubCLI
+        gh = GitHubCLI()
+        data = gh.view_issue(repo, number)
+        title = data.get('title','')
+        url = data.get('url','')
+        body = data.get('body','') or ''
+        click.echo(f"#{number} {title}\n{url}\n\n{body}")
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+    except Exception as e:
+        import subprocess
+        if isinstance(e, subprocess.CalledProcessError):
+            click.secho(f"gh error: {e}", fg='red')
+        else:
+            raise
+
+
+@issues.command('comment', help='Comment on an issue via GitHub CLI (gh)')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.')
+@click.argument('number', type=int)
+@click.argument('body')
+def gh_issue_comment(repo, number, body):
+    repo = repo or get_repo_from_git_config()
+    if not repo:
+        click.seho('Could not detect repository. Use --repo.', fg='red')
+        raise SystemExit(1)
+    try:
+        from scaffold.github_cli import GitHubCLI
+        gh = GitHubCLI()
+        gh.comment_issue(repo, number, body)
+        click.secho(f"Commented on issue #{number}", fg='green')
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+    except Exception as e:
+        import subprocess
+        if isinstance(e, subprocess.CalledProcessError):
+            click.secho(f"gh error: {e}", fg='red')
+        else:
+            raise
+
+
+@issues.command('edit', help='Edit an issue via GitHub CLI (gh)')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.')
+@click.argument('number', type=int)
+@click.option('--title')
+@click.option('--body')
+@click.option('--add-label', 'add_labels', multiple=True)
+@click.option('--remove-label', 'remove_labels', multiple=True)
+@click.option('--add-assignee', 'add_assignees', multiple=True)
+@click.option('--remove-assignee', 'remove_assignees', multiple=True)
+def gh_issue_edit(repo, number, title, body, add_labels, remove_labels, add_assignees, remove_assignees):
+    repo = repo or get_repo_from_git_config()
+    if not repo:
+        click.secho('Could not detect repository. Use --repo.', fg='red')
+        raise SystemExit(1)
+    try:
+        from scaffold.github_cli import GitHubCLI
+        gh = GitHubCLI()
+        gh.edit_issue(repo, number, title=title, body=body,
+                      add_labels=list(add_labels) or None,
+                      remove_labels=list(remove_labels) or None,
+                      add_assignees=list(add_assignees) or None,
+                      remove_assignees=list(remove_assignees) or None)
+        click.secho(f"Edited issue #{number}", fg='green')
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+    except Exception as e:
+        import subprocess
+        if isinstance(e, subprocess.CalledProcessError):
+            click.secho(f"gh error: {e}", fg='red')
+        else:
+            raise
+
+
+@issues.command('label-remove', help='Remove a label from an issue via gh')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.')
+@click.argument('number', type=int)
+@click.argument('label', nargs=-1)
+def gh_issue_label_remove(repo, number, label):
+    repo = repo or get_repo_from_git_config()
+    if not repo:
+        click.secho('Could not detect repository. Use --repo.', fg='red')
+        raise SystemExit(1)
+    try:
+        from scaffold.github_cli import GitHubCLI
+        gh = GitHubCLI()
+        for l in label:
+            gh.edit_issue(repo, number, remove_labels=[l])
+        click.secho(f"Removed labels from issue #{number}", fg='green')
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+    except Exception as e:
+        import subprocess
+        if isinstance(e, subprocess.CalledProcessError):
+            click.secho(f"gh error: {e}", fg='red')
+        else:
+            raise
+
+
 # Kanban via gh project (read-only for now)
 @issues.group('projects', help='GitHub Projects (kanban) via gh')
 def projects():
