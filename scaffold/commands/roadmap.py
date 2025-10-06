@@ -22,3 +22,9 @@ try:
     roadmap.add_command(legacy_import_md_cmd, name='import')
 except Exception:
     pass
+
+
+@roadmap.command('export')
+def roadmap_export():
+    """Export roadmap (stub)."""
+    click.secho('Roadmap export is not implemented yet.', fg='yellow')
