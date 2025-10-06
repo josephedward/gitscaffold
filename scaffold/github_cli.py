@@ -227,6 +227,160 @@ class GitHubCLI:
     def close_issue(self, repo: str, number: int) -> None:
         self._run(["issue", "close", str(number), "--repo", repo], capture=False)
 
+    def issue_view(self, repo: str, number: int, fields: Optional[str] = None) -> dict:
+        """Return issue details via gh issue view --json ..."""
+        if fields is None:
+            fields = "number,title,state,labels,assignees,milestone,author,createdAt,url,body"
+        args = [
+            "issue", "view", str(number), "--repo", repo, "--json", fields
+        ]
+        cp = self._run(args)
+        import json
+        return json.loads(cp.stdout or "{}")
+
+    def edit_issue(self, repo: str, number: int, title: Optional[str] = None, body: Optional[str] = None) -> None:
+        args = ["issue", "edit", str(number), "--repo", repo]
+        if title:
+            args += ["--title", title]
+        if body:
+            args += ["--body", body]
+        self._run(args, capture=False)
+
+    def issue_comment(self, repo: str, number: int, body: str) -> None:
+        args = ["issue", "comment", str(number), "--repo", repo, "--body", body]
+        self._run(args, capture=False)
+
+    def issue_remove_label(self, repo: str, number: int, label: str) -> None:
+        args = ["issue", "edit", str(number), "--repo", repo, "--remove-label", label]
+        self._run(args, capture=False)
+
+    def list_labels(self, repo: str, limit: int = 100) -> list:
+        fields = "name,description,color"
+        cp = self._run([
+            "label", "list", "--repo", repo, "--limit", str(limit),
+            "--json", fields
+        ])
+        import json
+        return json.loads(cp.stdout or "[]")
+
+    def create_label(self, repo: str, name: str, description: Optional[str] = None, color: Optional[str] = None) -> dict:
+        args = ["label", "create", "--repo", repo, name]
+        if description:
+            args += ["--description", description]
+        if color:
+            args += ["--color", color]
+        args += ["--json", "name,description,color"]
+        cp = self._run(args)
+        import json
+        return json.loads(cp.stdout or "{}")
+
+    def delete_label(self, repo: str, name: str) -> None:
+        self._run(["label", "delete", "--repo", repo, name, "--yes"], capture=False)
+
+    def list_milestones(self, repo: str, state: str = "open", limit: int = 100) -> list:
+        fields = "number,title,description,state,dueOn,url"
+        cp = self._run([
+            "milestone", "list", "--repo", repo, "--state", state, "--limit", str(limit),
+            "--json", fields
+        ])
+        import json
+        return json.loads(cp.stdout or "[]")
+
+    def create_milestone(self, repo: str, title: str, description: Optional[str] = None, due_on: Optional[str] = None) -> dict:
+        args = ["milestone", "create", "--repo", repo, title]
+        if description:
+            args += ["--description", description]
+        if due_on:
+            args += ["--due-on", due_on]
+        args += ["--json", "number,title,url"]
+        cp = self._run(args)
+        import json
+        return json.loads(cp.stdout or "{}")
+
+    def close_milestone(self, repo: str, number: int) -> None:
+        self._run(["milestone", "close", str(number), "--repo", repo], capture=False)
+
+    def open_milestone(self, repo: str, number: int) -> None:
+        self._run(["milestone", "open", str(number), "--repo", repo], capture=False)
+
+    def delete_milestone(self, repo: str, number: int) -> None:
+        self._run(["milestone", "delete", str(number), "--repo", repo, "--yes"], capture=False)
+
+    def list_workflows(self, repo: str, limit: int = 100) -> list:
+        fields = "id,name,state,createdAt,updatedAt"
+        cp = self._run([
+            "workflow", "list", "--repo", repo, "--limit", str(limit),
+            "--json", fields
+        ])
+        import json
+        return json.loads(cp.stdout or "[]")
+
+    def run_workflow(self, repo: str, workflow_id: str, ref: str = "main", inputs: Optional[dict] = None) -> dict:
+        args = ["workflow", "run", "--repo", repo, workflow_id, "--ref", ref]
+        if inputs:
+            for key, value in inputs.items():
+                args += ["-f", f"{key}={value}"]
+        cp = self._run(args)
+        import json
+        return json.loads(cp.stdout or "{}")
+
+    def workflow_status(self, repo: str, run_id: str) -> dict:
+        fields = "id,status,conclusion,createdAt,updatedAt,url"
+        cp = self._run([
+            "run", "view", "--repo", repo, run_id, "--json", fields
+        ])
+        import json
+        return json.loads(cp.stdout or "{}")
+
+    # ---- Projects (Kanban) helpers (require gh project plugin) ----
+    def has_projects(self) -> bool:
+        try:
+            self._run(["project", "--help"], check=False)
+            return True
+        except Exception:
+            return False
+
+    def project_list(self, owner: Optional[str] = None, org: Optional[str] = None, limit: int = 30) -> str:
+        args = ["project", "list", "--limit", str(limit)]
+        if owner:
+            args += ["--owner", owner]
+        if org:
+            args += ["--org", org]
+        # Not all gh versions support --format json; return raw output for compatibility
+        cp = self._run(args, capture=True, check=False)
+        return (cp.stdout or "").strip()
+
+    def project_view(self, number: int) -> str:
+        args = ["project", "view", str(number)]
+        cp = self._run(args, capture=True, check=False)
+        return (cp.stdout or "").strip()
+
+    def project_create(self, owner: Optional[str] = None, org: Optional[str] = None, title: str, body: Optional[str] = None, public: bool = False) -> dict:
+        args = ["project", "create", "--title", title]
+        if owner:
+            args += ["--owner", owner]
+        if org:
+            args += ["--org", org]
+        if body:
+            args += ["--body", body]
+        if public:
+            args += ["--public"]
+        cp = self._run(args)
+        import json
+        return json.loads(cp.stdout or "{}")
+
+    def project_add_item(self, project_url: str, item_url: str) -> dict:
+        args = ["project", "add-item", project_url, "--url", item_url]
+        cp = self._run(args)
+        import json
+        return json.loads(cp.stdout or "{}")
+
+    def project_move_item(self, project_url: str, item_id: str, status: str) -> dict:
+        args = ["project", "move-item", project_url, "--item-id", item_id, "--field-id", status]
+        cp = self._run(args)
+        import json
+        return json.loads(cp.stdout or "{}")
+
     # ---- Pull Request helpers ----
     def pr_view(self, repo: str, number: int, fields: Optional[str] = None) -> dict:
         """Return PR details via gh pr view --json ..."""
@@ -266,3 +420,27 @@ class GitHubCLI:
 
     def edit_pr(self, repo: str, number: int, body: str) -> None:
         self._run(["pr", "edit", str(number), "--repo", repo, "--body", body], capture=False)
+
+    def pr_merge(
+        self,
+        repo: str,
+        number: int,
+        merge: bool = False,
+        squash: bool = False,
+        rebase: bool = False,
+        delete_branch: bool = False,
+        admin: bool = False,
+    ) -> None:
+        args = ["pr", "merge", str(number), "--repo", repo]
+        # default behavior is interactive; choose strategy flags when provided
+        if merge:
+            args += ["--merge"]
+        if squash:
+            args += ["--squash"]
+        if rebase:
+            args += ["--rebase"]
+        if delete_branch:
+            args += ["--delete-branch"]
+        if admin:
+            args += ["--admin"]
+        self._run(args, capture=False)
