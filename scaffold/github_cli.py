@@ -403,6 +403,32 @@ class GitHubCLI:
             args += ["--add-label", l]
         self._run(args, capture=False)
 
+    def pr_remove_label(self, repo: str, number: int, label: str) -> None:
+        args = ["pr", "edit", str(number), "--repo", repo, "--remove-label", label]
+        self._run(args, capture=False)
+
+    def pr_add_reviewers(self, repo: str, number: int, reviewers: list[str]) -> None:
+        args = ["pr", "review", str(number), "--repo", repo, "--add", ",".join(reviewers)]
+        self._run(args, capture=False)
+
+    def pr_remove_reviewers(self, repo: str, number: int, reviewers: list[str]) -> None:
+        args = ["pr", "review", str(number), "--repo", repo, "--remove", ",".join(reviewers)]
+        self._run(args, capture=False)
+
+    def pr_checks_status(self, repo: str, number: int) -> dict:
+        fields = "status,conclusion,url"
+        cp = self._run([
+            "pr", "checks", str(number), "--repo", repo, "--json", fields
+        ])
+        import json
+        return json.loads(cp.stdout or "{}")
+
+    def pr_close(self, repo: str, number: int) -> None:
+        self._run(["pr", "close", str(number), "--repo", repo], capture=False)
+
+    def pr_reopen(self, repo: str, number: int) -> None:
+        self._run(["pr", "reopen", str(number), "--repo", repo], capture=False)
+
     def pr_comment(self, repo: str, number: int, body: str) -> None:
         args = ["pr", "comment", str(number), "--repo", repo, "--body", body]
         self._run(args, capture=False)

@@ -130,6 +130,48 @@ def _print_entry_basic_commands():
     click.echo("  - delete_branches.sh [-n COUNT] [-r REMOTE] [--dry-run] [--keep BRANCH ...]")
 
 
+def _curated_groups():
+    return [
+        ("settings", "Manage config, tokens, install/uninstall."),
+        ("roadmap", "Manipulate, sync, or diff roadmap files."),
+        ("issues", "Work with GitHub issues directly."),
+        ("ci", "CI/CD and GitHub tooling integration."),
+        ("source", "Source code/repo operations."),
+        ("api", "Start/stop API server."),
+        ("demo", "Start demo mode(s)."),
+        ("ai", "AI assistant & integrations (flexible)."),
+    ]
+
+
+def _run_menu(ctx):
+    """Simple menu to select a top-level group, then show its help, then enter REPL."""
+    groups = _curated_groups()
+    while True:
+        click.secho("\nSelect a group:", fg="cyan", bold=True)
+        for i, (name, desc) in enumerate(groups, 1):
+            click.echo(f"  {i}. {name:8} – {desc}")
+        click.echo("  q. quit")
+        choice = input("Choice: ").strip().lower()
+        if choice in ("q", "quit", "exit"):
+            ctx.exit(0)
+        try:
+            idx = int(choice)
+        except ValueError:
+            continue
+        if not (1 <= idx <= len(groups)):
+            continue
+        name, _ = groups[idx - 1]
+        # Show group help
+        grp = cli.commands.get(name)
+        if isinstance(grp, click.core.Group):
+            with grp.make_context(name, ["--help"]) as sub_ctx:
+                click.echo(sub_ctx.get_help())
+        # After showing help, drop to REPL for full control
+        click.secho("Entering interactive shell. Type 'help' or 'help <command>'.", fg='yellow')
+        run_repl(ctx)
+        # When REPL returns, show the menu again
+
+
 def _run_packaged_script(rel_path: str, args: list[str]) -> int:
     script = pkg_files('scaffold').joinpath(rel_path)
     if not script.exists():
@@ -221,14 +263,14 @@ def cli(ctx, interactive):
         # Prevent further execution of a subcommand if one was passed, e.g., `gitscaffold --interactive init`
         ctx.exit()
 
-    # If no subcommand is invoked and not in interactive mode, show logo and help.
+    # If no subcommand is invoked and not in interactive mode, show a concise menu and allow selection.
     if ctx.invoked_subcommand is None:
         _print_logo()
-        click.echo(ctx.get_help())
         click.secho("\nCommand groups:", fg="cyan", bold=True)
-        for name, cmd in cli.commands.items():
-            if isinstance(cmd, click.core.Group):
-                click.echo(f"- {name}: {cmd.help}")
+        for name, desc in _curated_groups():
+            click.echo(f"- {name}: {desc}")
+        # Start a simple selection menu
+        _run_menu(ctx)
 
 
 @cli.group(name='settings', help='Manage config, tokens, install/uninstall.')
