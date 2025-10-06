@@ -421,11 +421,12 @@ def server_group():
     pass
 
 
-from .commands.config_cmd import config as config_group
-
-
-# Register external command groups
-project_group.add_command(config_group)
+try:
+    from .commands.config_cmd import config as config_group  # legacy
+    # Register external command groups
+    project_group.add_command(config_group)
+except Exception:
+    pass
 
 @integrations_group.group(name='gh', help='Manage and use the bundled GitHub CLI (gh).')
 def gh_group():
