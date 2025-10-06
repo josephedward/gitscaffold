@@ -3,6 +3,7 @@ import re
 import subprocess
 import logging
 from pathlib import Path
+from typing import Optional
 
 import click
 
@@ -54,7 +55,7 @@ def remove_global_config_key(key: str) -> bool:
     return bool(removed)
 
 
-def get_repo_from_git_config() -> str | None:
+def get_repo_from_git_config() -> Optional[str]:
     """Retrieves the 'owner/repo' from the git config."""
     logging.info("Attempting to get repository from git config.")
     try:
@@ -111,4 +112,3 @@ def get_gemini_api_key() -> str:
         click.secho("Google Gemini API key saved to global config file.", fg="green")
         os.environ['GEMINI_API_KEY'] = api_key
     return api_key
-
