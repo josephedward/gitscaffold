@@ -172,6 +172,85 @@ def _run_menu(ctx):
         # When REPL returns, show the menu again
 
 
+# Simple status registry to annotate menu items
+COMMAND_STATUS = {
+    'settings': {
+        'config': 'ready',
+        'ai': 'ready',
+        'uninstall': 'ready',
+        'doctor': 'todo',
+    },
+    'roadmap': {
+        'sync': 'legacy',
+        'diff': 'legacy',
+        'import': 'legacy',
+        'export': 'todo',
+    },
+    'issues': {
+        'list': 'ready', 'create': 'ready', 'close': 'ready',
+        'view': 'ready', 'edit': 'ready', 'comment': 'ready', 'label-remove': 'ready',
+        'projects': 'ready',
+        'sanitize': 'legacy', 'deduplicate': 'legacy', 'delete-closed': 'legacy', 'enrich': 'legacy',
+        'labels': 'todo', 'milestones': 'todo',
+    },
+    'ci': {
+        'prs': 'ready',
+        'workflows': 'ready',
+        'gh': 'legacy', 'run-local': 'legacy'
+    },
+    'source': {
+        'worktree': 'ready',
+        'delete-branches': 'legacy', 'remove-from-git': 'legacy',
+        'branches': 'todo'
+    },
+    'api': {
+        'start': 'legacy', 'status': 'ready', 'stop': 'ready'
+    },
+    'demo': {
+        'streamlit': 'legacy', 'examples': 'ready'
+    },
+    'ai': {
+        'aider': 'legacy', 'vibe': 'legacy', 'enrich': 'legacy'
+    },
+}
+
+
+def _status_tag(status: str) -> str:
+    m = {
+        'ready': '[READY]', 'legacy': '[LEGACY]', 'todo': '[TODO]', 'wip': '[WIP]'
+    }
+    return m.get(status or '', '[?]')
+
+
+def _run_group_menu(ctx, group_name: str):
+    grp = cli.commands.get(group_name)
+    if not isinstance(grp, click.core.Group):
+        return
+    while True:
+        click.secho(f"\n{group_name} subcommands:", fg='cyan', bold=True)
+        items = sorted(grp.commands.items())
+        for i, (name, cmd) in enumerate(items, 1):
+            st = COMMAND_STATUS.get(group_name, {}).get(name, '')
+            click.echo(f"  {i}. {name:14} {_status_tag(st)}")
+        click.echo("  b. back")
+        click.echo("  q. quit")
+        choice = input("Choice: ").strip().lower()
+        if choice in ('b', 'back'):
+            return
+        if choice in ('q', 'quit', 'exit'):
+            ctx.exit(0)
+        try:
+            idx = int(choice)
+        except ValueError:
+            continue
+        if not (1 <= idx <= len(items)):
+            continue
+        name, cmd = items[idx - 1]
+        # Show help for the chosen subcommand
+        with cmd.make_context(name, ['--help']) as sub_ctx:
+            click.echo(sub_ctx.get_help())
+
+
 def _run_packaged_script(rel_path: str, args: list[str]) -> int:
     script = pkg_files('scaffold').joinpath(rel_path)
     if not script.exists():
@@ -269,8 +348,24 @@ def cli(ctx, interactive):
         click.secho("\nCommand groups:", fg="cyan", bold=True)
         for name, desc in _curated_groups():
             click.echo(f"- {name}: {desc}")
-        # Start a simple selection menu
-        _run_menu(ctx)
+        # Start a simple selection menu (group -> subcommands)
+        groups = _curated_groups()
+        while True:
+            click.secho("\nSelect a group:", fg="cyan", bold=True)
+            for i, (name, desc) in enumerate(groups, 1):
+                click.echo(f"  {i}. {name:8} – {desc}")
+            click.echo("  q. quit")
+            choice = input("Choice: ").strip().lower()
+            if choice in ("q", "quit", "exit"):
+                ctx.exit(0)
+            try:
+                idx = int(choice)
+            except ValueError:
+                continue
+            if not (1 <= idx <= len(groups)):
+                continue
+            name, _ = groups[idx - 1]
+            _run_group_menu(ctx, name)
 
 
 @cli.group(name='settings', help='Manage config, tokens, install/uninstall.')
