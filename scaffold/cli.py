@@ -2547,7 +2547,7 @@ def process_issues(issues_file, results_dir, timeout):
 
     click.secho("\nProcessing complete.", fg='green')
 
-@project_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+@settings_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
     """Provides instructions for uninstalling and offers to clean up config data."""
     click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
@@ -3111,7 +3111,7 @@ def process_issues(issues_file, results_dir, timeout):
 
     click.secho("\nProcessing complete.", fg='green')
 
-@project_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+@settings_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
     """Provides instructions for uninstalling and offers to clean up config data."""
     click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
@@ -3675,7 +3675,7 @@ def process_issues(issues_file, results_dir, timeout):
 
     click.secho("\nProcessing complete.", fg='green')
 
-@project_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
+@settings_group.command(name='uninstall', help='Uninstall gitscaffold and clean up config.')
 def uninstall():
     """Provides instructions for uninstalling and offers to clean up config data."""
     click.secho("Uninstalling `gitscaffold` requires two steps:", fg='yellow')
