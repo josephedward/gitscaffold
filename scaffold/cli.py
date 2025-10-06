@@ -227,8 +227,20 @@ def _run_group_menu(ctx, group_name: str):
     if not isinstance(grp, click.core.Group):
         return
     while True:
-        click.secho(f"\n{group_name} subcommands:", fg='cyan', bold=True)
         items = sorted(grp.commands.items())
+        # Arrow-key selection if available
+        choices = []
+        for name, cmd in items:
+            st = COMMAND_STATUS.get(group_name, {}).get(name, '')
+            choices.append((name, f"{name:14} {_status_tag(st)}"))
+        sel = _interactive_select(f"{group_name} subcommands (b=back, q=quit)", choices)
+        if sel:
+            cmd = grp.commands[sel]
+            with cmd.make_context(sel, ['--help']) as sub_ctx:
+                click.echo(sub_ctx.get_help())
+            continue
+        # Fallback numeric
+        click.secho(f"\n{group_name} subcommands:", fg='cyan', bold=True)
         for i, (name, cmd) in enumerate(items, 1):
             st = COMMAND_STATUS.get(group_name, {}).get(name, '')
             click.echo(f"  {i}. {name:14} {_status_tag(st)}")
@@ -246,9 +258,41 @@ def _run_group_menu(ctx, group_name: str):
         if not (1 <= idx <= len(items)):
             continue
         name, cmd = items[idx - 1]
-        # Show help for the chosen subcommand
         with cmd.make_context(name, ['--help']) as sub_ctx:
             click.echo(sub_ctx.get_help())
+
+
+def _interactive_select(title: str, choices: list[tuple[str,str]]) -> str | None:
+    """Try to present an arrow-key navigable selector using optional libs.
+    choices: list of (value, display_text). Returns selected value or None.
+    """
+    # Try InquirerPy
+    try:
+        from InquirerPy import inquirer  # type: ignore
+        return inquirer.select(message=title, choices=[{"name": d, "value": v} for v, d in choices]).execute()
+    except Exception:
+        pass
+    # Try questionary
+    try:
+        import questionary  # type: ignore
+        ans = questionary.select(title, choices=[d for _, d in choices]).ask()
+        if ans is None:
+            return None
+        # map back display -> value
+        for v, d in choices:
+            if d == ans:
+                return v
+        return None
+    except Exception:
+        pass
+    # Try prompt_toolkit radiolist_dialog
+    try:
+        from prompt_toolkit.shortcuts import radiolist_dialog  # type: ignore
+        res = radiolist_dialog(title=title, text=title, values=choices).run()
+        return res
+    except Exception:
+        pass
+    return None
 
 
 def _run_packaged_script(rel_path: str, args: list[str]) -> int:
@@ -351,6 +395,13 @@ def cli(ctx, interactive):
         # Start a simple selection menu (group -> subcommands)
         groups = _curated_groups()
         while True:
+            # Try arrow-key selection first
+            choices = [(name, f"{name:8} – {desc}") for name, desc in groups]
+            sel = _interactive_select("Select a group (q to quit)", choices)
+            if sel:
+                _run_group_menu(ctx, sel)
+                continue
+            # Fallback to numeric input
             click.secho("\nSelect a group:", fg="cyan", bold=True)
             for i, (name, desc) in enumerate(groups, 1):
                 click.echo(f"  {i}. {name:8} – {desc}")
