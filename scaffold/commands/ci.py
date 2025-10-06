@@ -147,3 +147,74 @@ try:
     ci.add_command(legacy_run_action_locally_cmd, name='run-local')
 except Exception:
     pass
+
+
+# Workflows via gh
+@ci.group('workflows', help='GitHub Actions workflows via gh')
+def workflows():
+    pass
+
+
+@workflows.command('list')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.')
+@click.option('--limit', default=50, show_default=True)
+def workflows_list(repo, limit):
+    try:
+        from scaffold.core.config import get_repo_from_git_config
+        from scaffold.github_cli import GitHubCLI
+        repo = repo or get_repo_from_git_config()
+        if not repo:
+            click.secho('Could not detect repository. Use --repo.', fg='red')
+            raise SystemExit(1)
+        gh = GitHubCLI()
+        items = gh.list_workflows(repo, limit=limit)
+        if not items:
+            click.echo('No workflows found.')
+            return
+        for w in items:
+            click.echo(f"{w['id']}\t{w['name']} [{w['state']}]")
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+
+
+@workflows.command('run')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.')
+@click.argument('workflow_id')
+@click.option('--ref', default='main', show_default=True)
+@click.option('-f', '--input', 'inputs', multiple=True, help='key=value input')
+def workflows_run(repo, workflow_id, ref, inputs):
+    try:
+        from scaffold.core.config import get_repo_from_git_config
+        from scaffold.github_cli import GitHubCLI
+        repo = repo or get_repo_from_git_config()
+        if not repo:
+            click.secho('Could not detect repository. Use --repo.', fg='red')
+            raise SystemExit(1)
+        gh = GitHubCLI()
+        inputs_dict = {}
+        for kv in inputs:
+            if '=' in kv:
+                k, v = kv.split('=', 1)
+                inputs_dict[k] = v
+        out = gh.run_workflow(repo, workflow_id, ref=ref, inputs=inputs_dict or None)
+        click.echo(out)
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
+
+
+@workflows.command('status')
+@click.option('--repo', help='owner/repo. Defaults to current git remote.')
+@click.option('--run-id', required=True)
+def workflows_status(repo, run_id):
+    try:
+        from scaffold.core.config import get_repo_from_git_config
+        from scaffold.github_cli import GitHubCLI
+        repo = repo or get_repo_from_git_config()
+        if not repo:
+            click.secho('Could not detect repository. Use --repo.', fg='red')
+            raise SystemExit(1)
+        gh = GitHubCLI()
+        out = gh.workflow_status(repo, run_id)
+        click.echo(out)
+    except FileNotFoundError as e:
+        click.secho(str(e), fg='yellow')
