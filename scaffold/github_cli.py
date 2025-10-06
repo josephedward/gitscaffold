@@ -355,7 +355,7 @@ class GitHubCLI:
         cp = self._run(args, capture=True, check=False)
         return (cp.stdout or "").strip()
 
-    def project_create(self, owner: Optional[str] = None, org: Optional[str] = None, title: str, body: Optional[str] = None, public: bool = False) -> dict:
+    def project_create(self, title: str, owner: Optional[str] = None, org: Optional[str] = None, body: Optional[str] = None, public: bool = False) -> dict:
         args = ["project", "create", "--title", title]
         if owner:
             args += ["--owner", owner]
