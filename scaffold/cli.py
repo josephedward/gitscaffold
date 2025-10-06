@@ -94,6 +94,7 @@ import csv
 from rich.console import Console
 from rich.table import Table
 from .matcher import find_best_issue_match
+from typing import Optional
 import json
 
 
@@ -262,7 +263,7 @@ def _run_group_menu(ctx, group_name: str):
             click.echo(sub_ctx.get_help())
 
 
-def _interactive_select(title: str, choices: list[tuple[str,str]]) -> str | None:
+def _interactive_select(title: str, choices: list[tuple[str,str]]) -> Optional[str]:
     """Try to present an arrow-key navigable selector using optional libs.
     choices: list of (value, display_text). Returns selected value or None.
     """
